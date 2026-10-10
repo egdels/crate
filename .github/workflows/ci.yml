@@ -1,0 +1,23 @@
+name: CI
+
+# Builds the package and runs its tests on the current macOS runner. The
+# runner ships Xcode, which `swift test` needs for the SwiftUI and Swift
+# Testing macro plugins (the Command Line Tools alone do not have them).
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Build & test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Build
+        run: swift build -v
+      - name: Test
+        run: swift test

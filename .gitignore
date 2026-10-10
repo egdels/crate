@@ -1,0 +1,9 @@
+.build/
+.swiftpm/
+*.xcodeproj
+*.xcworkspace
+DerivedData/
+.DS_Store
+build/
+.claude/settings.local.json
+.idea/

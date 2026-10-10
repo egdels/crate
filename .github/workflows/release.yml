@@ -1,0 +1,92 @@
+name: Release
+
+# Triggered by pushing a version tag (v0.1.0, v0.2.0-rc1, ...). Fails up
+# front unless the tag matches CFBundleShortVersionString in
+# Packaging/Info.plist, the one place the version is defined, so a tag
+# pushed before the version bump cannot attach 0.1.0-named assets to
+# v0.2.0. Release notes are the tag's section of CHANGELOG.md; without one,
+# GitHub's generated commit list. A tag with a "-" suffix ("-rc1",
+# "-beta1") becomes a pre-release.
+#
+# The asset is one universal (arm64 + x86_64) DMG built by scripts/dmg.sh,
+# ad-hoc signed: there is no Developer ID for this project, so a first
+# launch goes through right-click > Open. Idempotent: re-pushing the tag
+# updates the notes and replaces the asset instead of failing.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build DMG & publish release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the tag matches Packaging/Info.plist
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Packaging/Info.plist)
+          TAG_VERSION="${TAG#v}"
+          TAG_VERSION="${TAG_VERSION%%-*}"
+          if [[ "$TAG_VERSION" != "$VERSION" ]]; then
+            echo "::error::tag $TAG does not match CFBundleShortVersionString=$VERSION in Packaging/Info.plist"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Test
+        run: swift test
+
+      - name: Build universal DMG
+        run: scripts/dmg.sh --universal
+
+      # Section body without its heading (the release title is the tag),
+      # leading and trailing blank lines stripped.
+      - name: Collect release notes from CHANGELOG.md
+        run: |
+          NOTES="$RUNNER_TEMP/release-notes.md"
+          awk -v v="$VERSION" '
+            /^## / { if (found) exit; found = (index($0, "## [" v "]") == 1); next }
+            found
+          ' CHANGELOG.md | sed -e '/./,$!d' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$NOTES"
+          if [[ -s "$NOTES" ]]; then
+            echo "release notes: CHANGELOG.md section [$VERSION]"
+            echo "NOTES=$NOTES" >> "$GITHUB_ENV"
+          else
+            echo "::warning::CHANGELOG.md has no [$VERSION] section, using generated notes"
+          fi
+
+      - name: Create or update the release and upload the DMG
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          args=(--title "$TAG" --repo "${{ github.repository }}")
+          if [[ "$TAG" == *-* ]]; then
+            args+=(--prerelease)
+          fi
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "release $TAG exists - updating notes, replacing the asset"
+            if [[ -n "${NOTES:-}" ]]; then
+              gh release edit "$TAG" "${args[@]}" --notes-file "$NOTES"
+            else
+              gh release edit "$TAG" "${args[@]}"
+            fi
+          else
+            if [[ -n "${NOTES:-}" ]]; then
+              args+=(--notes-file "$NOTES")
+            else
+              args+=(--generate-notes)
+            fi
+            gh release create "$TAG" "${args[@]}"
+          fi
+          gh release upload "$TAG" "build/Crate-${VERSION}.dmg" --clobber --repo "${{ github.repository }}"
