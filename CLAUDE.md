@@ -121,7 +121,13 @@ retriever. Verified against the retriever's output for the same 900
 files: all durations equal, the only tag differences were the retriever's
 bogus year 1904 for M4As with an invalid date tag. Real-file check: set
 `CRATE_MUSIC_DIRS` (see above); every MP3/M4A/M4B must yield title and
-duration.
+duration. On the Pixel 7a, 3,600 files: full scan 25.8 s with the
+parsers at 16 in flight (the retriever path took over two minutes); a
+no-change rescan is the folder walk alone, 8.1 s sequential and 3.4 s
+with 8 folder queries in flight (`SafFileSource.QUERIES_IN_FLIGHT`);
+emulator with 914 files: 610 ms to 277 ms. The developer's MP3 collection
+has 20 zero-byte WAVs in a "(1)" folder (an interrupted copy): they are
+the "20 unreadable" and are failed without a round trip.
 Android decisions: the track's `path` is built from document display
 names starting at the tree's document id ("primary:Music/Artist/Album/
 01.mp3"), so grouping works for any provider; `uri` is the content URI
@@ -137,8 +143,8 @@ Ogg), grid, detail, playback, auto-advance, media notification with
 cover colour, search, two-pane landscape, "open with" via VIEW intent,
 restart with the saved library, and the R8 release build. On the
 developer's Pixel 7a (Android 17, wireless adb): install, folder pick,
-scan of 3,620 files (old retriever path: ~2 min), "open with" chooser.
-Not yet tested: output switching.
+scan of 3,600 files, rescan, "open with" chooser. Not yet tested:
+output switching, playback on the phone by ear.
 
 ## Test material
 

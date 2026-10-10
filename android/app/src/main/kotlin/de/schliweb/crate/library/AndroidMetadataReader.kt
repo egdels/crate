@@ -19,6 +19,7 @@ import de.schliweb.crate.core.TrackMetadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.FileNotFoundException
+import java.io.IOException
 
 /**
  * Tag reader. MP3, M4A/M4B and FLAC are parsed by Crate itself
@@ -31,6 +32,9 @@ import java.io.FileNotFoundException
  */
 class AndroidMetadataReader(private val context: Context) : MetadataReader {
     override suspend fun read(file: ScannedFile): TrackMetadata = withContext(Dispatchers.IO) {
+        // An empty file (an interrupted copy) is unreadable without asking
+        // anyone; it would otherwise cost a round trip on every rescan.
+        if (file.fileSize == 0L) throw IOException("empty file: ${file.path}")
         val uri = Uri.parse(file.uri)
         when (Paths.extension(file.path)) {
             "flac" -> {

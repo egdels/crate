@@ -29,7 +29,12 @@ version's section from this file as the GitHub release notes.
   at once: a 900-file folder in the emulator went from 10.3 s to 2.2 s.
   The retriever stays for Ogg, Opus and WAV. A side effect: M4A files
   without a date no longer get the year 1904 from their container
-  timestamp.
+  timestamp. On a Pixel 7a a 3,600-file collection scans in 26 s
+  instead of over two minutes.
+- Android lists folders concurrently, so a rescan that finds nothing
+  changed takes 3.4 s instead of 8 s for that collection, and empty
+  files (interrupted copies) are reported as unreadable without being
+  opened.
 
 ## [0.1.0] - 2026-10-10
 
