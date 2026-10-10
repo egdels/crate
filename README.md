@@ -1,5 +1,7 @@
 # Crate
 
+<img src="Packaging/AppIcon-256.png" width="128" height="128" alt="Crate app icon: a record pulled out of a wooden crate" align="right">
+
 A music player for the Mac that opens and plays. Point it at a folder, it
 reads the tags, and you listen. No account, no cloud, no store, no settings
 screen.

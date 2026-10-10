@@ -29,7 +29,7 @@ swift test                     # 71 tests, Swift Testing, needs Xcode (macro plu
 swift run crate-scan <folder>  # tag-reader check against real files, prints gaps
 scripts/bundle.sh              # release build -> build/Crate.app (ad-hoc signed)
 scripts/dmg.sh --universal     # -> build/Crate-<version>.dmg, what a release ships
-scripts/icon.sh                # redraw Packaging/AppIcon.icns from scripts/icon.swift
+scripts/icon.sh                # redraw Packaging/AppIcon.icns and the README PNG from scripts/icon.swift
 scripts/install.sh             # bundle + copy to /Applications + lsregister; quits a running Crate
 open <file>                    # what Finder does: plays the file (its album if in the library)
 open build/Crate.app           # run it; pkill -x Crate to stop
