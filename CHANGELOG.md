@@ -5,6 +5,28 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow takes a
 version's section from this file as the GitHub release notes.
 
+## [0.3.0] - 2026-10-10
+
+### Added
+
+- Google Play listing: texts, framed phone and tablet screenshots, icon
+  and feature graphic under `android/fastlane/metadata/`, built by
+  `scripts/store-assets.sh`.
+- The release workflow also builds and signs the Android App Bundle and
+  attaches `Crate-<version>.aab` to the release, for the Play Console.
+- Android: "Privacy Policy" in the overflow menu shows the policy in a
+  dialog. Google Play's User Data policy asks for the policy to be
+  reachable from inside the app, not only from the listing; showing the
+  text instead of a link keeps the app offline. The build copies
+  `PRIVACY.md` from the repository root into the app's assets, so the
+  policy is maintained in one place.
+
+### Changed
+
+- The privacy policy now names the publisher and a contact route, lists
+  every Android permission with its reason, and states explicitly that no
+  third party receives anything, as Google Play's user data policy asks.
+
 ## [0.2.0] - 2026-10-10
 
 ### Added

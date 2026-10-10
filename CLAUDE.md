@@ -243,8 +243,9 @@ model is attached, `PlayerModel.open(_:)` decides what to play.
 
 **Open, in no fixed order:**
 
-1. Released: v0.1.0 (DMG only) and v0.2.0 (DMG + signed APK) are
-   published at github.com/egdels/crate, built by `release.yml`. For
+1. Released: v0.1.0 (DMG only), v0.2.0 (DMG + signed APK) and v0.3.0
+   (DMG + APK + AAB) are published at github.com/egdels/crate, built by
+   `release.yml`. For
    the next version: bump `Packaging/Info.plist` and
    `android/gradle.properties` (appVersion), turn the CHANGELOG's
    Unreleased section into the version's, push `main` and the tag only
@@ -265,3 +266,33 @@ model is attached, `PlayerModel.open(_:)` decides what to play.
    has to be picked again. The workflow ran green for v0.2.0-rc2 and
    v0.2.0; the APK's certificate was verified with apksigner to be the
    shared release key (same digest as the other apps), not the debug key.
+4. Play Store listing: texts and graphics (en-US only, the app's UI is
+   English) live in
+   `android/fastlane/metadata/android/`, built by `scripts/store-assets.sh`
+   from `scripts/icon.swift --play` and raw emulator screenshots in
+   `build/store/raw/` (framed with captions by
+   `scripts/store-screenshot.swift`). `android/fastlane/metadata/README.md`
+   has the capture recipe (status bar demo mode, lock screen) and the
+   answers for the Play Console forms. The screenshots were taken on the
+   Pixel_9a, MoveAPiece_Tablet7 and MoveAPiece_Tablet10 AVDs with ~20
+   albums with covers copied from the developer's collection to
+   `/sdcard/Music/Store` (not in the repo). `PRIVACY.md` is written for
+   Play's User Data policy (publisher, contact route, every permission
+   explained, no third parties), and the Android overflow menu shows it
+   in a dialog (Play wants the policy in the app too, as link or text,
+   verified in the policy text). The build copies the file from the
+   repository root into the assets (`CopyPrivacyPolicyTask` in
+   app/build.gradle.kts); it is the only place the policy is maintained.
+   `ui/PrivacyPolicy.kt` renders the small Markdown subset it uses
+   (headings, paragraphs, bullets, inline code/bold/italic): no tables or
+   link syntax in that file. `release.yml` attaches the signed AAB next
+   to the APK (checked for a META-INF signature block: the bundle task
+   names its output the same either way and jarsigner -verify exits 0
+   for an unsigned file). There is no release keystore in this repo or
+   its notes, and no local build path for the AAB: releases come from
+   the workflow. The dialog is a plain `Dialog` with its own
+   Surface, not an `AlertDialog`: the latter sizes its text slot to the
+   content and showed four lines in landscape. Its open state is
+   `rememberSaveable`, so rotating keeps it open. Verified in portrait
+   and landscape, light and dark, on the Pixel_9a emulator. Not yet
+   done: the Play Console entry itself.
