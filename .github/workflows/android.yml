@@ -1,8 +1,9 @@
 name: Android
 
 # Runs the core library's JVM tests, lint, and builds the debug APK on
-# every push. The APK is unsigned-debug and only an artifact of the run;
-# releases of the Android app are not cut by CI yet.
+# every push that touches the Android app. The APK is debug-signed and
+# only an artifact of the run; the signed release APK is built by
+# release.yml when a version tag is pushed.
 
 on:
   push:

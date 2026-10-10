@@ -24,7 +24,8 @@ for what is in it.
 ## Download
 
 Each release on the Releases page ships one universal DMG (Apple silicon
-and Intel) for macOS 12 Monterey or later. Open it, drag Crate to
+and Intel) for macOS 12 Monterey or later, and from the next release on
+an APK for Android 10 or later. Open it, drag Crate to
 Applications, and start it once via right-click > Open: the app is
 ad-hoc signed, there is no Developer ID behind it, and Gatekeeper asks
 only that first time. Then pick a folder, or choose Crate > Use Crate for
@@ -88,8 +89,9 @@ track if the file is in the library, or just the opened files if not; a
 folder dropped on the app is added to the library.
 
 Releases are cut by pushing a `v*` tag that matches the version in
-`Packaging/Info.plist`; the workflow builds the DMG and takes the release
-notes from `CHANGELOG.md`.
+`Packaging/Info.plist` and in `android/gradle.properties`; the workflow
+builds the DMG and the signed APK and takes the release notes from
+`CHANGELOG.md`.
 
 To see what the tag reader makes of a real folder:
 

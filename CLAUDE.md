@@ -245,16 +245,21 @@ model is attached, `PlayerModel.open(_:)` decides what to play.
 
 1. Released: v0.1.0 is published at github.com/egdels/crate with the
    universal DMG built by `release.yml` (CI and Release both green on the
-   first run). For the next version: bump `Packaging/Info.plist`, add the
-   CHANGELOG section, push `main` and the tag only (`git push origin main
-   vX.Y.Z`, never `--all` or `--mirror`: local branches hold pre-release
-   history that stays local).
+   first run). For the next version: bump `Packaging/Info.plist` and
+   `android/gradle.properties` (appVersion), turn the CHANGELOG's
+   Unreleased section into the version's, push `main` and the tag only
+   (`git push origin main vX.Y.Z`, never `--all` or `--mirror`: local
+   branches hold pre-release history that stays local).
 2. Not yet verified by ear: the gapless transition is covered by a test on
    the node clock, not by listening. Output device switching mid-track is
    handled in code but untested.
-3. Android: no release pipeline yet (`android.yml` only tests, lints and
-   builds a debug APK). A release needs the signing env vars
-   `RELEASE_KEYSTORE_PATH`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`,
-   `SIGNING_STORE_PASSWORD` like the developer's other Android apps, and
-   a versionName bump in `android/gradle.properties`. Not run on a real
-   phone yet.
+3. Android release: `release.yml` builds and signs the APK next to the
+   DMG on a `v*` tag, with the developer's shared Android release key
+   from the repository secrets `KEYSTORE_BASE64`, `SIGNING_KEY_ALIAS`,
+   `SIGNING_KEY_PASSWORD`, `SIGNING_STORE_PASSWORD` (same names as the
+   other apps; the developer stores them in GitHub). The tag must match
+   both `Packaging/Info.plist` and `appVersion` in
+   `android/gradle.properties`; bump both. The Pixel 7a currently runs a
+   release build signed with the debug key; the first properly signed
+   APK needs an uninstall there (different signature), then the folder
+   has to be picked again. Not yet run: the workflow itself.

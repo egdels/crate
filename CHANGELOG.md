@@ -31,6 +31,9 @@ version's section from this file as the GitHub release notes.
   without a date no longer get the year 1904 from their container
   timestamp. On a Pixel 7a a 3,600-file collection scans in 26 s
   instead of over two minutes.
+- Releases ship the Android APK next to the DMG: the release workflow
+  signs it with the project's Android release key from the repository
+  secrets, and the tag has to match the Android version too.
 - Android lists folders concurrently, so a rescan that finds nothing
   changed takes 3.4 s instead of 8 s for that collection, and empty
   files (interrupted copies) are reported as unreadable without being
