@@ -19,7 +19,17 @@ version's section from this file as the GitHub release notes.
   incremental, the library is one JSON file, and "Open with Crate" from
   a file manager plays the file. Kotlin, Jetpack Compose, Media3;
   Android 10 and later. The core library has JVM tests, the app was
-  verified on an Android 17 emulator.
+  verified on an Android 17 emulator and a Pixel 7a.
+- Audiobooks: `.m4b` files are scanned on both platforms. They are
+  M4A files by another name, and whoever picks a folder wants to hear
+  what is in it. Playback position is not remembered, as for any track.
+- Android reads MP3 and M4A/M4B tags itself (ID3v2.2 to 2.4, ID3v1,
+  MP4 atoms, the duration from the Xing/VBRI header or the bitrate)
+  instead of through the platform's media retriever, and reads 16 files
+  at once: a 900-file folder in the emulator went from 10.3 s to 2.2 s.
+  The retriever stays for Ogg, Opus and WAV. A side effect: M4A files
+  without a date no longer get the year 1904 from their container
+  timestamp.
 
 ## [0.1.0] - 2026-10-10
 

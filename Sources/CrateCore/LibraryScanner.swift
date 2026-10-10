@@ -22,9 +22,12 @@ public struct ScannedFile: Hashable, Sendable {
 public struct LibraryScanner: Sendable {
     /// What AVFoundation can decode on macOS. Ogg Vorbis and Opus are
     /// deliberately absent: the system cannot play them, so listing them
-    /// would only produce tracks that fail on play.
+    /// would only produce tracks that fail on play. Audiobooks (m4b, an
+    /// M4A by another name) are in: whoever picks the folder wants to
+    /// hear what is in it, and chapter-per-file MP3 audiobooks were never
+    /// excluded either.
     public static let defaultExtensions: Set<String> = [
-        "mp3", "m4a", "aac", "flac", "wav", "aiff", "aif", "aifc", "caf",
+        "mp3", "m4a", "m4b", "aac", "flac", "wav", "aiff", "aif", "aifc", "caf",
     ]
 
     public var extensions: Set<String>

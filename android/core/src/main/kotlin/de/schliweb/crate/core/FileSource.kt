@@ -31,9 +31,11 @@ interface FileSource {
 }
 
 /** What Android decodes without help. Unlike the Mac, Ogg Vorbis and
- *  Opus are included: the platform plays them. */
+ *  Opus are included: the platform plays them. Audiobooks (m4b, an M4A
+ *  by another name) are in too; whoever picks the folder wants to hear
+ *  what is in it. Ringtones (m4r) are not. */
 val DEFAULT_EXTENSIONS: Set<String> = setOf(
-    "mp3", "m4a", "aac", "flac", "wav", "ogg", "oga", "opus", "aiff", "aif", "mka",
+    "mp3", "m4a", "m4b", "aac", "flac", "wav", "ogg", "oga", "opus", "aiff", "aif", "mka",
 )
 
 /** Hidden names and the odd system file are skipped on every platform. */

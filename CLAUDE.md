@@ -46,7 +46,9 @@ Android, from `android/` (needs JDK 17+, Android SDK with platform 37;
 `ANDROID_HOME` is set on this machine, Gradle 9.7 via the wrapper):
 
 ```sh
-./gradlew :core:test             # 34 JVM tests, ~2 s
+./gradlew :core:test             # 44 JVM tests, ~2 s
+CRATE_MUSIC_DIRS=~/Music/Music/Media.localized ./gradlew :core:test --tests '*TagParserTest*' -i
+                                 # also runs the MP3/MP4 parsers over real files (colon-separated dirs)
 ./gradlew :app:assembleDebug     # -> app/build/outputs/apk/debug/app-debug.apk
 ./gradlew :app:lintDebug         # must stay at zero errors (CI runs it)
 ./gradlew :app:assembleRelease   # R8; unsigned without RELEASE_KEYSTORE_PATH etc.
@@ -106,6 +108,20 @@ android/app/    de.schliweb.crate: CrateApplication (owns Library and
                 ArtworkBitmapLoader resolves crate://album/<key>)
 ```
 
+Android tag reading: `Mp3Metadata` (ID3v2.2-2.4 with unsync, extended
+header, ID3v1 tail, duration from Xing/VBRI or bitrate x size) and
+`Mp4Metadata` (top-level atom walk, `moov` at either end, `mvhd`
+duration, `ilst` items incl. binary trkn/disk/gnre and covr) read through
+`ByteSource` (`ContentByteSource` = pread on the provider's descriptor;
+`FileByteSource` in tests). `MediaMetadataRetriever` is the fallback and
+handles Ogg/Opus/WAV. Why: in the emulator 900 files took 10.3 s through
+the retriever at 4 in flight, 3.6 s with the parsers, 2.6 s at 8 and
+2.2 s at 16 in flight; the Pixel 7a managed only ~30 files/s with the
+retriever. Verified against the retriever's output for the same 900
+files: all durations equal, the only tag differences were the retriever's
+bogus year 1904 for M4As with an invalid date tag. Real-file check: set
+`CRATE_MUSIC_DIRS` (see above); every MP3/M4A/M4B must yield title and
+duration.
 Android decisions: the track's `path` is built from document display
 names starting at the tree's document id ("primary:Music/Artist/Album/
 01.mp3"), so grouping works for any provider; `uri` is the content URI
@@ -119,8 +135,10 @@ needs `@androidx.annotation.OptIn(UnstableApi::class)`, not Kotlin's
 scan (M4A, MP3, tagged FLAC with cover, untagged FLAC with folder.jpg,
 Ogg), grid, detail, playback, auto-advance, media notification with
 cover colour, search, two-pane landscape, "open with" via VIEW intent,
-restart with the saved library, and the R8 release build. Not yet
-tested: a real device, large libraries over SAF, output switching.
+restart with the saved library, and the R8 release build. On the
+developer's Pixel 7a (Android 17, wireless adb): install, folder pick,
+scan of 3,620 files (old retriever path: ~2 min), "open with" chooser.
+Not yet tested: output switching.
 
 ## Test material
 

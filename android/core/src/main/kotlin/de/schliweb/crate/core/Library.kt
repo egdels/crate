@@ -24,9 +24,11 @@ class Library(
     private val store: LibraryStore,
     private val reader: MetadataReader,
     private val source: FileSource,
-    /** Files read at once during a rescan. Reading is latency-bound;
-     *  going through a document provider adds a round trip per file. */
-    concurrency: Int = 4,
+    /** Files read at once during a rescan. Reading is latency-bound:
+     *  every file is a descriptor from the document provider plus a few
+     *  positional reads. Measured in the emulator with 900 files: 4 in
+     *  flight took 3.6 s, 8 took 2.6 s, 16 took 2.2 s. */
+    concurrency: Int = 16,
 ) {
     data class RescanSummary(
         val added: Int = 0,

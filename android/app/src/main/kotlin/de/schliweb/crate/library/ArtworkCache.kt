@@ -13,6 +13,8 @@ import android.util.LruCache
 import de.schliweb.crate.core.Album
 import de.schliweb.crate.core.FlacMetadata
 import de.schliweb.crate.core.FolderImages
+import de.schliweb.crate.core.Mp3Metadata
+import de.schliweb.crate.core.Mp4Metadata
 import de.schliweb.crate.core.Paths
 import de.schliweb.crate.core.Track
 import kotlinx.coroutines.CoroutineScope
@@ -40,15 +42,18 @@ interface ArtworkReader {
 class AndroidArtworkReader(private val context: Context) : ArtworkReader {
     override suspend fun artwork(track: Track): ByteArray? = withContext(Dispatchers.IO) {
         val uri = Uri.parse(track.uri)
-        val embedded = if (Paths.extension(track.path) == "flac") {
-            context.contentResolver.openInputStream(uri)?.let { FlacMetadata.read(it).cover?.data }
-        } else {
-            val retriever = MediaMetadataRetriever()
-            try {
-                retriever.setDataSource(context, uri)
-                retriever.embeddedPicture
-            } finally {
-                runCatching { retriever.release() }
+        val embedded = when (Paths.extension(track.path)) {
+            "flac" -> context.contentResolver.openInputStream(uri)?.let { FlacMetadata.read(it).cover?.data }
+            "mp3" -> ContentByteSource(context, uri).use { Mp3Metadata.read(it).cover?.data }
+            "m4a", "m4b" -> ContentByteSource(context, uri).use { Mp4Metadata.read(it).cover?.data }
+            else -> {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(context, uri)
+                    retriever.embeddedPicture
+                } finally {
+                    runCatching { retriever.release() }
+                }
             }
         }
         embedded?.takeIf { it.isNotEmpty() } ?: folderImage(uri)

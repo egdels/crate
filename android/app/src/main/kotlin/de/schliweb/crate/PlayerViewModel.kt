@@ -9,6 +9,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -242,9 +243,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         isScanning = true
         scanProgress = null
         notice = null
+        val started = System.currentTimeMillis()
         try {
             lastScan = withContext(Dispatchers.IO) { work() }
             lastError = null
+            Log.i(TAG, "scan: ${lastScan} in ${System.currentTimeMillis() - started} ms")
         } catch (e: Exception) {
             lastError = "Scan failed: ${e.message}"
         } finally {
@@ -459,6 +462,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
         repeatMode = next
         withController { it.repeatMode = next }
+    }
+
+    private companion object {
+        const val TAG = "Crate"
     }
 
     override fun onCleared() {

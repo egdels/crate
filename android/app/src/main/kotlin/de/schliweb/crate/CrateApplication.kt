@@ -24,7 +24,7 @@ class CrateApplication : Application() {
             store = JsonLibraryStore(File(filesDir, "library.json")),
             reader = AndroidMetadataReader(this),
             source = SafFileSource(this),
-            concurrency = 4,
+            concurrency = 16, // see Library: measured, not guessed
         )
     }
 

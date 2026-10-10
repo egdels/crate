@@ -49,8 +49,8 @@ What the package does:
   them as thumbnails (`ArtworkReader`, `ArtworkCache`)
 - **Search** titles, artists and albums (`SearchQuery`)
 
-Formats are whatever AVFoundation decodes: MP3, AAC/M4A, FLAC, ALAC, WAV,
-AIFF, CAF. Ogg Vorbis and Opus are not supported, because the system
+Formats are whatever AVFoundation decodes: MP3, AAC/M4A (including M4B
+audiobooks), FLAC, ALAC, WAV, AIFF, CAF. Ogg Vorbis and Opus are not supported, because the system
 cannot play them.
 
 The tag reader goes through AVFoundation's common keys, then ID3 and
@@ -105,8 +105,10 @@ logic, no shared code with the Mac app (there is nothing to share across
 Swift and Kotlin but the ideas). Pick a folder with the system's folder
 picker, Crate reads the tags where the files are and plays them through
 the system's media session, so the lock screen, headsets and Bluetooth
-controls work. Formats are what Android decodes: MP3, AAC/M4A, FLAC, WAV,
-Ogg Vorbis, Opus. Runs on Android 10 and later.
+controls work. Formats are what Android decodes: MP3, AAC/M4A (including M4B
+audiobooks), FLAC, WAV, Ogg Vorbis, Opus. Runs on Android 10 and later. MP3, M4A and FLAC tags
+are read by Crate's own parsers, a few kilobytes per file, so a scan of a
+few thousand files takes seconds; Ogg and Opus go through the platform.
 
 ```
 android/core/   UI-free Kotlin library: Track, Album grouping, Library with
