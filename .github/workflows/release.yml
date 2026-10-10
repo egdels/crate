@@ -11,9 +11,10 @@ name: Release
 #
 # Two assets: one universal (arm64 + x86_64) DMG built by scripts/dmg.sh,
 # ad-hoc signed (there is no Developer ID for this project, so a first
-# launch goes through right-click > Open), and one APK signed with the
+# launch goes through right-click > Open), one APK signed with the
 # release key from the repository secrets, the same identity the
-# developer's other Android apps use. Idempotent: re-pushing the tag
+# developer's other Android apps use, and the AAB from the same build
+# and key for the Play Console upload. Idempotent: re-pushing the tag
 # updates the notes and replaces the assets instead of failing.
 
 on:
@@ -112,7 +113,7 @@ jobs:
         run: gh release upload "${{ github.ref_name }}" "build/Crate-${{ needs.create-release.outputs.version }}.dmg" --clobber --repo "${{ github.repository }}"
 
   android:
-    name: Build & sign the APK
+    name: Build & sign the APK and AAB
     needs: create-release
     runs-on: ubuntu-latest
     defaults:
@@ -150,22 +151,31 @@ jobs:
       # app/build.gradle.kts picks the signing config up from these
       # variables; without them it would build an unsigned APK, which
       # must never reach a release, hence the check on the output name.
-      - name: Build the signed release APK
+      - name: Build the signed release APK and AAB
         env:
           RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
         run: |
-          ./gradlew :app:assembleRelease
+          ./gradlew :app:assembleRelease :app:bundleRelease
           APK=app/build/outputs/apk/release/app-release.apk
           if [[ ! -f "$APK" ]]; then
             echo "::error::no signed APK (signing secrets missing?); found: $(ls app/build/outputs/apk/release)"
             exit 1
           fi
           cp "$APK" "Crate-${{ needs.create-release.outputs.version }}.apk"
+          # The bundle task names its output the same with or without
+          # signing, and jarsigner -verify exits 0 for an unsigned file,
+          # so look for the signature block itself.
+          AAB=app/build/outputs/bundle/release/app-release.aab
+          if ! unzip -l "$AAB" | grep -qE 'META-INF/[^/]+\.(RSA|EC|DSA)$'; then
+            echo "::error::the AAB is not signed (signing secrets missing?)"
+            exit 1
+          fi
+          cp "$AAB" "Crate-${{ needs.create-release.outputs.version }}.aab"
 
-      - name: Upload the APK to the release
+      - name: Upload the APK and AAB to the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.ref_name }}" "Crate-${{ needs.create-release.outputs.version }}.apk" --clobber --repo "${{ github.repository }}"
+        run: gh release upload "${{ github.ref_name }}" "Crate-${{ needs.create-release.outputs.version }}.apk" "Crate-${{ needs.create-release.outputs.version }}.aab" --clobber --repo "${{ github.repository }}"
