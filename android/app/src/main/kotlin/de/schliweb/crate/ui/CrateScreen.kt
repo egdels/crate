@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -72,6 +73,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -110,6 +112,8 @@ fun CrateScreen(model: PlayerViewModel) {
             uri?.let(model::addFolder)
         }
         var searching by remember { mutableStateOf(false) }
+        var showingPrivacyPolicy by rememberSaveable { mutableStateOf(false) }
+        if (showingPrivacyPolicy) PrivacyPolicyDialog(onDismiss = { showingPrivacyPolicy = false })
         val showingDetail = !wide && model.selection != null && model.folders.isNotEmpty()
         BackHandler(enabled = showingDetail || searching) {
             if (searching) {
@@ -134,6 +138,7 @@ fun CrateScreen(model: PlayerViewModel) {
                     onSearching = { searching = it },
                     onBack = if (showingDetail) ({ model.selection = null }) else null,
                     onPickFolder = { pickFolder.launch(null) },
+                    onShowPrivacyPolicy = { showingPrivacyPolicy = true },
                 )
             },
             bottomBar = { if (model.current != null) PlayerBar(model) },
@@ -184,6 +189,7 @@ private fun TopBar(
     onSearching: (Boolean) -> Unit,
     onBack: (() -> Unit)?,
     onPickFolder: () -> Unit,
+    onShowPrivacyPolicy: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
@@ -278,6 +284,15 @@ private fun TopBar(
                         onClick = { menuOpen = false; model.cycleRepeat() },
                     )
                 }
+                // Google Play's User Data policy wants the privacy policy
+                // reachable from inside the app, not only from the listing;
+                // the text comes from the assets, so the app stays offline.
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text("Privacy Policy") },
+                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                    onClick = { menuOpen = false; onShowPrivacyPolicy() },
+                )
             }
         },
     )

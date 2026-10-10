@@ -75,6 +75,36 @@ android {
     }
 }
 
+// The privacy policy is maintained once, as PRIVACY.md in the repository
+// root; this copies it into the app's assets at build time so that the
+// menu's Privacy Policy dialog shows the same text.
+abstract class CopyPrivacyPolicyTask : DefaultTask() {
+    @get:InputFiles
+    abstract val sources: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val target = outputDirectory.get().asFile
+        target.deleteRecursively()  // no stale files from an earlier source list
+        target.mkdirs()
+        sources.files.forEach { it.copyTo(target.resolve(it.name), overwrite = true) }
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val task = project.tasks.register<CopyPrivacyPolicyTask>(
+            "copyPrivacyPolicy${variant.name.replaceFirstChar { it.uppercase() }}",
+        ) {
+            sources.from(rootDir.resolve("../PRIVACY.md"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(task, CopyPrivacyPolicyTask::outputDirectory)
+    }
+}
+
 dependencies {
     implementation(project(":core"))
     implementation(libs.kotlinx.coroutines.android)
