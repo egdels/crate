@@ -243,9 +243,9 @@ model is attached, `PlayerModel.open(_:)` decides what to play.
 
 **Open, in no fixed order:**
 
-1. Released: v0.1.0 is published at github.com/egdels/crate with the
-   universal DMG built by `release.yml` (CI and Release both green on the
-   first run). For the next version: bump `Packaging/Info.plist` and
+1. Released: v0.1.0 (DMG only) and v0.2.0 (DMG + signed APK) are
+   published at github.com/egdels/crate, built by `release.yml`. For
+   the next version: bump `Packaging/Info.plist` and
    `android/gradle.properties` (appVersion), turn the CHANGELOG's
    Unreleased section into the version's, push `main` and the tag only
    (`git push origin main vX.Y.Z`, never `--all` or `--mirror`: local
@@ -262,4 +262,6 @@ model is attached, `PlayerModel.open(_:)` decides what to play.
    `android/gradle.properties`; bump both. The Pixel 7a currently runs a
    release build signed with the debug key; the first properly signed
    APK needs an uninstall there (different signature), then the folder
-   has to be picked again. Not yet run: the workflow itself.
+   has to be picked again. The workflow ran green for v0.2.0-rc2 and
+   v0.2.0; the APK's certificate was verified with apksigner to be the
+   shared release key (same digest as the other apps), not the debug key.
