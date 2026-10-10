@@ -1,0 +1,7 @@
+First release on Google Play.
+
+Crate plays the music files you already have: MP3, FLAC, M4A, M4B, WAV, Ogg and Opus. Pick a folder, Crate reads the tags where the files are and shows your albums with covers. Gapless playback, lock screen and headset controls, search, two panes on tablets.
+
+No account, no cloud, no ads, no network permission. The privacy policy is in the app's menu.
+
+Free software under GPL-3.0: https://github.com/egdels/crate

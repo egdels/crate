@@ -10,6 +10,11 @@ uploaded into the Play Console by hand.
 The listing has one language, `en-US`, because the app's own UI is
 English only.
 
+Release notes for Play go into `changelogs/<versionCode>.txt` (500
+characters max; the versionCode is the one Gradle derives from
+`appVersion`, 0.3.0 -> 300). They are written for users of the store,
+not from the CHANGELOG, which is for readers of the repository.
+
 ## Regenerating the graphics
 
 ```sh
