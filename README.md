@@ -4,8 +4,6 @@ A music player for the Mac that opens and plays. Point it at a folder, it
 reads the tags, and you listen. No account, no cloud, no store, no settings
 screen.
 
-"Crate" is a working title.
-
 Written in Swift, GPLv3, fully offline, no proprietary services. macOS
 only, by decision: the audio stack, the media keys and the Now Playing
 integration all come straight from the system.

@@ -1,7 +1,7 @@
 # Crate
 
 A FLOSS music player for macOS, written because the developer dislikes the
-Music app. Working title "Crate". GPL-3.0-or-later. macOS only, by
+Music app. Named "Crate". GPL-3.0-or-later. macOS only, by
 decision: Swift, SwiftUI, AVFoundation. No Java, no cross-platform, do not
 reopen that question.
 
