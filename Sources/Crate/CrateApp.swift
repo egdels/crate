@@ -152,6 +152,15 @@ struct CrateApp: App {
                 }
                 .disabled(model.unreadableFiles.isEmpty)
             }
+            // SwiftUI adds "Crate Help" to the Help menu whether or not the
+            // app has one; left alone it opens a "Help isn't available"
+            // alert. HelpWindow.swift is what it opens instead.
+            CommandGroup(replacing: .help) {
+                Button("Crate Help") { Help.show() }
+                    .keyboardShortcut("?", modifiers: .command)
+                Divider()
+                Button("Crate on GitHub") { Help.openRepository() }
+            }
             CommandMenu("Playback") {
                 Button(model.isPlaying ? "Pause" : "Play") { model.togglePlayPause() }
                     .keyboardShortcut(.space, modifiers: [])

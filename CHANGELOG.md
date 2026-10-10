@@ -5,6 +5,16 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow takes a
 version's section from this file as the GitHub release notes.
 
+## [Unreleased]
+
+### Added
+
+- Help > Crate Help opens a one-page help window: library, playing,
+  keyboard shortcuts, Finder integration, formats and where the library
+  lives. Help > Crate on GitHub opens the repository. Before, the item
+  SwiftUI puts there by default answered with "Help isn't available for
+  Crate".
+
 ## [0.3.0] - 2026-10-10
 
 ### Added

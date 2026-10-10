@@ -237,6 +237,12 @@ build/Crate.app does not reach the double-click until scripts/install.sh
 copies it over. Rebinding a type *away* from Crate by script fails with
 userCanceledErr on macOS 26 (no dialog appears); testing the "not yet
 default" path needs Get Info > Change All by hand.
+Help: `HelpWindow.swift` replaces SwiftUI's default "Crate Help" item
+(which otherwise shows "Help isn't available") with a plain NSWindow
+holding one page of SwiftUI text, kept in a static and reused; no Apple
+Help Book. The text is a Swift view, not a resource, because
+scripts/bundle.sh copies only the binary. Verified on screen, incl.
+Cmd+W and reopen. Android has no help entry yet.
 Finder integration: CFBundleDocumentTypes in Packaging/Info.plist,
 `AppDelegate.application(_:open:)` in CrateApp.swift buffers URLs until the
 model is attached, `PlayerModel.open(_:)` decides what to play.
