@@ -38,16 +38,24 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Shows the privacy policy from the app's assets, where the build copies
+ * The privacy policy from the app's assets, where the build copies
  * PRIVACY.md from the repository root (see app/build.gradle.kts). Google
  * Play's User Data policy wants the policy reachable from inside the app,
  * as a link or as text; text keeps the app offline.
  */
 @Composable
-fun PrivacyPolicyDialog(onDismiss: () -> Unit) {
+fun PrivacyPolicyDialog(onDismiss: () -> Unit) = MarkdownDialog("PRIVACY.md", "Privacy Policy", onDismiss)
+
+/** Help > one page from assets/HELP.md, which belongs to the Android app alone. */
+@Composable
+fun HelpDialog(onDismiss: () -> Unit) = MarkdownDialog("HELP.md", "Crate Help", onDismiss)
+
+/** A Markdown file from the assets, shown as a scrolling dialog. */
+@Composable
+fun MarkdownDialog(asset: String, fallbackTitle: String, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val document by produceState<PolicyDocument?>(initialValue = null) {
-        value = withContext(Dispatchers.IO) { loadPolicy(context) }
+    val document by produceState<MarkdownDocument?>(initialValue = null, asset) {
+        value = withContext(Dispatchers.IO) { loadDocument(context, asset) }
     }
     // A plain Dialog with its own layout: AlertDialog sizes its text slot
     // to the content and fights a fixed height, and its default width
@@ -61,24 +69,24 @@ fun PrivacyPolicyDialog(onDismiss: () -> Unit) {
         ) {
             Column(Modifier.padding(24.dp)) {
                 Text(
-                    document?.title ?: "Privacy Policy",
+                    document?.title ?: fallbackTitle,
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.padding(bottom = 16.dp),
                 )
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                     for (block in document?.blocks.orEmpty()) {
                         when (block) {
-                            is PolicyBlock.Heading -> Text(
+                            is MarkdownBlock.Heading -> Text(
                                 block.text,
                                 style = MaterialTheme.typography.titleMedium,
                                 modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
                             )
-                            is PolicyBlock.Paragraph -> Text(
+                            is MarkdownBlock.Paragraph -> Text(
                                 block.text,
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(bottom = 8.dp),
                             )
-                            is PolicyBlock.Bullet -> Row(Modifier.padding(bottom = 6.dp)) {
+                            is MarkdownBlock.Bullet -> Row(Modifier.padding(bottom = 6.dp)) {
                                 Text("•", style = MaterialTheme.typography.bodyMedium)
                                 Spacer(Modifier.width(8.dp))
                                 Text(block.text, style = MaterialTheme.typography.bodyMedium)
@@ -95,36 +103,36 @@ fun PrivacyPolicyDialog(onDismiss: () -> Unit) {
     }
 }
 
-class PolicyDocument(val title: String, val blocks: List<PolicyBlock>)
+class MarkdownDocument(val title: String, val blocks: List<MarkdownBlock>)
 
-sealed class PolicyBlock {
-    class Heading(val text: String) : PolicyBlock()
-    class Paragraph(val text: AnnotatedString) : PolicyBlock()
-    class Bullet(val text: AnnotatedString) : PolicyBlock()
+sealed class MarkdownBlock {
+    class Heading(val text: String) : MarkdownBlock()
+    class Paragraph(val text: AnnotatedString) : MarkdownBlock()
+    class Bullet(val text: AnnotatedString) : MarkdownBlock()
 }
 
-private fun loadPolicy(context: Context): PolicyDocument {
-    val markdown = context.assets.open("PRIVACY.md").bufferedReader().use { it.readText() }
-    return parsePolicy(markdown)
+private fun loadDocument(context: Context, asset: String): MarkdownDocument {
+    val markdown = context.assets.open(asset).bufferedReader().use { it.readText() }
+    return parseMarkdown(markdown, asset.removeSuffix(".md"))
 }
 
 /**
- * The subset of Markdown the policy file uses: "#" and "##" headings,
- * paragraphs, "-" bullets with indented continuation lines, and inline
- * `code`, **bold** and *italic*. The policy deliberately uses no tables or
- * link syntax so that this stays small.
+ * The subset of Markdown the policy and help files use: "#" and "##"
+ * headings, paragraphs, "-" bullets with indented continuation lines, and
+ * inline `code`, **bold** and *italic*. Both files deliberately use no
+ * tables or link syntax so that this stays small.
  */
-fun parsePolicy(markdown: String): PolicyDocument {
-    var title = "Privacy Policy"
-    val blocks = mutableListOf<PolicyBlock>()
+fun parseMarkdown(markdown: String, fallbackTitle: String): MarkdownDocument {
+    var title = fallbackTitle
+    val blocks = mutableListOf<MarkdownBlock>()
     val paragraph = StringBuilder()
     var bullet: StringBuilder? = null
 
     fun flush() {
-        bullet?.let { blocks += PolicyBlock.Bullet(inline(it.toString())) }
+        bullet?.let { blocks += MarkdownBlock.Bullet(inline(it.toString())) }
         bullet = null
         if (paragraph.isNotEmpty()) {
-            blocks += PolicyBlock.Paragraph(inline(paragraph.toString()))
+            blocks += MarkdownBlock.Paragraph(inline(paragraph.toString()))
             paragraph.clear()
         }
     }
@@ -134,7 +142,7 @@ fun parsePolicy(markdown: String): PolicyDocument {
         when {
             line.isBlank() -> flush()
             line.startsWith("# ") -> { flush(); title = line.removePrefix("# ").trim() }
-            line.startsWith("## ") -> { flush(); blocks += PolicyBlock.Heading(line.removePrefix("## ").trim()) }
+            line.startsWith("## ") -> { flush(); blocks += MarkdownBlock.Heading(line.removePrefix("## ").trim()) }
             line.startsWith("- ") -> { flush(); bullet = StringBuilder(line.removePrefix("- ").trim()) }
             bullet != null && raw.startsWith("  ") -> bullet!!.append(' ').append(line.trim())
             else -> {
@@ -145,7 +153,7 @@ fun parsePolicy(markdown: String): PolicyDocument {
         }
     }
     flush()
-    return PolicyDocument(title, blocks)
+    return MarkdownDocument(title, blocks)
 }
 
 private val inlineMarkup = Regex("`([^`]+)`|\\*\\*([^*]+)\\*\\*|\\*([^*]+)\\*")

@@ -242,7 +242,9 @@ Help: `HelpWindow.swift` replaces SwiftUI's default "Crate Help" item
 holding one page of SwiftUI text, kept in a static and reused; no Apple
 Help Book. The text is a Swift view, not a resource, because
 scripts/bundle.sh copies only the binary. Verified on screen, incl.
-Cmd+W and reopen. Android has no help entry yet.
+Cmd+W and reopen. Android: "Help" in the overflow menu shows
+`app/src/main/assets/HELP.md` through `ui/MarkdownDialog.kt` (the
+privacy policy dialog, generalised); verified on the Pixel_9a emulator.
 Finder integration: CFBundleDocumentTypes in Packaging/Info.plist,
 `AppDelegate.application(_:open:)` in CrateApp.swift buffers URLs until the
 model is attached, `PlayerModel.open(_:)` decides what to play.
@@ -289,9 +291,9 @@ model is attached, `PlayerModel.open(_:)` decides what to play.
    verified in the policy text). The build copies the file from the
    repository root into the assets (`CopyPrivacyPolicyTask` in
    app/build.gradle.kts); it is the only place the policy is maintained.
-   `ui/PrivacyPolicy.kt` renders the small Markdown subset it uses
-   (headings, paragraphs, bullets, inline code/bold/italic): no tables or
-   link syntax in that file. `release.yml` attaches the signed AAB next
+   `ui/MarkdownDialog.kt` renders the small Markdown subset it and
+   HELP.md use (headings, paragraphs, bullets, inline code/bold/italic):
+   no tables or link syntax in those files. `release.yml` attaches the signed AAB next
    to the APK (checked for a META-INF signature block: the bundle task
    names its output the same either way and jarsigner -verify exits 0
    for an unsigned file). There is no release keystore in this repo or

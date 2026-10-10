@@ -14,6 +14,10 @@ version's section from this file as the GitHub release notes.
   lives. Help > Crate on GitHub opens the repository. Before, the item
   SwiftUI puts there by default answered with "Help isn't available for
   Crate".
+- Android: "Help" in the overflow menu shows the same kind of page
+  (folders, playing, opening files, formats, where the library lives),
+  in the dialog the privacy policy already uses. The text is
+  `app/src/main/assets/HELP.md`.
 
 ## [0.3.0] - 2026-10-10
 

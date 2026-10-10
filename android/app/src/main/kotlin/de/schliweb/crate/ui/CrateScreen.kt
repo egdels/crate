@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -114,6 +115,8 @@ fun CrateScreen(model: PlayerViewModel) {
         var searching by remember { mutableStateOf(false) }
         var showingPrivacyPolicy by rememberSaveable { mutableStateOf(false) }
         if (showingPrivacyPolicy) PrivacyPolicyDialog(onDismiss = { showingPrivacyPolicy = false })
+        var showingHelp by rememberSaveable { mutableStateOf(false) }
+        if (showingHelp) HelpDialog(onDismiss = { showingHelp = false })
         val showingDetail = !wide && model.selection != null && model.folders.isNotEmpty()
         BackHandler(enabled = showingDetail || searching) {
             if (searching) {
@@ -139,6 +142,7 @@ fun CrateScreen(model: PlayerViewModel) {
                     onBack = if (showingDetail) ({ model.selection = null }) else null,
                     onPickFolder = { pickFolder.launch(null) },
                     onShowPrivacyPolicy = { showingPrivacyPolicy = true },
+                    onShowHelp = { showingHelp = true },
                 )
             },
             bottomBar = { if (model.current != null) PlayerBar(model) },
@@ -190,6 +194,7 @@ private fun TopBar(
     onBack: (() -> Unit)?,
     onPickFolder: () -> Unit,
     onShowPrivacyPolicy: () -> Unit,
+    onShowHelp: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
@@ -288,6 +293,11 @@ private fun TopBar(
                 // reachable from inside the app, not only from the listing;
                 // the text comes from the assets, so the app stays offline.
                 HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text("Help") },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.Help, contentDescription = null) },
+                    onClick = { menuOpen = false; onShowHelp() },
+                )
                 DropdownMenuItem(
                     text = { Text("Privacy Policy") },
                     leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
