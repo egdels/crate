@@ -167,14 +167,12 @@ model is attached, `PlayerModel.open(_:)` decides what to play.
 
 **Open, in no fixed order:**
 
-1. First release: the 0.1.0 files are built: CHANGELOG has its
-   `[0.1.0]` section, the tag `v0.1.0` exists locally, and
-   `build/release/` holds the universal DMG, its `.sha256` and the release
-   notes (a copy sits on the NAS for the Intel MacBook). No GitHub
-   remote exists yet and the name is still open; once both are settled,
-   push `main` and the tag only (`git push origin main v0.1.0`, never
-   `--all` or `--mirror`: local branches hold pre-release history that
-   stays local), and `release.yml` publishes the same DMG.
+1. Released: v0.1.0 is published at github.com/egdels/crate with the
+   universal DMG built by `release.yml` (CI and Release both green on the
+   first run). For the next version: bump `Packaging/Info.plist`, add the
+   CHANGELOG section, push `main` and the tag only (`git push origin main
+   vX.Y.Z`, never `--all` or `--mirror`: local branches hold pre-release
+   history that stays local).
 2. Not yet verified by ear: the gapless transition is covered by a test on
    the node clock, not by listening. Output device switching mid-track is
    handled in code but untested.
