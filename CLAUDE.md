@@ -294,5 +294,10 @@ model is attached, `PlayerModel.open(_:)` decides what to play.
    Surface, not an `AlertDialog`: the latter sizes its text slot to the
    content and showed four lines in landscape. Its open state is
    `rememberSaveable`, so rotating keeps it open. Verified in portrait
-   and landscape, light and dark, on the Pixel_9a emulator. Not yet
-   done: the Play Console entry itself.
+   and landscape, light and dark, on the Pixel_9a emulator. The v0.3.0
+   workflow ran green; the AAB's signer is the same certificate as the
+   v0.2.0 APK (verified with keytool -printcert -jarfile) and it carries
+   assets/PRIVACY.md. The Play Console entry was started on 2026-10-10
+   (app created as de.schliweb.crate, "Crate: Offline Music Player",
+   automatic integrity protection off on purpose: it would add Play-only
+   checks to a GPL app whose APK is also on GitHub).
