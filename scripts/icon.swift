@@ -6,13 +6,17 @@
 // (the square fills 824 of 1024 points). Run via scripts/icon.sh, which
 // turns the PNGs into Packaging/AppIcon.icns.
 //
-//   swift scripts/icon.swift <output directory> [--android <res directory>]
+//   swift scripts/icon.swift <output directory> [--android <res directory>] [--play <directory>]
 //
 // With --android it also writes the Android launcher icon's foreground
 // layer into the app's res/ folder, mipmap-*/ic_launcher_foreground.png:
 // the scene without frame or shadow on the full canvas, so that every
 // launcher mask shape shows sky around the crate. (The app's minimum
 // Android version has adaptive icons, so no legacy square is needed.)
+//
+// With --play it writes the Google Play listing graphics: icon.png (512 px,
+// the unframed scene, Play rounds the corners itself) and
+// featureGraphic.png (1024 x 500, the scene beside the app name).
 
 import AppKit
 import Foundation
@@ -228,6 +232,45 @@ for (points, scale) in sizes {
     try writePNG(pixels: points * scale, framed: true, to: outDir.appendingPathComponent(name))
 }
 print("wrote \(sizes.count) PNGs to \(outDir.path)")
+
+if let flag = CommandLine.arguments.firstIndex(of: "--play"), CommandLine.arguments.count > flag + 1 {
+    let dir = URL(fileURLWithPath: CommandLine.arguments[flag + 1], isDirectory: true)
+    try writePNG(pixels: 512, framed: false, to: dir.appendingPathComponent("icon.png"))
+
+    // Feature graphic: the sky across the whole banner, the crate scene on
+    // the left, name and tagline on the right. Play shows it above the
+    // listing and in promotions, so no small text.
+    let (w, h) = (1024, 500)
+    let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+    ctx.interpolationQuality = .high
+    let rgb = CGColorSpaceCreateDeviceRGB()
+    let sky = CGGradient(colorsSpace: rgb, colors: [color(0x4A5C9A), color(0x27305A), color(0x161B33)] as CFArray,
+                         locations: [0, 0.55, 1])!
+    ctx.drawLinearGradient(sky, start: CGPoint(x: 0, y: CGFloat(h)), end: .zero, options: [])
+    ctx.saveGState()
+    // The unframed scene draws its own sky over the full 1024 canvas, so
+    // clip it to a circle and let the banner's sky continue around it.
+    let scene = CGRect(x: 40, y: 20, width: 460, height: 460)
+    ctx.addEllipse(in: scene)
+    ctx.clip()
+    ctx.translateBy(x: scene.minX, y: scene.minY)
+    draw(in: ctx, scale: scene.width / 1024, framed: false)
+    ctx.restoreGState()
+
+    func text(_ string: String, size: CGFloat, weight: NSFont.Weight, color: NSColor, at point: CGPoint) {
+        let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: size, weight: weight), .foregroundColor: color]
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: string, attributes: attributes))
+        ctx.textPosition = point
+        CTLineDraw(line, ctx)
+    }
+    text("Crate", size: 128, weight: .bold, color: .white, at: CGPoint(x: 530, y: 250))
+    text("Your music. Your files.", size: 44, weight: .medium, color: NSColor(white: 1, alpha: 0.92), at: CGPoint(x: 534, y: 180))
+    text("No account, no cloud, no ads.", size: 32, weight: .regular, color: NSColor(white: 1, alpha: 0.7), at: CGPoint(x: 536, y: 128))
+    let rep = NSBitmapImageRep(cgImage: ctx.makeImage()!)
+    try rep.representation(using: .png, properties: [:])!.write(to: dir.appendingPathComponent("featureGraphic.png"))
+    print("wrote Play icon and feature graphic to \(dir.path)")
+}
 
 if let flag = CommandLine.arguments.firstIndex(of: "--android"), CommandLine.arguments.count > flag + 1 {
     let res = URL(fileURLWithPath: CommandLine.arguments[flag + 1], isDirectory: true)
