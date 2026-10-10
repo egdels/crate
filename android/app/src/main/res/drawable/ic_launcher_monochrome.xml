@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright (C) 2026 Christian Kierdorf
+  SPDX-License-Identifier: GPL-3.0-or-later
+
+  Themed-icon silhouette of the launcher icon: a record standing in a
+  crate of three slats, in the 108 dp adaptive canvas.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Record with spindle hole. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,30 m-19,0 a19,19 0 1,1 38,0 a19,19 0 1,1 -38,0 Z M54,30 m-2.5,0 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0 Z"
+        android:fillType="evenOdd" />
+    <!-- Three slats. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M30,50 h48 v7 h-48 Z M30,60 h48 v7 h-48 Z M30,70 h48 v7 h-48 Z" />
+    <!-- Corner posts. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M31,48 h4 v31 h-4 Z M73,48 h4 v31 h-4 Z" />
+</vector>

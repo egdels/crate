@@ -6,9 +6,11 @@ A music player for the Mac that opens and plays. Point it at a folder, it
 reads the tags, and you listen. No account, no cloud, no store, no settings
 screen.
 
-Written in Swift, GPLv3, fully offline, no proprietary services. macOS
-only, by decision: the audio stack, the media keys and the Now Playing
-integration all come straight from the system.
+Written in Swift, GPLv3, fully offline, no proprietary services. The
+audio stack, the media keys and the Now Playing integration all come
+straight from the system. There is an Android app with the same idea in
+`android/`, written in Kotlin on top of the platform's own media stack;
+see [Android](#android) below.
 
 ## Status
 
@@ -96,6 +98,34 @@ swift run crate-scan ~/Music/Music/Media.localized        # summary + tracks wit
 swift run crate-scan <folder> --all                       # every track
 ```
 
+## Android
+
+`android/` holds the Android app: the same product, the same album
+logic, no shared code with the Mac app (there is nothing to share across
+Swift and Kotlin but the ideas). Pick a folder with the system's folder
+picker, Crate reads the tags where the files are and plays them through
+the system's media session, so the lock screen, headsets and Bluetooth
+controls work. Formats are what Android decodes: MP3, AAC/M4A, FLAC, WAV,
+Ogg Vorbis, Opus. Runs on Android 10 and later.
+
+```
+android/core/   UI-free Kotlin library: Track, Album grouping, Library with
+                incremental rescans, JSON store, FLAC parser, search (JVM tests)
+android/app/    Jetpack Compose UI, Media3/ExoPlayer playback service,
+                Storage Access Framework file source, cover cache
+```
+
+```sh
+cd android
+./gradlew :core:test            # the library's tests, no emulator needed
+./gradlew :app:assembleDebug    # -> app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:assembleRelease  # unsigned unless the signing env vars are set
+```
+
+Building needs JDK 17 or later and the Android SDK with platform 37
+(`ANDROID_HOME` or `android/local.properties`). The `scripts/icon.sh`
+run that draws the Mac icon also writes the Android launcher icon.
+
 ## Layout
 
 ```
@@ -103,7 +133,9 @@ Sources/CrateCore/    the package
 Sources/Crate/        the SwiftUI app
 Sources/crate-scan/   developer tool, not part of the app
 Tests/CrateCoreTests/
-Packaging/            Info.plist (the one place the version lives) and AppIcon.icns
+Packaging/            Info.plist (the one place the macOS version lives) and AppIcon.icns
+android/              the Android app, see above; its version lives in
+                      android/gradle.properties
 scripts/              bundle.sh (build Crate.app), dmg.sh (release DMG), install.sh
                       (copy to /Applications and register), icon.sh/icon.swift
                       (regenerate the icon), screenshot.sh (dev aid)
@@ -125,5 +157,5 @@ GPL-3.0-or-later, see `LICENSE`.
 
 See `AI_POLICY.md` for how AI tooling is used in this project,
 `PRIVACY.md` for what the app does with your data (nothing leaves your
-Mac) and `THIRD-PARTY-NOTICES.md` for dependencies (there are none beyond
-the system frameworks).
+device) and `THIRD-PARTY-NOTICES.md` for dependencies (none beyond the
+system frameworks on the Mac; Kotlin, AndroidX and Media3 on Android).

@@ -1,9 +1,11 @@
 # Crate
 
 A FLOSS music player for macOS, written because the developer dislikes the
-Music app. Named "Crate". GPL-3.0-or-later. macOS only, by
-decision: Swift, SwiftUI, AVFoundation. No Java, no cross-platform, do not
-reopen that question.
+Music app. Named "Crate". GPL-3.0-or-later. The Mac app is Swift, SwiftUI,
+AVFoundation, nothing cross-platform. Since 2026-10-10 there is also an
+Android app in `android/` (Kotlin, Compose, Media3), decided by the
+developer: same product, same album logic, no shared code; the two apps
+never get a common framework. Do not reopen that either.
 
 The product rule, inherited from the developer's other apps: **open it and
 play**. No account, no cloud, no store, no settings screen. Defaults
@@ -40,6 +42,20 @@ No Xcode project. The app is a SwiftPM executable target; `scripts/bundle.sh`
 is the whole packaging step. Xcode 27 is installed and `xcode-select`ed; the
 Command Line Tools alone cannot build the SwiftUI target (no macro plugin).
 
+Android, from `android/` (needs JDK 17+, Android SDK with platform 37;
+`ANDROID_HOME` is set on this machine, Gradle 9.7 via the wrapper):
+
+```sh
+./gradlew :core:test             # 34 JVM tests, ~2 s
+./gradlew :app:assembleDebug     # -> app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:lintDebug         # must stay at zero errors (CI runs it)
+./gradlew :app:assembleRelease   # R8; unsigned without RELEASE_KEYSTORE_PATH etc.
+~/Library/Android/sdk/emulator/emulator -avd Pixel_9a &   # Android 17 (API 37) image
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell am start -n de.schliweb.crate/.MainActivity
+adb exec-out screencap -p > shot.png   # then Read the file; adb shell input tap X Y
+```
+
 Screenshots and `osascript` need Screen Recording and Accessibility granted
 to the terminal's host app; see the header of `scripts/screenshot.sh`.
 Playback can be verified without a screen: start playback, then check
@@ -69,6 +85,42 @@ the result for a real folder.
 Design rules: everything with I/O sits behind a protocol so tests use
 fakes. `Library` is an actor, `PlayQueue` a value type, views never touch
 `Library` or `AudioPlayer` directly, only `PlayerModel`.
+
+## Android layout
+
+```
+android/core/   Kotlin/JVM, package de.schliweb.crate.core: Track (uri +
+                path), Album.group (port of the Swift one, on "/"-joined
+                document paths), Library (Mutex, incremental rescans),
+                JsonLibraryStore (kotlinx.serialization), FileSource
+                (+LocalFileSource for tests), MetadataReader, FlacMetadata,
+                TagText/Id3v1Genres, FolderImages, SearchQuery, Formatting
+android/app/    de.schliweb.crate: CrateApplication (owns Library and
+                ArtworkCache), PlayerViewModel (the only UI state),
+                MainActivity, ui/CrateScreen (grid + detail, two panes
+                from 720 dp, else grid -> album page), ui/Theme,
+                library/SafFileSource (DocumentsContract walk),
+                library/AndroidMetadataReader (MediaMetadataRetriever,
+                FLAC via FlacMetadata), library/ArtworkCache (+reader),
+                playback/PlaybackService (MediaSessionService + ExoPlayer,
+                ArtworkBitmapLoader resolves crate://album/<key>)
+```
+
+Android decisions: the track's `path` is built from document display
+names starting at the tree's document id ("primary:Music/Artist/Album/
+01.mp3"), so grouping works for any provider; `uri` is the content URI
+that opens it. ExoPlayer's playlist is the queue (there is no PlayQueue
+port): next/previous/shuffle/repeat/gapless come from Media3, and the
+notification's buttons work without extra plumbing. Ogg and Opus are
+scanned because Android plays them. `mipmap-anydpi` without `-v26` is
+silently dropped by the resource merger; keep the `-v26` folder. Lint
+needs `@androidx.annotation.OptIn(UnstableApi::class)`, not Kotlin's
+`@OptIn`. Verified on the Pixel_9a emulator (Android 17): folder picker,
+scan (M4A, MP3, tagged FLAC with cover, untagged FLAC with folder.jpg,
+Ogg), grid, detail, playback, auto-advance, media notification with
+cover colour, search, two-pane landscape, "open with" via VIEW intent,
+restart with the saved library, and the R8 release build. Not yet
+tested: a real device, large libraries over SAF, output switching.
 
 ## Test material
 
@@ -176,3 +228,9 @@ model is attached, `PlayerModel.open(_:)` decides what to play.
 2. Not yet verified by ear: the gapless transition is covered by a test on
    the node clock, not by listening. Output device switching mid-track is
    handled in code but untested.
+3. Android: no release pipeline yet (`android.yml` only tests, lints and
+   builds a debug APK). A release needs the signing env vars
+   `RELEASE_KEYSTORE_PATH`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`,
+   `SIGNING_STORE_PASSWORD` like the developer's other Android apps, and
+   a versionName bump in `android/gradle.properties`. Not run on a real
+   phone yet.

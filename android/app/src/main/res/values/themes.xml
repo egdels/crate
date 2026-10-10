@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copyright (C) 2026 Christian Kierdorf
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<resources>
+    <!-- Only the window frame; everything inside is Compose. -->
+    <style name="Theme.Crate" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

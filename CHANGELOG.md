@@ -5,6 +5,22 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow takes a
 version's section from this file as the GitHub release notes.
 
+## [Unreleased]
+
+### Added
+
+- An Android app in `android/`: the same product on a phone or tablet.
+  Pick a folder with the system's folder picker, Crate scans it and
+  reads the tags (MP3, M4A, Ogg and Opus through the platform, FLAC
+  through its own parser), groups albums by folder and loosely compared
+  tags exactly like the Mac app, shows covers from the files or the
+  folder, searches, and plays through a media session with gapless
+  transitions, lock screen and headset controls. Rescans are
+  incremental, the library is one JSON file, and "Open with Crate" from
+  a file manager plays the file. Kotlin, Jetpack Compose, Media3;
+  Android 10 and later. The core library has JVM tests, the app was
+  verified on an Android 17 emulator.
+
 ## [0.1.0] - 2026-10-10
 
 ### Added

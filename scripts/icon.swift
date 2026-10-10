@@ -6,7 +6,13 @@
 // (the square fills 824 of 1024 points). Run via scripts/icon.sh, which
 // turns the PNGs into Packaging/AppIcon.icns.
 //
-//   swift scripts/icon.swift <output directory>
+//   swift scripts/icon.swift <output directory> [--android <res directory>]
+//
+// With --android it also writes the Android launcher icon's foreground
+// layer into the app's res/ folder, mipmap-*/ic_launcher_foreground.png:
+// the scene without frame or shadow on the full canvas, so that every
+// launcher mask shape shows sky around the crate. (The app's minimum
+// Android version has adaptive icons, so no legacy square is needed.)
 
 import AppKit
 import Foundation
@@ -22,30 +28,43 @@ func color(_ hex: UInt32, _ alpha: CGFloat = 1) -> CGColor {
 
 /// Everything is drawn in a 1024-point space, origin bottom-left: a
 /// record pulled halfway out of a crate, the way you flip through one.
-func draw(in ctx: CGContext, scale: CGFloat) {
+/// `framed` is the macOS icon: the scene inside a rounded square with a
+/// drop shadow. Unframed (Android's adaptive foreground) the sky fills
+/// the whole canvas and the scene sits a little smaller in the middle, so
+/// that a circular mask does not clip the crate's corners.
+func draw(in ctx: CGContext, scale: CGFloat, framed: Bool = true) {
     ctx.scaleBy(x: scale, y: scale)
     let canvas = CGRect(x: 0, y: 0, width: 1024, height: 1024)
-    let square = canvas.insetBy(dx: 100, dy: 100)
+    let square = framed ? canvas.insetBy(dx: 100, dy: 100) : canvas
     let radius: CGFloat = square.width * 0.2237
     let squarePath = CGPath(roundedRect: square, cornerWidth: radius, cornerHeight: radius, transform: nil)
     let rgb = CGColorSpaceCreateDeviceRGB()
 
-    // Drop shadow under the square, like the system icons.
-    ctx.saveGState()
-    ctx.setShadow(offset: CGSize(width: 0, height: -14), blur: 40, color: color(0x000000, 0.45))
-    ctx.addPath(squarePath)
-    ctx.setFillColor(color(0x1A2238))
-    ctx.fillPath()
-    ctx.restoreGState()
+    if framed {
+        // Drop shadow under the square, like the system icons.
+        ctx.saveGState()
+        ctx.setShadow(offset: CGSize(width: 0, height: -14), blur: 40, color: color(0x000000, 0.45))
+        ctx.addPath(squarePath)
+        ctx.setFillColor(color(0x1A2238))
+        ctx.fillPath()
+        ctx.restoreGState()
+    }
 
     ctx.saveGState()
-    ctx.addPath(squarePath)
-    ctx.clip()
+    if framed {
+        ctx.addPath(squarePath)
+        ctx.clip()
+    }
 
     // Background: deep blue, lit from the top, darker at the bottom.
     let sky = CGGradient(colorsSpace: rgb, colors: [color(0x4A5C9A), color(0x27305A), color(0x161B33)] as CFArray,
                          locations: [0, 0.55, 1])!
     ctx.drawLinearGradient(sky, start: CGPoint(x: 0, y: square.maxY), end: CGPoint(x: 0, y: square.minY), options: [])
+    if !framed {
+        ctx.translateBy(x: 512, y: 512)
+        ctx.scaleBy(x: 0.78, y: 0.78)
+        ctx.translateBy(x: -512, y: -512)
+    }
     let glow = CGGradient(colorsSpace: rgb, colors: [color(0xFFFFFF, 0.18), color(0xFFFFFF, 0)] as CFArray, locations: [0, 1])!
     ctx.drawRadialGradient(glow, startCenter: CGPoint(x: 400, y: 880), startRadius: 0,
                            endCenter: CGPoint(x: 400, y: 880), endRadius: 520, options: [])
@@ -194,15 +213,29 @@ func draw(in ctx: CGContext, scale: CGFloat) {
     ctx.restoreGState()
 }
 
-for (points, scale) in sizes {
-    let pixels = points * scale
+func writePNG(pixels: Int, framed: Bool, to url: URL) throws {
     let ctx = CGContext(data: nil, width: pixels, height: pixels, bitsPerComponent: 8, bytesPerRow: 0,
                         space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
     ctx.interpolationQuality = .high
-    draw(in: ctx, scale: CGFloat(pixels) / 1024)
-    let image = ctx.makeImage()!
-    let rep = NSBitmapImageRep(cgImage: image)
+    draw(in: ctx, scale: CGFloat(pixels) / 1024, framed: framed)
+    let rep = NSBitmapImageRep(cgImage: ctx.makeImage()!)
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try rep.representation(using: .png, properties: [:])!.write(to: url)
+}
+
+for (points, scale) in sizes {
     let name = scale == 1 ? "icon_\(points)x\(points).png" : "icon_\(points)x\(points)@2x.png"
-    try rep.representation(using: .png, properties: [:])!.write(to: outDir.appendingPathComponent(name))
+    try writePNG(pixels: points * scale, framed: true, to: outDir.appendingPathComponent(name))
 }
 print("wrote \(sizes.count) PNGs to \(outDir.path)")
+
+if let flag = CommandLine.arguments.firstIndex(of: "--android"), CommandLine.arguments.count > flag + 1 {
+    let res = URL(fileURLWithPath: CommandLine.arguments[flag + 1], isDirectory: true)
+    // Adaptive icon layers are 108 dp; one PNG per density.
+    let densities: [(String, CGFloat)] = [("mdpi", 1), ("hdpi", 1.5), ("xhdpi", 2), ("xxhdpi", 3), ("xxxhdpi", 4)]
+    for (density, factor) in densities {
+        let folder = res.appendingPathComponent("mipmap-\(density)", isDirectory: true)
+        try writePNG(pixels: Int(108 * factor), framed: false, to: folder.appendingPathComponent("ic_launcher_foreground.png"))
+    }
+    print("wrote Android launcher icons to \(res.path)")
+}
