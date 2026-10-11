@@ -12,8 +12,11 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.util.BitmapLoader
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DataSourceBitmapLoader
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.FileDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.ListenableFuture
@@ -45,7 +48,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        val player = ExoPlayer.Builder(this)
+        val player = ExoPlayer.Builder(this, DefaultMediaSourceFactory(localDataSources(this)))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -62,7 +65,7 @@ class PlaybackService : MediaSessionService() {
         )
         session = MediaSession.Builder(this, player)
             .setSessionActivity(openApp)
-            .setBitmapLoader(ArtworkBitmapLoader(this, (application as CrateApplication).artwork))
+            .setBitmapLoader(ArtworkBitmapLoader((application as CrateApplication).artwork))
             .build()
     }
 
@@ -82,21 +85,23 @@ class PlaybackService : MediaSessionService() {
  * Resolves the `crate://album/<key>` artwork URIs the view model puts on
  * its media items through the shared [ArtworkCache], so the notification
  * and the lock screen show the same thumbnail as the app, decoded once.
- * Anything else goes to Media3's own loader.
+ * Embedded artwork the player hands over as bytes is decoded with the
+ * cache's subsampling. No Media3 `DataSourceBitmapLoader`: it always
+ * builds an HTTP data source, which Crate cannot use (no INTERNET
+ * permission) and Play flags as image downloading.
  */
 @UnstableApi
-class ArtworkBitmapLoader(context: Context, private val cache: ArtworkCache) : BitmapLoader {
-    private val fallback = DataSourceBitmapLoader(context)
+class ArtworkBitmapLoader(private val cache: ArtworkCache) : BitmapLoader {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    override fun supportsMimeType(mimeType: String): Boolean = fallback.supportsMimeType(mimeType)
+    override fun supportsMimeType(mimeType: String): Boolean = mimeType.startsWith("image/")
 
-    override fun decodeBitmap(data: ByteArray): ListenableFuture<Bitmap> = fallback.decodeBitmap(data)
+    override fun decodeBitmap(data: ByteArray): ListenableFuture<Bitmap> =
+        scope.future { ArtworkCache.decode(data) ?: throw IOException("undecodable artwork") }
 
-    override fun loadBitmap(uri: Uri): ListenableFuture<Bitmap> {
-        if (uri.scheme != SCHEME) return fallback.loadBitmap(uri)
-        val key = uri.lastPathSegment ?: return fallback.loadBitmap(uri)
-        return scope.future { cache.thumbnail(key) ?: throw IOException("no artwork for $key") }
+    override fun loadBitmap(uri: Uri): ListenableFuture<Bitmap> = scope.future {
+        val key = uri.lastPathSegment?.takeIf { uri.scheme == SCHEME } ?: throw IOException("not an album URI: $uri")
+        cache.thumbnail(key) ?: throw IOException("no artwork for $key")
     }
 
     fun close() = scope.cancel()
@@ -107,3 +112,12 @@ class ArtworkBitmapLoader(context: Context, private val cache: ArtworkCache) : B
         fun uri(key: String): Uri = Uri.parse("$SCHEME://album/$key")
     }
 }
+
+/**
+ * content:// and file:// only. Media3's default includes an HTTP data
+ * source, which Crate cannot use (no INTERNET permission); without a
+ * default factory anywhere, R8 drops it.
+ */
+@UnstableApi
+private fun localDataSources(context: Context): DataSource.Factory =
+    DefaultDataSource.Factory(context, FileDataSource.Factory())

@@ -12,6 +12,11 @@ version's section from this file as the GitHub release notes.
 - Android: the window theme no longer sets the status and navigation bar
   colours; `enableEdgeToEdge()` already does, and the theme attributes
   are deprecated since Android 15 (flagged by the Play Console).
+- Android: the APK no longer contains Media3's HTTP data source. Crate
+  has no network permission and never used it, but the Play Console
+  reported it as images being downloaded and decoded by hand. Embedded
+  covers for the notification are now decoded with the same subsampling
+  as the grid's thumbnails.
 
 ## [0.4.0] - 2026-10-11
 
