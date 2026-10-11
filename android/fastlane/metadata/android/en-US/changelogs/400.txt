@@ -1,0 +1,6 @@
+New: Help in the menu explains folders, playing, opening files and formats.
+
+Fixed for large libraries:
+- Going back from an album returns to where you were in the grid, not to the top.
+- Turning the phone keeps your place: the album you opened stays open and visible, and turning back returns to the grid.
+- The "pick a folder" page no longer flashes at start while your library loads.

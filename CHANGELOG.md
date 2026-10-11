@@ -19,6 +19,24 @@ version's section from this file as the GitHub release notes.
   in the dialog the privacy policy already uses. The text is
   `app/src/main/assets/HELP.md`.
 
+### Fixed
+
+- Android: going back from an album to the grid returned to the top of
+  the grid instead of where the album was. With a large library that
+  meant scrolling down again every time.
+- Android: turning the phone to landscape and back opened the library's
+  first album instead of returning to the grid. The two-pane view now
+  shows an album from the part of the grid that is on screen, and drops
+  it again when the panes collapse; an album the user tapped stays open.
+- Android: after a rotation the selected album's tile could sit cut off
+  at the bottom of the grid or outside it; the grid now scrolls it into
+  view.
+- Both apps: the "pick a folder" start page flashed at launch while the
+  saved library was still loading, as if no folder had been added.
+- Mac: album grouping no longer runs on the main thread, so the window
+  stays responsive while a library of tens of thousands of tracks is
+  loaded or rescanned.
+
 ## [0.3.0] - 2026-10-10
 
 ### Added
