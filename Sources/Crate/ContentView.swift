@@ -17,7 +17,9 @@ struct ContentView: View {
         VStack(spacing: 0) {
             NavigationView {
                 Group {
-                    if model.folders.isEmpty {
+                    if !model.isLoaded {
+                        Color.clear
+                    } else if model.folders.isEmpty {
                         Text("No music folder yet")
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -26,7 +28,9 @@ struct ContentView: View {
                     }
                 }
                 .frame(minWidth: 380, idealWidth: 420)
-                if model.folders.isEmpty {
+                if !model.isLoaded {
+                    Color.clear
+                } else if model.folders.isEmpty {
                     EmptyLibraryView()
                 } else if model.detail == .allTracks {
                     AllTracksView()

@@ -22,6 +22,9 @@ final class PlayerModel: ObservableObject {
     /// Cover of the album the current track belongs to, for the player bar.
     @Published private(set) var currentArtwork: CGImage?
     @Published private(set) var isScanning = false
+    /// False until the saved library has been read; until then the views
+    /// must not show the empty state as if there were no folder.
+    @Published private(set) var isLoaded = false
     /// Files read so far and files to read, while a scan is in its reading
     /// phase; nil while it lists the folder.
     @Published private(set) var scanProgress: (read: Int, total: Int)?
@@ -151,6 +154,7 @@ final class PlayerModel: ObservableObject {
                 } catch {
                     lastError = "Could not load the library: \(error.localizedDescription)"
                 }
+                isLoaded = true
                 opensAudioFiles = DefaultApp.opensAudioFiles
             }
         }
@@ -298,9 +302,17 @@ final class PlayerModel: ObservableObject {
     }
 
     private func refresh() async {
-        folders = await library.folders
-        tracks = await library.tracks
-        albums = Album.group(tracks, roots: folders)
+        // Read everything first and publish it in one go: setting folders
+        // before the hop for the tracks could show an empty grid. Grouping
+        // runs off the main actor; with tens of thousands of tracks it
+        // would stall the window on a slow Mac.
+        let folders = await library.folders
+        let tracks = await library.tracks
+        self.albums = await Task.detached(priority: .userInitiated) {
+            Album.group(tracks, roots: folders)
+        }.value
+        self.tracks = tracks
+        self.folders = folders
         switch selection {
         case .allTracks:
             break
