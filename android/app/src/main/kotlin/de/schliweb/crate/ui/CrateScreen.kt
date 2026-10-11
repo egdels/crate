@@ -27,8 +27,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -76,6 +78,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -98,6 +101,7 @@ import de.schliweb.crate.core.Track
 import de.schliweb.crate.core.countText
 import de.schliweb.crate.core.lengthText
 import de.schliweb.crate.core.timeText
+import kotlinx.coroutines.flow.first
 
 /**
  * The whole app on one screen, laid out like the Mac window when there
@@ -118,6 +122,9 @@ fun CrateScreen(model: PlayerViewModel) {
         var showingHelp by rememberSaveable { mutableStateOf(false) }
         if (showingHelp) HelpDialog(onDismiss = { showingHelp = false })
         val showingDetail = !wide && model.selection != null && model.folders.isNotEmpty()
+        // On a phone the grid leaves the composition while an album is
+        // open; its scroll position lives here so "back" returns to it.
+        val gridState = rememberLazyGridState()
         BackHandler(enabled = showingDetail || searching) {
             if (searching) {
                 searching = false
@@ -127,9 +134,26 @@ fun CrateScreen(model: PlayerViewModel) {
             }
         }
         // With both panes visible there is always a selection, like on the
-        // Mac; on a phone the grid is the start page.
+        // Mac; on a phone the grid is the start page. The automatic pick is
+        // the first album on screen, and it is dropped again when the panes
+        // collapse, so turning the phone and back returns to the grid.
+        var autoSelected by rememberSaveable { mutableStateOf<String?>(null) }
         LaunchedEffect(wide, model.albums) {
-            if (wide && model.selection == null) model.albums.firstOrNull()?.let { model.selection = Selection.AlbumId(it.id) }
+            val selection = model.selection
+            if (wide && selection == null) {
+                val albums = model.filteredAlbums.ifEmpty { model.albums }
+                // Item 0 of the grid is the "All Tracks" tile.
+                albums.getOrNull((gridState.firstVisibleItemIndex - 1).coerceAtLeast(0))?.let {
+                    model.selection = Selection.AlbumId(it.id)
+                    autoSelected = it.id
+                }
+            } else if (!wide && selection is Selection.AlbumId && selection.id == autoSelected) {
+                model.selection = null
+                autoSelected = null
+            }
+        }
+        LaunchedEffect(model.selection) {
+            if ((model.selection as? Selection.AlbumId)?.id != autoSelected) autoSelected = null
         }
 
         Scaffold(
@@ -164,10 +188,11 @@ fun CrateScreen(model: PlayerViewModel) {
                     }
                 }
                 when {
+                    !model.isLoaded -> Unit
                     model.folders.isEmpty() -> EmptyLibrary(model, onPickFolder = { pickFolder.launch(null) })
                     wide -> Row(Modifier.fillMaxSize()) {
                         Column(Modifier.weight(1f).fillMaxSize()) {
-                            AlbumGrid(model, Modifier.weight(1f))
+                            AlbumGrid(model, gridState, Modifier.weight(1f))
                             StatusLine(model)
                         }
                         VerticalDivider()
@@ -175,7 +200,7 @@ fun CrateScreen(model: PlayerViewModel) {
                     }
                     model.selection != null -> Detail(model)
                     else -> {
-                        AlbumGrid(model, Modifier.weight(1f))
+                        AlbumGrid(model, gridState, Modifier.weight(1f))
                         StatusLine(model)
                     }
                 }
@@ -360,9 +385,25 @@ private fun StatusLine(model: PlayerViewModel) {
 }
 
 @Composable
-private fun AlbumGrid(model: PlayerViewModel, modifier: Modifier = Modifier) {
+private fun AlbumGrid(model: PlayerViewModel, state: LazyGridState, modifier: Modifier = Modifier) {
     val albums = model.filteredAlbums
+    // The kept scroll position is an item index; after a rotation the
+    // viewport has another height, so the selected tile can end up cut off
+    // or off screen. Bring it fully into view once the grid has a layout.
+    LaunchedEffect(Unit) {
+        val index = when (val selection = model.selection) {
+            Selection.AllTracks -> 0
+            is Selection.AlbumId -> albums.indexOfFirst { it.id == selection.id }.takeIf { it >= 0 }?.plus(1)
+            null -> null
+        } ?: return@LaunchedEffect
+        val layout = snapshotFlow { state.layoutInfo }.first { it.visibleItemsInfo.isNotEmpty() }
+        val tile = layout.visibleItemsInfo.firstOrNull { it.index == index }
+        if (tile == null || tile.offset.y < 0 || tile.offset.y + tile.size.height > layout.viewportEndOffset - layout.afterContentPadding) {
+            state.scrollToItem(index)
+        }
+    }
     LazyVerticalGrid(
+        state = state,
         columns = GridCells.Adaptive(minSize = 140.dp),
         contentPadding = PaddingValues(12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

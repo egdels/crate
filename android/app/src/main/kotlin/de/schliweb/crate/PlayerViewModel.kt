@@ -65,6 +65,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private set
     var isScanning by mutableStateOf(false)
         private set
+    /** False until the saved library has been read; until then the UI
+     *  must not offer the folder picker as if the library were empty. */
+    var isLoaded by mutableStateOf(false)
+        private set
     /** Files read so far and files to read, while a scan is in its
      *  reading phase; null while it lists the folder. */
     var scanProgress by mutableStateOf<Pair<Int, Int>?>(null)
@@ -115,11 +119,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     init {
         viewModelScope.launch {
             try {
+                val t0 = System.currentTimeMillis()
                 withContext(Dispatchers.IO) { library.load() }
+                val t1 = System.currentTimeMillis()
                 refresh()
+                Log.i(TAG, "load: ${tracks.size} tracks, read ${t1 - t0} ms, grouped ${System.currentTimeMillis() - t1} ms")
             } catch (e: Exception) {
                 lastError = "Could not load the library: ${e.message}"
             }
+            isLoaded = true
             started.complete(Unit)
         }
         viewModelScope.launch { connect() }
@@ -258,9 +266,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private suspend fun refresh() {
+        val grouped = withContext(Dispatchers.Default) { library.albums }
+        // All three at once, after the grouping: setting folders first
+        // showed an empty grid for as long as the grouping took.
         folders = library.folders
         tracks = library.tracks
-        val grouped = withContext(Dispatchers.Default) { library.albums }
         albums = grouped
         val selected = selection
         if (selected is Selection.AlbumId && grouped.none { it.id == selected.id }) selection = null
