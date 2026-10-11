@@ -4,10 +4,11 @@
   SPDX-License-Identifier: GPL-3.0-or-later
 -->
 <resources>
-    <!-- Only the window frame; everything inside is Compose. -->
+    <!-- Only the window frame; everything inside is Compose. The bar
+         colours come from enableEdgeToEdge() in MainActivity: the
+         android:statusBarColor/navigationBarColor attributes are
+         deprecated since Android 15 and flagged by Play. -->
     <style name="Theme.Crate" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 </resources>

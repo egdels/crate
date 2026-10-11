@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow takes a
 version's section from this file as the GitHub release notes.
 
+## [Unreleased]
+
+### Changed
+
+- Android: the window theme no longer sets the status and navigation bar
+  colours; `enableEdgeToEdge()` already does, and the theme attributes
+  are deprecated since Android 15 (flagged by the Play Console).
+
 ## [0.4.0] - 2026-10-11
 
 ### Added
