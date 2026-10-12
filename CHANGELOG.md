@@ -31,6 +31,8 @@ version's section from this file as the GitHub release notes.
   letter filtered the library several times on the main thread. It
   now filters once per letter in the background, from text prepared
   when the library loads.
+- Android: the search key on the keyboard did nothing; it now closes
+  the keyboard and leaves the results in place.
 
 ## [0.4.0] - 2026-10-11
 

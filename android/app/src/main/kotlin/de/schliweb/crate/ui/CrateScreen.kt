@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -87,6 +88,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -223,6 +225,7 @@ private fun TopBar(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
     TopAppBar(
         title = {
             if (searching) {
@@ -233,6 +236,8 @@ private fun TopBar(
                     placeholder = { Text("Search") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    // The results are already there; the key only closes the keyboard.
+                    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,
