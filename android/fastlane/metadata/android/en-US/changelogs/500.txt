@@ -1,0 +1,3 @@
+Fixed for large libraries:
+- Typing in the search field no longer lags.
+- The search key on the keyboard closes the keyboard and keeps the results.
