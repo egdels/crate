@@ -26,6 +26,11 @@ version's section from this file as the GitHub release notes.
   results are now computed once per change of the search or the
   library, off the main thread, from text prepared when the library
   loads.
+- Android: typing in the search field lagged with a large library
+  (about 0.75 s per letter with 13,000 tracks on a Galaxy A16): every
+  letter filtered the library several times on the main thread. It
+  now filters once per letter in the background, from text prepared
+  when the library loads.
 
 ## [0.4.0] - 2026-10-11
 

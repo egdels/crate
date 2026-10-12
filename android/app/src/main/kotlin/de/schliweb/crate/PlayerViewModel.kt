@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.C
@@ -30,6 +31,7 @@ import de.schliweb.crate.core.Folder
 import de.schliweb.crate.core.Library
 import de.schliweb.crate.core.Paths
 import de.schliweb.crate.core.ScannedFile
+import de.schliweb.crate.core.SearchIndex
 import de.schliweb.crate.core.SearchQuery
 import de.schliweb.crate.core.Track
 import de.schliweb.crate.core.countText
@@ -40,6 +42,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
@@ -82,6 +85,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private set
     var selection by mutableStateOf<Selection?>(null)
     var searchText by mutableStateOf("")
+    /** Albums for the grid, narrowed by the search field. */
+    var filteredAlbums by mutableStateOf<List<Album>>(emptyList())
+        private set
+    /** Every track in album order, narrowed by the search field. */
+    var filteredTracks by mutableStateOf<List<Track>>(emptyList())
+        private set
+    private var searchIndex by mutableStateOf(SearchIndex(emptyList()))
 
     /** What the detail pane shows: one album, or every track. */
     sealed interface Selection {
@@ -131,6 +141,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             started.complete(Unit)
         }
         viewModelScope.launch { connect() }
+        // Off the main thread and once per keystroke: the field shows
+        // what was typed right away, the lists follow when they are ready.
+        viewModelScope.launch {
+            snapshotFlow { searchIndex to searchText }.collectLatest { (index, text) ->
+                val result = withContext(Dispatchers.Default) { index.search(SearchQuery(text)) }
+                filteredAlbums = result.albums
+                filteredTracks = result.tracks
+            }
+        }
     }
 
     // Derived state
@@ -138,25 +157,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val selectedAlbum: Album?
         get() = (selection as? Selection.AlbumId)?.let { s -> albums.firstOrNull { it.id == s.id } }
 
-    private val query: SearchQuery get() = SearchQuery(searchText)
-
     /** What the detail pane shows. Differs from [selection] while a
      *  search hides the selected album from the grid: then the search
      *  results take the detail, and the album returns with its tile. */
     val detail: Selection?
         get() {
             val album = selection as? Selection.AlbumId ?: return selection
-            if (!query.isEmpty && filteredAlbums.none { it.id == album.id }) return Selection.AllTracks
+            if (searchText.isNotBlank() && filteredAlbums.none { it.id == album.id }) return Selection.AllTracks
             return selection
         }
-
-    /** Albums for the grid, narrowed by the search field. */
-    val filteredAlbums: List<Album>
-        get() = query.let { q -> if (q.isEmpty) albums else albums.filter(q::matches) }
-
-    /** Every track in album order, narrowed by the search field. */
-    val filteredTracks: List<Track>
-        get() = query.let { q -> albums.flatMap { it.tracks }.let { all -> if (q.isEmpty) all else all.filter(q::matches) } }
 
     /** One line for the footer: what the last scan did, otherwise the
      *  size of the library. */
@@ -266,12 +275,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private suspend fun refresh() {
-        val grouped = withContext(Dispatchers.Default) { library.albums }
+        val (grouped, index) = withContext(Dispatchers.Default) { library.albums.let { it to SearchIndex(it) } }
         // All three at once, after the grouping: setting folders first
         // showed an empty grid for as long as the grouping took.
         folders = library.folders
         tracks = library.tracks
         albums = grouped
+        searchIndex = index
         val selected = selection
         if (selected is Selection.AlbumId && grouped.none { it.id == selected.id }) selection = null
     }

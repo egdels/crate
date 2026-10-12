@@ -4,6 +4,7 @@
 package de.schliweb.crate.core
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -43,5 +44,17 @@ class SearchQueryTest {
         assertTrue(SearchQuery("lark night").matches(spell))
         assertFalse(SearchQuery("morning").matches(costa))
         assertTrue(SearchQuery("trio").matches(costa))
+    }
+
+    @Test
+    fun indexFindsWhatTheQueryMatches() {
+        val albums = Album.group(tracks)
+        val index = SearchIndex(albums)
+        for (text in listOf("", "ada", "morning", "lark night", "senorita", "RIO costa", "nothing", "ada nobody")) {
+            val query = SearchQuery(text)
+            val result = index.search(query)
+            assertEquals(albums.filter(query::matches), result.albums, text)
+            assertEquals(albums.flatMap { it.tracks }.filter(query::matches), result.tracks, text)
+        }
     }
 }
