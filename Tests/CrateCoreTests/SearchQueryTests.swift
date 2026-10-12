@@ -37,4 +37,20 @@ import Testing
         #expect(!SearchQuery("morning").matches(costa))
         #expect(SearchQuery("trio").matches(costa))
     }
+
+    @Test func indexFindsWhatTheQueryMatches() {
+        let tricky = tracks + [
+            makeTrack("Straße", artist: "AC/DC", album: "Ｗｉｄｅ", folder: "/other"),
+            makeTrack("Ångström", artist: "Björk", album: "Œuvre", folder: "/third"),
+        ]
+        let albums = Album.group(tricky)
+        let index = SearchIndex(albums: albums)
+        for text in ["", "ada", "morning", "lark night", "senorita", "RIO costa", "nothing", "ada nobody",
+                     "strasse", "STRASSE", "ac/dc", "acdc", "wide", "ｗｉｄｅ", "angstrom", "bjork", "oeuvre", "œuvre"] {
+            let query = SearchQuery(text)
+            let result = index.search(query)
+            #expect(result.albums == albums.filter(query.matches), "\(text)")
+            #expect(result.tracks == albums.flatMap(\.tracks).filter(query.matches), "\(text)")
+        }
+    }
 }

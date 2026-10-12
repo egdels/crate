@@ -36,7 +36,13 @@ final class PlayerModel: ObservableObject {
     /// Whether this copy of Crate is what Finder opens audio files with.
     @Published private(set) var opensAudioFiles = false
     @Published var selection: Selection?
-    @Published var searchText = ""
+    @Published var searchText = "" {
+        didSet { updateSearch() }
+    }
+    /// Albums for the grid, narrowed by the search field.
+    @Published private(set) var filteredAlbums: [Album] = []
+    /// Every track in album order, narrowed by the search field.
+    @Published private(set) var filteredTracks: [Track] = []
 
     /// What the detail column shows: one album, or every track.
     enum Selection: Hashable {
@@ -53,6 +59,8 @@ final class PlayerModel: ObservableObject {
     private let artworkCache: ArtworkCache
     private var ticker: Timer?
     private var artworkTask: Task<Void, Never>?
+    private var searchIndex = SearchIndex(albums: [])
+    private var searchTask: Task<Void, Never>?
     /// Set by `live()`; nil in tests and previews.
     var nowPlaying: NowPlaying?
 
@@ -84,14 +92,12 @@ final class PlayerModel: ObservableObject {
         return albums.first { $0.id == id }
     }
 
-    private var query: SearchQuery { SearchQuery(searchText) }
-
     /// What the detail column shows. Differs from `selection` while a
     /// search hides the selected album from the grid: then the search
     /// results take the detail, and the album returns with its tile.
     var detail: Selection? {
         guard case .album(let id) = selection else { return selection }
-        if !query.isEmpty, !filteredAlbums.contains(where: { $0.id == id }) {
+        if !SearchQuery(searchText).isEmpty, !filteredAlbums.contains(where: { $0.id == id }) {
             return .allTracks
         }
         return selection
@@ -127,17 +133,25 @@ final class PlayerModel: ObservableObject {
         return "\(tracks) in \(folders)"
     }
 
-    /// Albums for the grid, narrowed by the search field.
-    var filteredAlbums: [Album] {
-        let query = query
-        return query.isEmpty ? albums : albums.filter(query.matches)
-    }
-
-    /// Every track in album order, narrowed by the search field.
-    var filteredTracks: [Track] {
-        let query = query
-        let all = albums.flatMap(\.tracks)
-        return query.isEmpty ? all : all.filter(query.matches)
+    /// Stored rather than computed: every published change redraws the
+    /// views, the playback clock four times a second, and filtering a
+    /// large library on each redraw stalled typing. A search runs off the
+    /// main actor; the field shows what was typed right away.
+    private func updateSearch() {
+        searchTask?.cancel()
+        let query = SearchQuery(searchText)
+        let index = searchIndex
+        if query.isEmpty {
+            filteredAlbums = index.albums
+            filteredTracks = index.tracks
+            return
+        }
+        searchTask = Task {
+            let result = await Task.detached(priority: .userInitiated) { index.search(query) }.value
+            guard !Task.isCancelled else { return }
+            filteredAlbums = result.albums
+            filteredTracks = result.tracks
+        }
     }
 
     // MARK: - Library
@@ -308,9 +322,13 @@ final class PlayerModel: ObservableObject {
         // would stall the window on a slow Mac.
         let folders = await library.folders
         let tracks = await library.tracks
-        self.albums = await Task.detached(priority: .userInitiated) {
-            Album.group(tracks, roots: folders)
+        let (albums, index) = await Task.detached(priority: .userInitiated) {
+            let albums = Album.group(tracks, roots: folders)
+            return (albums, SearchIndex(albums: albums))
         }.value
+        self.albums = albums
+        searchIndex = index
+        updateSearch()
         self.tracks = tracks
         self.folders = folders
         switch selection {

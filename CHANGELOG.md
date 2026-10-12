@@ -18,6 +18,15 @@ version's section from this file as the GitHub release notes.
   covers for the notification are now decoded with the same subsampling
   as the grid's thumbnails.
 
+### Fixed
+
+- With a large library and a search in the field, the Mac app kept
+  filtering the whole library four times a second while playing (one
+  CPU core at ~85 % with 18,000 tracks) and on every keystroke. The
+  results are now computed once per change of the search or the
+  library, off the main thread, from text prepared when the library
+  loads.
+
 ## [0.4.0] - 2026-10-11
 
 ### Added
