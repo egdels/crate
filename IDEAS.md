@@ -6,10 +6,6 @@ Entries move to CHANGELOG.md when they ship and are deleted here.
 
 ## Small, directly audible or visible
 
-- **Visible queue.** Both apps play an album or the favorites through,
-  but never show what comes next. A popover at the player bar (Mac) or
-  a sheet (Android) with the remaining list; a tap jumps there. Plus
-  "Play Next" in the row's context menu.
 - **Heart in the Android media notification.** Known open point; needs
   a session callback in `PlaybackService`. On the Mac ⌘L is enough.
 - **Recently Played / Recently Added tiles.** Two more tiles next to All
@@ -62,6 +58,6 @@ Entries move to CHANGELOG.md when they ship and are deleted here.
 
 ## Suggested next version (0.7.0)
 
-Visible queue, heart in the notification, resume on launch, disc
-separators. Four small things that make a round release; the lyrics
-count via `crate-scan` as groundwork for 0.8.
+Heart in the notification, resume on launch, disc separators, on top
+of the Up Next list that is already in. The lyrics count via
+`crate-scan` as groundwork for 0.8.

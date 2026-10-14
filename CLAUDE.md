@@ -307,6 +307,23 @@ Playback > Add to Favorites ⌘L and row context menu. Verified on screen
 on the Mac and on the Pixel_9a emulator incl. restart. Not done: a heart
 in the Android media notification (needs a session callback in
 `PlaybackService`).
+Up Next (both apps): the queue after the current track, from
+`PlayQueue.upcoming` (Mac, popover on the player bar, `UpNextView`,
+`showsUpNext` on the model for ⌘U) or a walk over the controller's
+timeline with `getNextWindowIndex(..., shuffleModeEnabled)` (Android,
+`PlayerViewModel.upcoming`, `UpNextSheet`); the `RemotableTimeline` the
+controller holds carries the shuffle order. Play Next / Play Last on
+the row and tile context menus (Mac) and long-press menus (Android,
+`QueueMenu`). Android shuffle lives in the ExoPlayer's `ShuffleOrder`,
+which a controller cannot set: `PlaybackService` rewrites it when
+shuffle turns on (current item first) and on the custom session command
+`COMMAND_QUEUED_NEXT` (the items the view model just inserted go right
+behind the current one). That command arrives before the insert itself,
+because a controller's `addMediaItems` passes through the callback's
+`onAddMediaItems` future, so the service waits for the playlist to
+reach the length the controller reported (`KEY_TOTAL`). Verified on the
+Pixel_9a emulator: sheet, tap, ×, Clear, Play Next with and without
+shuffle; and on the Mac on screen.
 
 **Open, in no fixed order:**
 

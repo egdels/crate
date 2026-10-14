@@ -32,6 +32,9 @@ uploaded or changed.
   them. Favorites are kept on this device, in a file next to the library
   index.
 - **Shuffle** and **Repeat** are in the menu. Albums play gapless.
+- The list icon in the player bar shows **Up Next**, what plays after
+  this track. A tap plays an entry now, the × takes it out. Press and
+  hold a track or an album for Play Next and Play Last.
 - Files tagged with ReplayGain or iTunes Sound Check play at the level
   the tags describe, so albums come out equally loud; the system volume
   is on top of that. Untagged files play as they are. Playing an album,

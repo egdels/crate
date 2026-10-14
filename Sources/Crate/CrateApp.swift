@@ -189,6 +189,10 @@ struct CrateApp: App {
                 }
                 .keyboardShortcut("l")
                 .disabled(model.current == nil)
+                Divider()
+                Button(model.showsUpNext ? "Hide Up Next" : "Show Up Next") { model.showsUpNext.toggle() }
+                    .keyboardShortcut("u")
+                    .disabled(model.queue.isEmpty)
             }
         }
     }

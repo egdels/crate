@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -21,12 +22,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -39,6 +42,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -66,10 +71,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -126,6 +133,8 @@ fun CrateScreen(model: PlayerViewModel) {
         if (showingPrivacyPolicy) PrivacyPolicyDialog(onDismiss = { showingPrivacyPolicy = false })
         var showingHelp by rememberSaveable { mutableStateOf(false) }
         if (showingHelp) HelpDialog(onDismiss = { showingHelp = false })
+        var showingUpNext by rememberSaveable { mutableStateOf(false) }
+        if (showingUpNext) UpNextSheet(model, onDismiss = { showingUpNext = false })
         val showingDetail = !wide && model.selection != null && model.folders.isNotEmpty()
         // On a phone the grid leaves the composition while an album is
         // open; its scroll position lives here so "back" returns to it.
@@ -175,7 +184,7 @@ fun CrateScreen(model: PlayerViewModel) {
                     onShowHelp = { showingHelp = true },
                 )
             },
-            bottomBar = { if (model.current != null) PlayerBar(model) },
+            bottomBar = { if (model.current != null) PlayerBar(model, onShowUpNext = { showingUpNext = true }) },
         ) { padding ->
             Column(Modifier.padding(padding).fillMaxSize()) {
                 model.lastError?.let { error ->
@@ -457,20 +466,25 @@ private fun AlbumGrid(model: PlayerViewModel, state: LazyGridState, modifier: Mo
             }
         }
         items(albums, key = { it.id }) { album ->
-            Tile(
-                selected = model.selection == Selection.AlbumId(album.id),
-                onClick = { model.selection = Selection.AlbumId(album.id) },
-                title = album.title,
-                subtitle = album.artist,
-            ) {
-                Artwork(model, album, placeholder = initials(album.title))
-                // A heart means every track of the album has one.
-                if (model.isFavorite(album)) {
-                    Icon(
-                        Icons.Default.Favorite, contentDescription = "Favorite album", tint = Color.White,
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(16.dp),
-                    )
+            var menuOpen by remember { mutableStateOf(false) }
+            Box {
+                Tile(
+                    selected = model.selection == Selection.AlbumId(album.id),
+                    onClick = { model.selection = Selection.AlbumId(album.id) },
+                    onLongClick = { menuOpen = true },
+                    title = album.title,
+                    subtitle = album.artist,
+                ) {
+                    Artwork(model, album, placeholder = initials(album.title))
+                    // A heart means every track of the album has one.
+                    if (model.isFavorite(album)) {
+                        Icon(
+                            Icons.Default.Favorite, contentDescription = "Favorite album", tint = Color.White,
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(16.dp),
+                        )
+                    }
                 }
+                QueueMenu(model, album.tracks, expanded = menuOpen, onDismiss = { menuOpen = false }, play = { model.play(album) })
             }
         }
     }
@@ -485,6 +499,7 @@ private fun Tile(
     onClick: () -> Unit,
     title: String,
     subtitle: String,
+    onLongClick: (() -> Unit)? = null,
     picture: @Composable BoxScope.() -> Unit,
 ) {
     val background = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent
@@ -492,7 +507,7 @@ private fun Tile(
         Modifier
             .clip(RoundedCornerShape(10.dp))
             .background(background)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(8.dp),
     ) {
         Box(
@@ -584,17 +599,21 @@ private fun TrackList(model: PlayerViewModel, album: Album) {
         }
         itemsIndexed(album.tracks, key = { _, track -> track.id }) { index, track ->
             TrackRow(
-                track, playing = track.id == model.current?.id, favorite = model.isFavorite(track),
+                model, track, playing = track.id == model.current?.id, favorite = model.isFavorite(track),
                 onClick = { model.play(album, index) }, onHeart = { model.toggleFavorite(track) },
             )
         }
     }
 }
 
+/** A row of the album page. A long press offers to queue the track. */
 @Composable
-private fun TrackRow(track: Track, playing: Boolean, favorite: Boolean, onClick: () -> Unit, onHeart: () -> Unit) {
+private fun TrackRow(model: PlayerViewModel, track: Track, playing: Boolean, favorite: Boolean, onClick: () -> Unit, onHeart: () -> Unit) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Box {
+    QueueMenu(model, listOf(track), expanded = menuOpen, onDismiss = { menuOpen = false })
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = { menuOpen = true }).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -614,6 +633,32 @@ private fun TrackRow(track: Track, playing: Boolean, favorite: Boolean, onClick:
         }
         HeartButton(on = favorite, onClick = onHeart)
         Text(timeText(track.duration), fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    }
+}
+
+/** The long-press menu of a row or tile: play now (an album), or queue
+ *  it after the current track or at the end. */
+@Composable
+private fun QueueMenu(model: PlayerViewModel, tracks: List<Track>, expanded: Boolean, onDismiss: () -> Unit, play: (() -> Unit)? = null) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        if (play != null) {
+            DropdownMenuItem(
+                text = { Text("Play") },
+                leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
+                onClick = { onDismiss(); play() },
+            )
+        }
+        DropdownMenuItem(
+            text = { Text("Play Next") },
+            leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null) },
+            onClick = { onDismiss(); model.playNext(tracks) },
+        )
+        DropdownMenuItem(
+            text = { Text("Play Last") },
+            leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null) },
+            onClick = { onDismiss(); model.playLater(tracks) },
+        )
     }
 }
 
@@ -640,8 +685,13 @@ private fun FlatTrackList(model: PlayerViewModel, tracks: List<Track>, emptyText
     }
     LazyColumn(Modifier.fillMaxSize()) {
         itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
+            var menuOpen by remember { mutableStateOf(false) }
+            Box {
+            QueueMenu(model, listOf(track), expanded = menuOpen, onDismiss = { menuOpen = false })
             Row(
-                Modifier.fillMaxWidth().clickable { model.play(tracks, index) }.padding(horizontal = 16.dp, vertical = 10.dp),
+                Modifier.fillMaxWidth()
+                    .combinedClickable(onClick = { model.play(tracks, index) }, onLongClick = { menuOpen = true })
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -663,12 +713,13 @@ private fun FlatTrackList(model: PlayerViewModel, tracks: List<Track>, emptyText
                 HeartButton(on = model.isFavorite(track), onClick = { model.toggleFavorite(track) })
                 Text(timeText(track.duration), fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            }
         }
     }
 }
 
 @Composable
-private fun PlayerBar(model: PlayerViewModel) {
+private fun PlayerBar(model: PlayerViewModel, onShowUpNext: () -> Unit) {
     val track = model.current ?: return
     Surface(tonalElevation = 3.dp) {
         // Below the bar is the system's gesture area; keep the slider out of it.
@@ -706,7 +757,70 @@ private fun PlayerBar(model: PlayerViewModel) {
                     modifier = Modifier.weight(1f),
                 )
                 Text(timeText(duration), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // Up Next: the list of what follows, as a sheet.
+                IconButton(onClick = onShowUpNext, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Up Next", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
+    }
+}
+
+/** The queue after the current track. A tap plays an entry now, the ×
+ *  takes it out, Clear empties the list. What is playing is not in it:
+ *  the bar already shows that. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UpNextSheet(model: PlayerViewModel, onDismiss: () -> Unit) {
+    val upcoming = model.upcoming
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Up Next", style = MaterialTheme.typography.titleLarge)
+                if (upcoming.isNotEmpty()) {
+                    Text(
+                        "${countText(upcoming.size, "track")} · ${lengthText(upcoming.sumOf { it.track.duration })}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            TextButton(onClick = model::clearUpNext, enabled = upcoming.isNotEmpty()) { Text("Clear") }
+        }
+        if (upcoming.isEmpty()) {
+            Text(
+                if (model.repeatMode == Player.REPEAT_MODE_OFF) "Nothing after this track." else "Repeats from the start.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
+            )
+        } else {
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 480.dp).padding(top = 8.dp)) {
+                items(upcoming, key = { it.index }) { entry ->
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .clickable { model.play(entry); onDismiss() }
+                            .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(entry.track.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                listOfNotNull(entry.track.artist, entry.track.album).joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Text(timeText(entry.track.duration), fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        IconButton(onClick = { model.remove(entry) }) {
+                            Icon(Icons.Default.Close, contentDescription = "Remove from Up Next", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.navigationBarsPadding().height(16.dp))
     }
 }

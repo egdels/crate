@@ -132,6 +132,7 @@ struct AlbumGrid: View {
                         AlbumTile(album: album, selected: model.selection == .album(album.id))
                             .onTapGesture(count: 2) { model.play(album: album) }
                             .onTapGesture { model.selection = .album(album.id) }
+                            .albumContextMenu(album)
                             .id(album.id)
                     }
                 }
@@ -265,7 +266,7 @@ struct FlatTrackList: View {
                         FlatTrackRow(track: track, playing: track.id == model.current?.id)
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) { model.play(tracks: tracks, startingAt: index) }
-                            .favoriteContextMenu(track)
+                            .trackContextMenu(track)
                     }
                 }
                 .listStyle(.inset)
@@ -324,20 +325,45 @@ struct HeartButton: View {
 }
 
 extension View {
-    /// Right-click: the same as the heart.
-    func favoriteContextMenu(_ track: Track) -> some View {
-        modifier(FavoriteContextMenu(track: track))
+    /// Right-click on a row: queue the track, or the same as the heart.
+    func trackContextMenu(_ track: Track) -> some View {
+        modifier(TrackContextMenu(track: track))
+    }
+
+    /// Right-click on a tile: play or queue the album, or heart it.
+    func albumContextMenu(_ album: Album) -> some View {
+        modifier(AlbumContextMenu(album: album))
     }
 }
 
-private struct FavoriteContextMenu: ViewModifier {
+private struct TrackContextMenu: ViewModifier {
     @EnvironmentObject private var model: PlayerModel
     let track: Track
 
     func body(content: Content) -> some View {
         content.contextMenu {
+            Button("Play Next") { model.playNext([track]) }
+            Button("Play Last") { model.playLater([track]) }
+            Divider()
             Button(model.isFavorite(track) ? "Remove from Favorites" : "Add to Favorites") {
                 model.toggleFavorite(track)
+            }
+        }
+    }
+}
+
+private struct AlbumContextMenu: ViewModifier {
+    @EnvironmentObject private var model: PlayerModel
+    let album: Album
+
+    func body(content: Content) -> some View {
+        content.contextMenu {
+            Button("Play") { model.play(album: album) }
+            Button("Play Next") { model.playNext(album.tracks) }
+            Button("Play Last") { model.playLater(album.tracks) }
+            Divider()
+            Button(model.isFavorite(album) ? "Remove from Favorites" : "Add to Favorites") {
+                model.setFavorite(!model.isFavorite(album), album: album)
             }
         }
     }
@@ -406,7 +432,7 @@ struct TrackList: View {
                         TrackRow(track: track, playing: track.id == model.current?.id)
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) { model.play(album: album, startingAt: index) }
-                            .favoriteContextMenu(track)
+                            .trackContextMenu(track)
                     }
                 }
                 .listStyle(.inset)

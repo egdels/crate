@@ -57,6 +57,10 @@ final class PlayerModel: ObservableObject {
         case favorites
     }
 
+    /// Whether the player bar shows the Up Next popover. Held here so the
+    /// Playback menu can toggle it.
+    @Published var showsUpNext = false
+
     @Published var volume: Float = 1 {
         didSet { player.volume = volume }
     }
@@ -423,6 +427,62 @@ final class PlayerModel: ObservableObject {
     /// The mean of the queued album's track gains, for files that have
     /// only those (Sound Check); nil otherwise.
     private var queueAlbumMean: Double?
+
+    // MARK: - Up Next
+
+    /// What plays after the current track, in playback order.
+    var upcoming: [PlayQueue.Entry] { queue.upcoming }
+
+    /// Queues the tracks right after the one playing. With nothing
+    /// playing, they start right away.
+    func playNext(_ tracks: [Track]) {
+        guard !tracks.isEmpty else { return }
+        let wasEmpty = queue.isEmpty
+        queue.playNext(tracks)
+        queueGrew(from: wasEmpty)
+    }
+
+    /// Queues the tracks at the end. With nothing playing, they start
+    /// right away.
+    func playLater(_ tracks: [Track]) {
+        guard !tracks.isEmpty else { return }
+        let wasEmpty = queue.isEmpty
+        queue.append(tracks)
+        queueGrew(from: wasEmpty)
+    }
+
+    private func queueGrew(from wasEmpty: Bool) {
+        if wasEmpty {
+            // Tracks from anywhere: each is levelled on its own.
+            queueIsAlbum = false
+            queueAlbumMean = nil
+            loadCurrent(autoplay: true)
+        } else {
+            preloadNext()
+        }
+    }
+
+    /// Plays the queued entry now. Entries between the one playing and
+    /// it are skipped, as with Next.
+    func play(entry: PlayQueue.Entry) {
+        guard queue.jump(to: entry.id) != nil else { return }
+        loadCurrent(autoplay: true)
+    }
+
+    /// Takes an upcoming entry out of the queue. The current entry is
+    /// never in `upcoming`, so playback is not affected.
+    func remove(entry: PlayQueue.Entry) {
+        queue.remove(entry.id)
+        preloadNext()
+    }
+
+    /// Empties the queue after the current track.
+    func clearUpNext() {
+        for entry in queue.upcoming {
+            queue.remove(entry.id)
+        }
+        preloadNext()
+    }
 
     /// The loudness correction to play the track with, in dB.
     func gain(for track: Track) -> Double {

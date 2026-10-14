@@ -5,6 +5,24 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow takes a
 version's section from this file as the GitHub release notes.
 
+## [Unreleased]
+
+### Added
+
+- Up Next, in both apps: the list of what plays after the current
+  track, behind the list icon in the player bar (Mac: also ⌘U). A
+  double-click (Mac) or tap (Android) plays an entry now, the × takes
+  it out, Clear empties the list. Right-click (Mac) or press and hold
+  (Android) a track or an album for Play Next and Play Last; with
+  nothing playing, they start right away.
+
+### Fixed
+
+- Android: turning shuffle on left the current track somewhere in the
+  player's random order, so only the tracks drawn after it followed;
+  now the current track leads and all the others follow. Tracks queued
+  with Play Next while shuffled do play next.
+
 ## [0.6.3] - 2026-10-14
 
 ### Fixed

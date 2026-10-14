@@ -24,8 +24,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import de.schliweb.crate.core.Album
 import de.schliweb.crate.core.Favorites
@@ -129,6 +131,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /** Cover of the album the current track belongs to, for the player bar. */
     var currentArtwork by mutableStateOf<Bitmap?>(null)
         private set
+    /** What plays after the current track, in playback order (the
+     *  shuffle order while shuffled). The playlist index identifies the
+     *  entry; the same track can be queued twice. */
+    var upcoming by mutableStateOf<List<QueueEntry>>(emptyList())
+        private set
+
+    data class QueueEntry(val index: Int, val track: Track)
 
     val duration: Double
         get() = if (reportedDuration > 0) reportedDuration else current?.duration ?: 0.0
@@ -406,12 +415,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             controllerReady.takeIf { it.isCompleted }?.let { viewModelScope.launch { syncFromPlayer(it.await()) } }
         }
 
+        override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+            controllerReady.takeIf { it.isCompleted }?.let { viewModelScope.launch { updateUpcoming(it.await()) } }
+        }
+
         override fun onPlaybackStateChanged(playbackState: Int) {
             controllerReady.takeIf { it.isCompleted }?.let { viewModelScope.launch { syncFromPlayer(it.await()) } }
         }
 
         override fun onShuffleModeEnabledChanged(enabled: Boolean) {
             isShuffled = enabled
+            controllerReady.takeIf { it.isCompleted }?.let { viewModelScope.launch { updateUpcoming(it.await()) } }
         }
 
         override fun onRepeatModeChanged(mode: Int) {
@@ -437,6 +451,28 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             loadArtwork(track)
         }
         if (track != null) lastError = null
+        updateUpcoming(controller)
+    }
+
+    /** Walks the timeline from the current item the way the player will,
+     *  shuffle order included, once through to the end (repeat does not
+     *  make the list longer). */
+    private fun updateUpcoming(controller: MediaController) {
+        val timeline = controller.currentTimeline
+        if (timeline.isEmpty || controller.currentMediaItem == null) {
+            upcoming = emptyList()
+            return
+        }
+        val entries = mutableListOf<QueueEntry>()
+        var index = controller.currentMediaItemIndex
+        while (true) {
+            index = timeline.getNextWindowIndex(index, Player.REPEAT_MODE_OFF, controller.shuffleModeEnabled)
+            if (index == C.INDEX_UNSET) break
+            val id = controller.getMediaItemAt(index).mediaId
+            val track = queued[id] ?: library.track(id) ?: continue
+            entries += QueueEntry(index, track)
+        }
+        upcoming = entries
     }
 
     private fun loadArtwork(track: Track?) {
@@ -498,6 +534,75 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .setUri(Uri.parse(track.uri))
             .setMediaMetadata(metadata)
             .build()
+    }
+
+    // Up Next
+
+    /** Queues the tracks right after the one playing. With nothing
+     *  playing, they start right away. */
+    fun playNext(tracks: List<Track>) = enqueue(tracks, next = true)
+
+    /** Queues the tracks at the end. With nothing playing, they start
+     *  right away. */
+    fun playLater(tracks: List<Track>) = enqueue(tracks, next = false)
+
+    private fun enqueue(tracks: List<Track>, next: Boolean) {
+        if (tracks.isEmpty()) return
+        val byPath = HashMap<String, Album>()
+        for (album in albums) for (track in album.tracks) byPath[track.id] = album
+        // Tracks from anywhere: each is levelled on its own.
+        val items = tracks.map { track -> mediaItem(track, byPath[track.id], ReplayGain.playbackGain(track, false, null)) }
+        queued = queued + tracks.associateBy { it.id }
+        withController { controller ->
+            when {
+                controller.currentMediaItem == null -> {
+                    controller.setMediaItems(items, 0, 0L)
+                    controller.prepare()
+                    controller.play()
+                }
+                next -> {
+                    val start = controller.currentMediaItemIndex + 1
+                    controller.addMediaItems(start, items)
+                    // The playlist index means nothing to the shuffle
+                    // order; the service moves the items behind the
+                    // current one.
+                    if (controller.shuffleModeEnabled) {
+                        val args = Bundle().apply {
+                            putInt(PlaybackService.KEY_START, start)
+                            putInt(PlaybackService.KEY_COUNT, items.size)
+                            putInt(PlaybackService.KEY_TOTAL, controller.mediaItemCount)
+                        }
+                        controller.sendCustomCommand(SessionCommand(PlaybackService.COMMAND_QUEUED_NEXT, Bundle.EMPTY), args)
+                    }
+                }
+                else -> controller.addMediaItems(items)
+            }
+        }
+    }
+
+    /** Plays the queued entry now. Entries between the one playing and
+     *  it are skipped, as with Next. */
+    fun play(entry: QueueEntry) = withController { controller ->
+        if (entry.index < controller.mediaItemCount) {
+            controller.seekTo(entry.index, 0L)
+            controller.play()
+        }
+    }
+
+    /** Takes an upcoming entry out of the queue. The current entry is
+     *  never in [upcoming], so playback is not affected. */
+    fun remove(entry: QueueEntry) = withController { controller ->
+        if (entry.index < controller.mediaItemCount && entry.index != controller.currentMediaItemIndex) {
+            controller.removeMediaItem(entry.index)
+        }
+    }
+
+    /** Empties the queue after the current track. */
+    fun clearUpNext() = withController { controller ->
+        // Highest index first, so the lower ones keep their meaning.
+        for (index in upcoming.map { it.index }.sortedDescending()) {
+            if (index < controller.mediaItemCount && index != controller.currentMediaItemIndex) controller.removeMediaItem(index)
+        }
     }
 
     fun togglePlayPause() = withController { controller ->
