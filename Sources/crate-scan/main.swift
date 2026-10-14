@@ -67,6 +67,7 @@ struct LyricsFinding: Sendable {
     enum Kind: String, CaseIterable, Sendable {
         case uslt = "USLT (MP3, plain)", sylt = "SYLT (MP3, timed)", lyr = "©lyr (M4A)", vorbis = "LYRICS (FLAC)"
         case lrc = ".lrc next to the file", lrcFolder = ".lrc in a lyrics/ subfolder"
+        case txt = ".txt next to the file", txtFolder = ".txt in a lyrics/ subfolder"
     }
     var url: URL
     var kinds: [Kind]
@@ -107,6 +108,8 @@ func sidecar(_ url: URL) -> (kind: LyricsFinding.Kind, text: String)? {
     let folder = url.deletingLastPathComponent()
     let candidates: [(LyricsFinding.Kind, URL)] = [(.lrc, folder.appendingPathComponent(base + ".lrc"))]
         + ["lyrics", "Lyrics"].map { (.lrcFolder, folder.appendingPathComponent($0).appendingPathComponent(base + ".lrc")) }
+        + [(.txt, folder.appendingPathComponent(base + ".txt"))]
+        + ["lyrics", "Lyrics"].map { (.txtFolder, folder.appendingPathComponent($0).appendingPathComponent(base + ".txt")) }
     for (kind, file) in candidates {
         guard let data = try? Data(contentsOf: file) else { continue }
         return (kind, String(decoding: data, as: UTF8.self))

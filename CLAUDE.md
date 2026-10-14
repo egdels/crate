@@ -404,8 +404,8 @@ hundredths, several stamps per line, `[offset:]`, header tags dropped)
 or plain text; `index(at:)`/`indexAt` gives the line being sung.
 Looked up when a track starts, never at scan time (no Track field, no
 index change): `FileLyricsSource` (Mac) and `SafLyricsSource`
-(Android) try an `.lrc` with the track's name beside it or in a
-`lyrics/` subfolder, then the tags (Mac: FLACMetadata LYRICS,
+(Android) try an `.lrc`, then a `.txt`, with the track's name beside it
+or in a `lyrics/` subfolder, then the tags (Mac: FLACMetadata LYRICS,
 AVFoundation USLT/©lyr; Android: FlacMetadata, `ParsedTags.lyrics`
 from the MP3 USLT frame and the MP4 ©lyr atom). Android finds the
 sidecar without a directory query by swapping the name in the
@@ -415,7 +415,13 @@ paths. UI: Mac pane beside the detail (`LyricsView`, `showsLyrics`,
 ⌥⌘L), Android `LyricsSheet`; the button exists only while
 `lyrics != nil`. Counted first (`crate-scan --lyrics`, 2026-10-14): 55
 of the 1,985 music files have lyrics (3 USLT, 11 FLAC LYRICS, 41
-timed `.lrc`, 39 of those in `lyrics/`), the audio plays none. Verified
+timed `.lrc`, 39 of those in `lyrics/`), the audio plays none; 49
+more have a plain `.txt` beside them (14 albums), hence the `.txt`
+fallback. Whisper was tried for the rest and rejected: 23 to 55 %
+word error rate on sung vocals even with the medium model and
+non-speech suppression, no verse-line timing, while two minutes of
+a German audio play came out nearly perfect; the notes are in the
+session, not in the repo. Verified
 with the Rehab `.lrc` on the Mac (pane, bold line moves) and on the
 emulator (`/sdcard/Music/Store/Amy/rehab.mp3|.lrc`, sheet follows).
 main.swift gotcha: a top-level `let` is initialised when execution

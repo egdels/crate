@@ -52,12 +52,17 @@ import Testing
         let a = makeTrack("a", folder: directory.path)
         let b = makeTrack("b", folder: directory.path)
         let c = makeTrack("c", folder: directory.path)
-        for track in [a, b, c] { try Data().write(to: track.url) }
+        let d = makeTrack("d", folder: directory.path)
+        for track in [a, b, c, d] { try Data().write(to: track.url) }
         try Data("[00:01.00]beside".utf8).write(to: directory.appendingPathComponent("a.lrc"))
         try Data("below".utf8).write(to: directory.appendingPathComponent("lyrics/b.lrc"))
+        // A plain .txt counts too, after an .lrc anywhere.
+        try Data("plain text".utf8).write(to: directory.appendingPathComponent("lyrics/d.txt"))
+        try Data("not this".utf8).write(to: directory.appendingPathComponent("a.txt"))
         let source = FileLyricsSource()
         #expect(await source.lyrics(for: a)?.lines == [Lyrics.Line(time: 1, text: "beside")])
         #expect(await source.lyrics(for: b)?.lines == [Lyrics.Line(text: "below")])
         #expect(await source.lyrics(for: c) == nil)
+        #expect(await source.lyrics(for: d)?.lines == [Lyrics.Line(text: "plain text")])
     }
 }

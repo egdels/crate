@@ -58,9 +58,9 @@ uploaded or changed.
 - Crate remembers where you stopped: the next launch comes up with the
   same queue, at the same spot, paused.
 - Lyrics: when a track has them, an icon appears next to the slider in
-  the player bar. Crate looks for an `.lrc` file with the track's name
-  beside it or in a `lyrics` folder, then in the track's tags. A timed
-  `.lrc` follows the playback.
+  the player bar. Crate looks for an `.lrc` or `.txt` file with the
+  track's name beside it or in a `lyrics` folder, then in the track's
+  tags. A timed `.lrc` follows the playback.
 
 ## Opening files
 

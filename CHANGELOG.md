@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow takes a
 version's section from this file as the GitHub release notes.
 
+## [Unreleased]
+
+### Added
+
+- Lyrics also come from a `.txt` file with the track's name beside it
+  or in a `lyrics` folder, as plain text; an `.lrc` still wins when
+  both exist. Rips often bring these along.
+
 ## [0.9.0] - 2026-10-14
 
 ### Added

@@ -135,8 +135,9 @@ public protocol LyricsSource: Sendable {
 }
 
 /// Lyrics from next to the file first, then from its tags: an `.lrc`
-/// with the track's name beside it or in a `lyrics` subfolder, then a
-/// LYRICS comment (FLAC), a USLT frame (MP3) or a ©lyr atom (M4A).
+/// (timed) or `.txt` (plain) with the track's name beside it or in a
+/// `lyrics` subfolder, then a LYRICS comment (FLAC), a USLT frame (MP3)
+/// or a ©lyr atom (M4A).
 public struct FileLyricsSource: LyricsSource {
     public init() {}
 
@@ -150,14 +151,16 @@ public struct FileLyricsSource: LyricsSource {
         return lyrics.isEmpty ? nil : lyrics
     }
 
+    /// `.lrc` before `.txt`, beside the file before the subfolder.
     static func sidecar(_ url: URL) -> String? {
-        let name = url.deletingPathExtension().lastPathComponent + ".lrc"
+        let base = url.deletingPathExtension().lastPathComponent
         let folder = url.deletingLastPathComponent()
-        let candidates = [folder.appendingPathComponent(name)]
-            + ["lyrics", "Lyrics"].map { folder.appendingPathComponent($0).appendingPathComponent(name) }
-        for file in candidates {
-            guard let data = try? Data(contentsOf: file) else { continue }
-            return String(decoding: data, as: UTF8.self)
+        let folders = [folder] + ["lyrics", "Lyrics"].map { folder.appendingPathComponent($0) }
+        for ext in ["lrc", "txt"] {
+            for place in folders {
+                guard let data = try? Data(contentsOf: place.appendingPathComponent(base + "." + ext)) else { continue }
+                return String(decoding: data, as: UTF8.self)
+            }
         }
         return nil
     }
