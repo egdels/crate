@@ -42,11 +42,15 @@ uploaded or changed.
 - The list icon in the player bar shows **Up Next**, what plays after
   this track. A tap plays an entry now, the × takes it out. Press and
   hold a track or an album for Play Next and Play Last.
-- Files tagged with ReplayGain or iTunes Sound Check play at the level
-  the tags describe, so albums come out equally loud; the system volume
-  is on top of that. Untagged files play as they are. Playing an album,
-  every track gets the same correction, so a quiet intro stays quiet and
-  the record keeps its dynamics; in Shuffle and All Tracks each track is
+- Albums come out equally loud: files tagged with ReplayGain play at
+  the level the tags describe, and files without are measured by Crate
+  while the app is open, after a scan (EBU R 128, the way ReplayGain
+  2.0 asks for it; the line under the grid counts along, the results
+  are kept next to the library index, the files are not touched). Until
+  a file is measured, its iTunes Sound Check tag counts, or it plays as
+  it is. The system volume is on top of that. Playing an album, every
+  track gets the same correction, so a quiet intro stays quiet and the
+  record keeps its dynamics; in Shuffle and All Tracks each track is
   levelled on its own.
 - The notification, the lock screen and headphone buttons control
   playback, and the notification has the heart too; the music keeps

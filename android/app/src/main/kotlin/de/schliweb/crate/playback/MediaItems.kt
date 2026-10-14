@@ -26,7 +26,19 @@ fun mediaItems(app: CrateApplication, tracks: List<Track>, albums: List<Album>, 
     val byPath = HashMap<String, Album>()
     for (album in albums) for (track in album.tracks) byPath[track.id] = album
     val albumMean = if (asAlbum) ReplayGain.albumMean(tracks) else null
-    return tracks.map { track -> mediaItem(app, track, byPath[track.id], ReplayGain.playbackGain(track, asAlbum, albumMean)) }
+    // The file's ReplayGain tags when it has them, else the measurement
+    // (the album's, gated over all its tracks, when every one of them is
+    // measured), else its Sound Check value, else nothing.
+    val loudness = app.loudness.loudness
+    val measuredAlbum = if (asAlbum) loudness.albumGain(tracks) else null
+    return tracks.map { track ->
+        val measured = if (track.albumGain == null) loudness.measurement(track) else null
+        val gain = when {
+            measured != null -> measuredAlbum ?: measured.gain ?: 0.0
+            else -> ReplayGain.playbackGain(track, asAlbum, albumMean)
+        }
+        mediaItem(app, track, byPath[track.id], gain)
+    }
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)

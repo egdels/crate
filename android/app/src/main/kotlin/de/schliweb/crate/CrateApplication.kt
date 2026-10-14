@@ -6,12 +6,15 @@ package de.schliweb.crate
 import android.app.Application
 import de.schliweb.crate.core.JsonFavoritesStore
 import de.schliweb.crate.core.JsonHistoryStore
+import de.schliweb.crate.core.JsonLoudnessStore
+import de.schliweb.crate.core.LoudnessAnalyzer
 import de.schliweb.crate.core.JsonLibraryStore
 import de.schliweb.crate.core.JsonPlaybackStateStore
 import de.schliweb.crate.core.Library
 import de.schliweb.crate.library.AndroidArtworkReader
 import de.schliweb.crate.library.AndroidMetadataReader
 import de.schliweb.crate.library.ArtworkCache
+import de.schliweb.crate.library.MediaCodecLoudness
 import de.schliweb.crate.library.SafFileSource
 import de.schliweb.crate.library.SafLyricsSource
 import java.io.File
@@ -38,6 +41,13 @@ class CrateApplication : Application() {
 
     /** What was played, newest first, for the Recently Played tile. */
     val history: SharedHistory by lazy { SharedHistory(JsonHistoryStore(File(filesDir, "history.json"))) }
+
+    /** The measured loudness of files without ReplayGain tags, in
+     *  `loudness.json`; the view model runs the analysis, the media
+     *  items read the gains. */
+    val loudness: LoudnessAnalyzer by lazy {
+        LoudnessAnalyzer(JsonLoudnessStore(File(filesDir, "loudness.json")), measure = { MediaCodecLoudness.measure(this, it) })
+    }
 
     /** Where playback stood, for the next launch; two small files next
      *  to the index. */

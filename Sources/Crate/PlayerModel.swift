@@ -88,6 +88,14 @@ final class PlayerModel: ObservableObject {
     private let favoritesStore: any FavoritesStore
     private let historyStore: any HistoryStore
     private let playbackStore: any PlaybackStateStore
+    private let loudnessAnalyzer: LoudnessAnalyzer
+    private var analysisTask: Task<Void, Never>?
+    /// The measured loudness of files without ReplayGain tags; grows
+    /// while the analysis runs.
+    private var loudness = Loudness()
+    /// Files measured so far and files to measure, while the analysis
+    /// runs; nil otherwise.
+    @Published private(set) var analysisProgress: LoudnessAnalyzer.Progress?
     private let lyricsSource: any LyricsSource
     private var ticker: Timer?
     private var artworkTask: Task<Void, Never>?
@@ -99,13 +107,15 @@ final class PlayerModel: ObservableObject {
 
     init(
         library: Library, player: any AudioPlayer, artwork: ArtworkCache, favorites: any FavoritesStore,
-        playback: any PlaybackStateStore, history: any HistoryStore, lyrics: any LyricsSource = FileLyricsSource()
+        playback: any PlaybackStateStore, history: any HistoryStore, loudness: any LoudnessStore,
+        lyrics: any LyricsSource = FileLyricsSource()
     ) {
         self.library = library
         self.player = player
         self.artworkCache = artwork
         self.favoritesStore = favorites
         self.historyStore = history
+        self.loudnessAnalyzer = LoudnessAnalyzer(store: loudness)
         self.playbackStore = playback
         self.lyricsSource = lyrics
         player.onFinished = { [weak self] in self?.trackFinished() }
@@ -126,11 +136,14 @@ final class PlayerModel: ObservableObject {
             ?? FileManager.default.temporaryDirectory
         let historyURL = (try? JSONHistoryStore.defaultFileURL(appName: "Crate"))
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("crate-history.json")
+        let loudnessURL = (try? JSONLoudnessStore.defaultFileURL(appName: "Crate"))
+            ?? FileManager.default.temporaryDirectory.appendingPathComponent("crate-loudness.json")
         let model = PlayerModel(
             library: library, player: AVAudioEngineBackend(), artwork: artwork,
             favorites: JSONFavoritesStore(fileURL: favoritesURL),
             playback: JSONPlaybackStateStore(directory: playbackDirectory),
-            history: JSONHistoryStore(fileURL: historyURL))
+            history: JSONHistoryStore(fileURL: historyURL),
+            loudness: JSONLoudnessStore(fileURL: loudnessURL))
         model.nowPlaying = NowPlaying(model: model)
         return model
     }
@@ -164,6 +177,9 @@ final class PlayerModel: ObservableObject {
                 return "Scanning… \(scanProgress.read.formatted()) of \(scanProgress.total.formatted()) files"
             }
             return "Scanning…"
+        }
+        if let analysisProgress {
+            return "Measuring loudness… \(analysisProgress.done.formatted()) of \(analysisProgress.total.formatted()) files · \(librarySize)"
         }
         if let scan = lastScan {
             var parts: [String] = []
@@ -296,12 +312,15 @@ final class PlayerModel: ObservableObject {
                 }
                 isLoaded = true
                 opensAudioFiles = DefaultApp.opensAudioFiles
+                loudness = await loudnessAnalyzer.load()
                 restorePlayback()
                 // An index from an older version lacks tags this one
                 // reads: re-read the files once, with the grid already up
                 // and the footer showing the progress.
                 if await library.needsRescan {
                     await rescan()
+                } else {
+                    startAnalysis()
                 }
             }
         }
@@ -395,6 +414,9 @@ final class PlayerModel: ObservableObject {
         favoritesChanged()
         history.removeAll(under: url)
         try? historyStore.save(history)
+        analysisTask?.cancel()
+        await loudnessAnalyzer.removeAll(under: url)
+        loudness = await loudnessAnalyzer.load()
         let wasCurrent = current
         queue.removeAll { Library.isUnder($0.url, url) }
         if let wasCurrent, current?.id != wasCurrent.id {
@@ -439,6 +461,9 @@ final class PlayerModel: ObservableObject {
         isScanning = true
         scanProgress = nil
         notice = nil
+        // The analysis reads the same files: out of the way until the
+        // scan is done, then on with whatever is new.
+        analysisTask?.cancel()
         defer {
             isScanning = false
             scanProgress = nil
@@ -450,6 +475,35 @@ final class PlayerModel: ObservableObject {
             lastError = "Scan failed: \(error.localizedDescription)"
         }
         await refresh()
+        startAnalysis()
+    }
+
+    // MARK: - Loudness analysis
+
+    /// Measures files without ReplayGain tags in the background, lowest
+    /// priority, a few at a time; results arrive every few files and the
+    /// footer counts along. Cancelled by a scan or a folder removal and
+    /// started again after, picking up where it was.
+    private func startAnalysis() {
+        analysisTask?.cancel()
+        let tracks = self.tracks
+        let analyzer = loudnessAnalyzer
+        // Built here, where self is strong, so the closure owns its own
+        // weak reference instead of capturing the task's.
+        let report: @Sendable (LoudnessAnalyzer.Progress?, Loudness?) -> Void = { [weak self] progress, snapshot in
+            Task { @MainActor in
+                guard let self else { return }
+                self.analysisProgress = progress
+                if let snapshot { self.loudness = snapshot }
+            }
+        }
+        analysisTask = Task(priority: .utility) {
+            let pending = await analyzer.pending(in: tracks).count
+            guard pending > 0 else { return }
+            report(LoudnessAnalyzer.Progress(done: 0, total: pending), nil)
+            let result = await analyzer.run(tracks: tracks) { progress, snapshot in report(progress, snapshot) }
+            report(nil, result)
+        }
     }
 
     private func refresh() async {
@@ -495,6 +549,7 @@ final class PlayerModel: ObservableObject {
         queue.replace(with: tracks, startingAt: index)
         queueIsAlbum = asAlbum
         queueAlbumMean = asAlbum ? ReplayGain.albumMean(tracks) : nil
+        queueAlbumGain = asAlbum ? loudness.albumGain(for: tracks) : nil
         loadCurrent(autoplay: true)
     }
 
@@ -502,6 +557,9 @@ final class PlayerModel: ObservableObject {
     /// The mean of the queued album's track gains, for files that have
     /// only those (Sound Check); nil otherwise.
     private var queueAlbumMean: Double?
+    /// The measured album gain of the queued album, when every track of
+    /// it is measured; nil otherwise.
+    private var queueAlbumGain: Double?
 
     // MARK: - Up Next
 
@@ -559,9 +617,15 @@ final class PlayerModel: ObservableObject {
         preloadNext()
     }
 
-    /// The loudness correction to play the track with, in dB.
+    /// The loudness correction to play the track with, in dB: the file's
+    /// ReplayGain tags when it has them, else the measurement, else its
+    /// Sound Check value, else nothing.
     func gain(for track: Track) -> Double {
-        ReplayGain.playbackGain(track, asAlbum: queueIsAlbum, albumMean: queueAlbumMean)
+        if track.albumGain == nil, let measured = loudness.measurement(for: track) {
+            if queueIsAlbum, let queueAlbumGain { return queueAlbumGain }
+            return measured.gain ?? 0
+        }
+        return ReplayGain.playbackGain(track, asAlbum: queueIsAlbum, albumMean: queueAlbumMean)
     }
 
     private func preloadNext() {
@@ -774,6 +838,7 @@ final class PlayerModel: ObservableObject {
         if state.isShuffled { queue.setShuffle(true) }
         queueIsAlbum = state.asAlbum
         queueAlbumMean = state.asAlbum ? ReplayGain.albumMean(restored) : nil
+        queueAlbumGain = state.asAlbum ? loudness.albumGain(for: restored) : nil
         do {
             try player.load(currentTrack.url, gain: gain(for: currentTrack))
         } catch {

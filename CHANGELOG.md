@@ -5,6 +5,25 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow takes a
 version's section from this file as the GitHub release notes.
 
+## [Unreleased]
+
+### Added
+
+- Crate measures the loudness of files that carry no ReplayGain tags
+  itself, in both apps: EBU R 128 (ITU-R BS.1770-4, what ReplayGain
+  2.0 asks for), decoded in the background after a scan, a few files at
+  a time, the line under the grid counting along; a quit or a scan
+  interrupts it and the next run picks up where it was. The results go
+  to `loudness.json` next to the index (`PRIVACY.md` lists it); the
+  files are not touched. Playback then uses the measured track gain, or
+  the album gain gated over all of an album's tracks when every one of
+  them is measured, before falling back to iTunes Sound Check. Checked
+  against ffmpeg's ebur128 filter: identical integrated loudness. The
+  Mac measures about six files a second, Android depends on the
+  device's decoders and runs only while the app is open.
+- `crate-scan --loudness` measures a folder and prints loudness, peak
+  and gain per file, with the speed.
+
 ## [0.8.0] - 2026-10-14
 
 ### Added

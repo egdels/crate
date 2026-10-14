@@ -7,6 +7,7 @@
 //
 //   swift run crate-scan <folder> [--all] [--albums] [--concurrency N]
 //   swift run crate-scan <folder> --lyrics [--concurrency N]
+//   swift run crate-scan <folder> --loudness [--concurrency N]
 //
 // Prints a summary and every track that is missing a field; --all prints
 // every track, --albums the albums the grouping makes of them. --concurrency overrides how many files are read at once,
@@ -14,6 +15,9 @@
 // carry lyrics: USLT/SYLT frames (MP3), the ©lyr atom (M4A), LYRICS or
 // UNSYNCEDLYRICS comments (FLAC) and .lrc files next to the audio (same
 // name, or in a "lyrics" subfolder); groundwork for showing them.
+// --loudness measures every file with the BS.1770 meter and prints
+// loudness, peak and ReplayGain, to compare with `ffmpeg -af ebur128`
+// and to time the decoding.
 
 import AVFoundation
 import CrateCore
@@ -165,8 +169,44 @@ func countLyrics(in folder: URL, concurrency: Int) async throws {
     }
 }
 
+func measureLoudness(in folder: URL, concurrency: Int) async throws {
+    let started = Date()
+    let files = try LibraryScanner().scan(folder).map(\.url).sorted { $0.path < $1.path }
+    var seconds = 0.0
+    await withTaskGroup(of: (URL, TrackLoudness?, Double, Double).self) { group in
+        var iterator = files.makeIterator()
+        func enqueue() {
+            guard let url = iterator.next() else { return }
+            group.addTask {
+                let t0 = Date()
+                let result = try? LoudnessMeter.measure(url)
+                let length = (try? AVAudioFile(forReading: url)).map { Double($0.length) / $0.processingFormat.sampleRate } ?? 0
+                return (url, result, Date().timeIntervalSince(t0), length)
+            }
+        }
+        for _ in 0..<max(1, concurrency) { enqueue() }
+        for await (url, result, took, length) in group {
+            seconds += length
+            if let result, let loudness = result.loudness {
+                print(String(format: "%@  I=%.1f LUFS  peak=%.1f dBFS  gain=%+.1f dB  (%.0f s audio in %.1f s)",
+                             url.lastPathComponent, loudness, 20 * log10(max(result.peak, 1e-9)), result.gain ?? 0, length, took))
+            } else {
+                print("\(url.lastPathComponent)  no result")
+            }
+            enqueue()
+        }
+    }
+    let elapsed = Date().timeIntervalSince(started)
+    print(String(format: "measured %d files, %.0f min of audio, in %.1f s (%.0fx realtime, %d in flight)",
+                 files.count, seconds / 60, elapsed, seconds / max(elapsed, 0.001), concurrency))
+}
+
 // Below every declaration: a top-level constant such as `timeStamp` is
 // initialised when the code reaches its line.
+if arguments.contains("--loudness") {
+    try await measureLoudness(in: folder, concurrency: concurrency)
+    exit(0)
+}
 if arguments.contains("--lyrics") {
     try await countLyrics(in: folder, concurrency: concurrency)
     exit(0)

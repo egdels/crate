@@ -42,6 +42,10 @@ its own. It only reads the music files in the folders you point it at.
 - **Favorites**: the file paths of the tracks you marked with a heart,
   in a second JSON file next to the index (`favorites.json`). Nothing is
   written into the music files themselves.
+- **Measured loudness**: for music files that carry no ReplayGain tags,
+  the loudness and peak level Crate measured by decoding the file in the
+  background, in `loudness.json` next to the index, so that albums play
+  equally loud. The files themselves are not changed.
 - **Recently played**: the file paths of the last tracks that played,
   newest first and at most a few hundred, in `history.json` next to the
   index, for the Recently Played tile.

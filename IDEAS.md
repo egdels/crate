@@ -13,15 +13,6 @@ Entries move to CHANGELOG.md when they ship and are deleted here.
 
 ## Large, but in character
 
-- **Compute loudness ourselves.** The developer's collection has no
-  ReplayGain tags, only Sound Check in ~300 files. Crate could run EBU
-  R128 over the files during a scan and keep the result in a
-  `loudness.json` (favorites pattern, nothing written into the files),
-  giving every album a real album gain instead of the Sound Check mean.
-  Cost: an R128 implementation in Swift and Kotlin, and scan time (one
-  pass over ~18,000 tracks takes hours and must run in the background,
-  interruptible). The biggest audible gain on the list, and the most
-  expensive.
 - **Gapless by ear.** Not a feature, still open: listen to an album with
   live transitions in both apps.
 
@@ -37,6 +28,5 @@ Entries move to CHANGELOG.md when they ship and are deleted here.
 
 ## Suggested next version
 
-0.7.0 and 0.8.0 shipped on 2026-10-14. What is left above is either
-small (adding a loose file's folder) or a project of its own (loudness
-analysis); the latter would be 0.9.
+0.7.0 and 0.8.0 shipped on 2026-10-14. The loudness analysis is in
+for 0.9; adding a loose file's folder is the small thing left.

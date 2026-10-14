@@ -20,6 +20,9 @@ object ReplayGain {
     const val MIN_DB = -24.0
     const val MAX_DB = 24.0
 
+    /** ReplayGain 2.0's target: -18 LUFS, 5 dB above EBU R 128's -23. */
+    const val REFERENCE = -18.0
+
     /** "-6.50 dB", "+3.25 dB", "-6.5" → the number. */
     fun decibels(text: String): Double? {
         val trimmed = text.trim().lowercase()

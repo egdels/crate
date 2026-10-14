@@ -30,6 +30,7 @@ swift build                    # whole package
 swift test                     # 92 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
 swift run crate-scan <folder>  # tag-reader check against real files, prints gaps
 swift run crate-scan <folder> --lyrics   # counts files with lyrics (USLT/SYLT, ©lyr, FLAC LYRICS, .lrc)
+swift run crate-scan <folder> --loudness # BS.1770 loudness, peak and gain per file, with the speed
 scripts/bundle.sh              # release build -> build/Crate.app (ad-hoc signed)
 scripts/dmg.sh --universal     # -> build/Crate-<version>.dmg, what a release ships
 scripts/icon.sh                # redraw Packaging/AppIcon.icns, the README PNG and the Android icon
@@ -84,7 +85,10 @@ Sources/CrateCore/    UI-free library: Track, Album, LibraryScanner,
                       (+FavoritesStore, JSON impl), ReplayGain,
                       PlaybackState (+PlaybackStateStore, JSON impl),
                       Lyrics (+LyricsSource, FileLyricsSource), History
-                      (+HistoryStore, JSON impl; Track.recentlyAdded)
+                      (+HistoryStore, JSON impl; Track.recentlyAdded),
+                      Loudness (LoudnessMeter, LoudnessHistogram,
+                      TrackLoudness, Loudness, LoudnessStore + JSON impl,
+                      LoudnessAnalyzer; AVAudioFile decoding)
 Sources/Crate/        SwiftUI app: CrateApp, PlayerModel (@Observable,
                       the only UI state), ContentView (album grid + track
                       list + empty state), PlayerBar
@@ -145,7 +149,9 @@ android/core/   Kotlin/JVM, package de.schliweb.crate.core: Track (uri +
                 Favorites (+JsonFavoritesStore), ReplayGain,
                 PlaybackState (+JsonPlaybackStateStore), Lyrics
                 (+LyricsSource; SafLyricsSource lives in the app),
-                History (+JsonHistoryStore, recentlyAdded())
+                History (+JsonHistoryStore, recentlyAdded()), Loudness
+                (meter, histogram, store, analyzer; MediaCodecLoudness
+                in the app decodes)
 android/app/    de.schliweb.crate: CrateApplication (owns Library and
                 ArtworkCache), PlayerViewModel (the only UI state),
                 MainActivity, ui/CrateScreen (grid + detail, two panes
@@ -344,6 +350,32 @@ because a controller's `addMediaItems` passes through the callback's
 reach the length the controller reported (`KEY_TOTAL`). Verified on the
 Pixel_9a emulator: sheet, tap, ×, Clear, Play Next with and without
 shuffle; and on the Mac on screen.
+Loudness analysis (both apps): `LoudnessMeter` is BS.1770-4 (the
+K-filter biquads designed per sample rate as libebur128 does, 400 ms
+blocks every 100 ms, -70 LUFS absolute gate, relative gate 10 LU under
+the mean) with a `LoudnessHistogram` of 1 LU bins so an album can be
+gated over all its tracks' blocks from the stored per-track data
+(`TrackLoudness.albumGain`); gain = -18 LUFS minus loudness, limited by
+the sample peak (`ReplayGain.limited`). Checked against
+`ffmpeg -af ebur128`: identical LUFS on MP3, M4A and FLAC; the peak
+differs where ffmpeg's decoder exceeds full scale (AVFoundation clips
+at 0 dBFS). `LoudnessAnalyzer` measures what `Loudness.needsMeasuring`
+(no ReplayGain tags) and is not fresh (file modified since), two in
+flight at utility priority, saves every ten files, cancellable;
+`loudness.json` costs about 1 KB per file (49 bins on average over the
+audio plays, fewer for music). Mac: `PlayerModel.startAnalysis` after
+load and after every scan, cancelled by scans and folder removal,
+footer "Measuring loudness… x of y"; about six files a second with two
+in flight (125x realtime per thread), 150% CPU, so the developer's
+18,000 files take about an hour; `gain(for:)` prefers tags, then the
+measurement (album gain only when the whole queued album is measured),
+then Sound Check. Android: `MediaCodecLoudness` (MediaExtractor +
+MediaCodec, 16-bit or float PCM to planar floats), the analyzer in the
+application, the view model starts it after load and scans while the
+app is open (no WorkManager, no background service); `mediaItems`
+applies the same precedence. Verified: the Rehab MP3 measures -16.4
+LUFS, peak -6.5 dBFS on both the Mac and the emulator; the emulator's
+software codecs manage about one file per nine seconds.
 Recent tiles (both apps): Recently Added is `Track.recentlyAdded` /
 `recentlyAdded()` over the album-ordered tracks (newest modification
 day first, album order within a day, capped at 200), computed with

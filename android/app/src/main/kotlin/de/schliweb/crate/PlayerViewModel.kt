@@ -33,6 +33,7 @@ import de.schliweb.crate.core.Favorites
 import de.schliweb.crate.core.History
 import de.schliweb.crate.core.Folder
 import de.schliweb.crate.core.Library
+import de.schliweb.crate.core.LoudnessAnalyzer
 import de.schliweb.crate.core.Lyrics
 import de.schliweb.crate.core.Paths
 import de.schliweb.crate.core.ScannedFile
@@ -86,6 +87,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private set
     var lastScan by mutableStateOf<Library.RescanSummary?>(null)
         private set
+    /** Files measured so far and files to measure, while the loudness
+     *  analysis runs; null otherwise. */
+    var analysisProgress by mutableStateOf<LoudnessAnalyzer.Progress?>(null)
+        private set
+    private var analysisJob: Job? = null
     var lastError by mutableStateOf<String?>(null)
     /** A one-line result of something the user just did, shown in the
      *  footer until the next scan; null most of the time. */
@@ -184,11 +190,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
             isLoaded = true
             started.complete(Unit)
+            withContext(Dispatchers.IO) { app.loudness.load() }
             restorePlayback()
             // An index from an older version lacks tags this one reads:
             // re-read the files once, with the grid already up and the
             // footer showing the progress.
-            if (library.needsRescan) rescan()
+            if (library.needsRescan) rescan() else startAnalysis()
         }
         viewModelScope.launch { connect() }
         viewModelScope.launch {
@@ -277,6 +284,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     "Scanning…"
                 }
             }
+            analysisProgress?.let { return "Measuring loudness… ${it.done} of ${it.total} files · $librarySize" }
             val scan = lastScan ?: return librarySize
             val parts = mutableListOf<String>()
             if (scan.added > 0) parts.add("${scan.added} added")
@@ -322,6 +330,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             notice = "Removed ${folder.name}"
             app.favorites.update { it.removeAllUnder(folder.path) }
             app.history.update { it.removeAllUnder(folder.path) }
+            analysisJob?.cancel()
+            withContext(Dispatchers.IO) { app.loudness.removeAllUnder(folder.path) }
             val controller = controllerReady.takeIf { it.isCompleted }?.await()
             if (controller != null) {
                 val keep = (0 until controller.mediaItemCount).filter { !Paths.isUnder(controller.getMediaItemAt(it).mediaId, folder.path) }
@@ -360,6 +370,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         isScanning = true
         scanProgress = null
         notice = null
+        // The analysis reads the same files: out of the way until the
+        // scan is done, then on with whatever is new.
+        analysisJob?.cancel()
         val started = System.currentTimeMillis()
         try {
             lastScan = withContext(Dispatchers.IO) { work() }
@@ -372,6 +385,30 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             scanProgress = null
         }
         refresh()
+        startAnalysis()
+    }
+
+    // Loudness analysis
+
+    /** Measures files without ReplayGain tags in the background, two at
+     *  a time, while the app is open; results arrive every few files and
+     *  the footer counts along. Cancelled by a scan or a folder removal
+     *  and started again after, picking up where it was. */
+    private fun startAnalysis() {
+        analysisJob?.cancel()
+        val tracks = this.tracks
+        analysisJob = viewModelScope.launch {
+            val pending = app.loudness.pending(tracks).size
+            if (pending == 0) return@launch
+            analysisProgress = LoudnessAnalyzer.Progress(0, pending)
+            try {
+                app.loudness.run(tracks) { progress, _ ->
+                    viewModelScope.launch { analysisProgress = progress }
+                }
+            } finally {
+                analysisProgress = null
+            }
+        }
     }
 
     private suspend fun refresh() {
