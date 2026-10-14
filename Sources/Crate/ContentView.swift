@@ -359,6 +359,10 @@ private struct TrackContextMenu: ViewModifier {
             Button(model.isFavorite(track) ? "Remove from Favorites" : "Add to Favorites") {
                 model.toggleFavorite(track)
             }
+            if let artist = track.displayArtist {
+                Divider()
+                Button("Show Albums by \(artist)") { model.showAlbums(ofArtist: artist) }
+            }
         }
     }
 }
@@ -459,8 +463,23 @@ struct TrackList: View {
                         }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(album.title).font(.title2.bold())
-                        Text([album.artist, album.year.map(String.init), album.genre].compactMap { $0 }.joined(separator: " · "))
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 0) {
+                            // The artist view: the name fills the search
+                            // field with "artist:" and the grid narrows to
+                            // that artist's albums.
+                            if album.artist == Album.variousArtists {
+                                Text(album.artist)
+                            } else {
+                                Button(album.artist) { model.showAlbums(ofArtist: album.artist) }
+                                    .buttonStyle(.plain)
+                                    .help("Show this artist's albums")
+                            }
+                            let rest = [album.year.map(String.init), album.genre].compactMap { $0 }
+                            if !rest.isEmpty {
+                                Text(" · " + rest.joined(separator: " · "))
+                            }
+                        }
+                        .foregroundStyle(.secondary)
                         Text(summary(album))
                             .font(.caption)
                             .foregroundStyle(.secondary)

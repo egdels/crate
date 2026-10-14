@@ -112,6 +112,7 @@ import de.schliweb.crate.PlayerViewModel
 import de.schliweb.crate.PlayerViewModel.Selection
 import de.schliweb.crate.core.Album
 import de.schliweb.crate.core.Lyrics
+import de.schliweb.crate.core.SearchQuery
 import de.schliweb.crate.core.Track
 import de.schliweb.crate.core.countText
 import de.schliweb.crate.core.lengthText
@@ -132,6 +133,16 @@ fun CrateScreen(model: PlayerViewModel) {
             uri?.let(model::addFolder)
         }
         var searching by remember { mutableStateOf(false) }
+        // Opened from a header or a long press: the field shows the
+        // "artist:" text and, on a phone, the grid comes back filtered.
+        LaunchedEffect(Unit) {
+            snapshotFlow { model.searchText }.collect { text ->
+                if (text.startsWith(SearchQuery.ARTIST_PREFIX) && !searching) {
+                    searching = true
+                    if (!wide) model.selection = null
+                }
+            }
+        }
         var showingPrivacyPolicy by rememberSaveable { mutableStateOf(false) }
         if (showingPrivacyPolicy) PrivacyPolicyDialog(onDismiss = { showingPrivacyPolicy = false })
         var showingHelp by rememberSaveable { mutableStateOf(false) }
@@ -591,10 +602,20 @@ private fun TrackList(model: PlayerViewModel, album: Album) {
                 Box(Modifier.size(96.dp).clip(RoundedCornerShape(6.dp))) { Artwork(model, album) }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(album.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text(
-                        listOfNotNull(album.artist, album.year?.toString(), album.genre).joinToString(" · "),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Row {
+                        // The artist view: the name fills the search field
+                        // with "artist:" and the grid narrows to that
+                        // artist's albums.
+                        Text(
+                            album.artist,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = if (album.artist == Album.VARIOUS_ARTISTS) Modifier else Modifier.clickable { model.showAlbumsOfArtist(album.artist) },
+                        )
+                        val rest = listOfNotNull(album.year?.toString(), album.genre)
+                        if (rest.isNotEmpty()) {
+                            Text(" · " + rest.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                     Text(
                         "${countText(album.tracks.size, "track")} · ${lengthText(album.duration)}",
                         style = MaterialTheme.typography.bodySmall,
@@ -685,6 +706,15 @@ private fun QueueMenu(model: PlayerViewModel, tracks: List<Track>, expanded: Boo
             leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null) },
             onClick = { onDismiss(); model.playLater(tracks) },
         )
+        val artist = tracks.singleOrNull()?.displayArtist
+        if (artist != null) {
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text("Albums by $artist") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                onClick = { onDismiss(); model.showAlbumsOfArtist(artist) },
+            )
+        }
     }
 }
 

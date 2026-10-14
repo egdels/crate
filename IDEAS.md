@@ -13,9 +13,6 @@ Entries move to CHANGELOG.md when they ship and are deleted here.
 
 ## Medium, library
 
-- **Artist view.** A click on the artist name in the album header
-  filters the grid to that artist's albums, using the sort names read
-  since 0.6. No new navigation, only a pre-filled search.
 - **Folder watching on the Mac.** FSEvents on the library folders, so a
   freshly copied album appears without a rescan. Unreliable over SMB,
   pleasant locally; the manual rescan stays as the fallback.
@@ -47,6 +44,5 @@ Entries move to CHANGELOG.md when they ship and are deleted here.
 
 ## Suggested next version (0.7.0)
 
-0.7.0 shipped with the first group. Lyrics (sidecar and tags, timed
-display) are in for 0.8; the artist view and folder watching are the
-candidates to go with them.
+0.7.0 shipped with the first group. Lyrics and the artist view are in
+for 0.8; folder watching on the Mac is the candidate to go with them.

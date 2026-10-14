@@ -16,6 +16,9 @@ public struct SearchIndex: Sendable {
     // contains whitespace, so it cannot match across two fields.
     private let albumTexts: [String]
     private let trackTexts: [String]
+    /// The folded artist fields alone, for the artist view.
+    private let albumArtists: [String]
+    private let trackArtists: [String]
 
     public struct Result: Sendable {
         public let albums: [Album]
@@ -29,18 +32,29 @@ public struct SearchIndex: Sendable {
         let fold = { (text: String) in Self.fold(text, locale: locale) }
         albumTexts = albums.map { SearchQuery.fields(of: $0).map(fold).joined(separator: "\n") }
         trackTexts = tracks.map { SearchQuery.fields(of: $0).map(fold).joined(separator: "\n") }
+        albumArtists = albums.map { fold($0.artist) }
+        trackArtists = tracks.map { SearchQuery.artistFields(of: $0).map(fold).joined(separator: "\n") }
     }
 
     public func search(_ query: SearchQuery) -> Result {
         if query.isEmpty { return Result(albums: albums, tracks: tracks) }
         let words = query.words.map { Self.fold($0, locale: locale) }
+        let artist = query.artist.map { Self.fold($0, locale: locale) }
         func matches(_ text: String) -> Bool { words.allSatisfy { text.contains($0) } }
-        let trackMatches = trackTexts.map(matches)
+        let trackMatches: [Bool]
+        let albumMatches: [Bool]
+        if let artist {
+            trackMatches = trackArtists.map { $0.contains(artist) }
+            albumMatches = albumArtists.map { $0.contains(artist) }
+        } else {
+            trackMatches = trackTexts.map(matches)
+            albumMatches = albumTexts.map(matches)
+        }
         var foundAlbums: [Album] = []
         var start = 0
         for (i, album) in albums.enumerated() {
             let end = start + album.tracks.count
-            if matches(albumTexts[i]) || trackMatches[start..<end].contains(true) {
+            if albumMatches[i] || trackMatches[start..<end].contains(true) {
                 foundAlbums.append(album)
             }
             start = end

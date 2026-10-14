@@ -53,6 +53,7 @@ struct HelpView: View {
                     HelpRow("", "Double-click an album to play it, or a track to start there and play on through the album. All Tracks lists everything; a double-click plays from that row to the end of the list.")
                     HelpRow("", "Albums are sorted by artist, ignoring a leading \"The\" and following the sort names in the tags when the files have them, then by year.")
                     HelpRow("", "The search field narrows albums and tracks by title, artist, album, composer and genre. Albums play gapless.")
+                    HelpRow("", "Click the artist's name in an album's header to see that artist's albums: the search field takes \"artist:Name\", which you can type as well. Clear the field to see everything again.")
                     HelpRow("", "Files tagged with ReplayGain or iTunes Sound Check play at the level the tags describe, so albums come out equally loud; the volume control is on top of that. Untagged files play as they are. Playing an album, every track gets the same correction, so a quiet intro stays quiet and the record keeps its dynamics; in Shuffle and All Tracks each track is levelled on its own.")
                     HelpRow("Space", "Play or pause.")
                     HelpRow("⌘→  ⌘←", "Next and previous track.")

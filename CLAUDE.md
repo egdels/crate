@@ -40,6 +40,8 @@ open build/Crate.app           # run it; pkill -x Crate to stop
 scripts/screenshot.sh          # PNG of the Crate window, then Read the file
                                # (captures the screen area: an overlapping window shows instead;
                                # `screencapture -l <CGWindowID>` captures the window itself, and
+                               # a SwiftUI button can be pressed by title through accessibility (AXUIElement walk + AXPress, see the
+                               # scratch `axpress` tool idea) when the window is on another Space or covered;
                                # `open -g -a <abs path to build/Crate.app> <file>` plays a library file in that build without
                                # bringing it forward; a bare `open <file>` goes to /Applications/Crate.app, even
                                # while a build/Crate.app is running, and then two Crates run)
@@ -340,6 +342,15 @@ because a controller's `addMediaItems` passes through the callback's
 reach the length the controller reported (`KEY_TOTAL`). Verified on the
 Pixel_9a emulator: sheet, tap, ×, Clear, Play Next with and without
 shuffle; and on the Mac on screen.
+Artist view (both apps): no new navigation, a search. `SearchQuery`
+takes "artist:Name" (`SearchQuery.artistPrefix`/`ARTIST_PREFIX`) and
+then matches only the artist and album artist fields with the whole
+phrase; `SearchIndex` keeps the folded artist fields apart for it. The
+album header's artist name is a plain button (Mac) or clickable text
+(Android) that sets the search text (`showAlbums(ofArtist:)`,
+`showAlbumsOfArtist`); "Various Artists" is not clickable. Android's
+screen watches the search text for the prefix to open the search bar
+and, on a phone, return to the grid. Verified on both.
 Lyrics (both apps): `Lyrics.parse` reads LRC (dot or colon
 hundredths, several stamps per line, `[offset:]`, header tags dropped)
 or plain text; `index(at:)`/`indexAt` gives the line being sung.

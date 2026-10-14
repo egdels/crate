@@ -21,18 +21,25 @@ class SearchIndex(val albums: List<Album>) {
     private val trackTexts: List<String> = tracks.map { track ->
         SearchQuery.fields(track).joinToString("\n") { it.foldedForSearch() }
     }
+    /** The folded artist fields alone, for the artist view. */
+    private val albumArtists: List<String> = albums.map { it.artist.foldedForSearch() }
+    private val trackArtists: List<String> = tracks.map { track ->
+        SearchQuery.artistFields(track).joinToString("\n") { it.foldedForSearch() }
+    }
 
     data class Result(val albums: List<Album>, val tracks: List<Track>)
 
     fun search(query: SearchQuery): Result {
         if (query.isEmpty) return Result(albums, tracks)
+        val artist = query.artist
         fun matches(text: String) = query.words.all { text.contains(it) }
-        val trackMatches = BooleanArray(tracks.size) { matches(trackTexts[it]) }
+        val trackMatches = BooleanArray(tracks.size) { if (artist != null) trackArtists[it].contains(artist) else matches(trackTexts[it]) }
+        val albumMatches = BooleanArray(albums.size) { if (artist != null) albumArtists[it].contains(artist) else matches(albumTexts[it]) }
         val foundAlbums = mutableListOf<Album>()
         var start = 0
         albums.forEachIndexed { i, album ->
             val end = start + album.tracks.size
-            if (matches(albumTexts[i]) || (start until end).any { trackMatches[it] }) foundAlbums.add(album)
+            if (albumMatches[i] || (start until end).any { trackMatches[it] }) foundAlbums.add(album)
             start = end
         }
         return Result(foundAlbums, tracks.filterIndexed { i, _ -> trackMatches[i] })

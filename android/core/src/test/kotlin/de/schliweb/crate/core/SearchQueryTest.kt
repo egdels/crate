@@ -70,4 +70,29 @@ class SearchQueryTest {
             assertEquals(albums.flatMap { it.tracks }.filter(query::matches), result.tracks, text)
         }
     }
+
+    @Test
+    fun artistPrefixSearchesTheArtistAlone() {
+        val query = SearchQuery("artist:Ada Lark")
+        assertEquals("ada lark", query.artist)
+        assertTrue(query.words.isEmpty())
+        assertFalse(query.isEmpty)
+        assertTrue(query.matches(tracks[0]))
+        assertTrue(query.matches(tracks[1]))
+        assertFalse(query.matches(tracks[2]))
+        // The phrase is not looked for in titles or albums.
+        assertFalse(SearchQuery("artist:Nobody").matches(tracks[0]))
+        assertTrue(SearchQuery("ARTIST: ada").matches(tracks[0]))
+        assertTrue(SearchQuery("artist:").isEmpty)
+        assertEquals("artist:Río Trio", SearchQuery.textForArtist("Río Trio"))
+    }
+
+    @Test
+    fun indexHonoursTheArtistPrefix() {
+        val index = SearchIndex(Album.group(tracks, listOf("/music")))
+        val result = index.search(SearchQuery("artist:rio"))
+        assertEquals(listOf("Señorita"), result.tracks.map { it.title })
+        assertEquals(listOf("Costa"), result.albums.map { it.title })
+        assertTrue(index.search(SearchQuery("artist:Songs")).albums.isEmpty())
+    }
 }

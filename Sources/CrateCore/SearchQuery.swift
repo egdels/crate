@@ -9,28 +9,57 @@ import Foundation
 /// "Señorita"). An album matches when its title, artist or genre does,
 /// or when any of its tracks does, so searching for a song title still
 /// shows the album it is on.
+///
+/// "artist:Name" is the artist view: the rest of the text is one phrase
+/// that has to occur in the artist or album artist, nothing else is
+/// searched. The album header's artist name fills the field that way.
 public struct SearchQuery: Equatable, Sendable {
+    public static let artistPrefix = "artist:"
+
     public let words: [String]
+    /// The phrase after "artist:", nil for an ordinary search.
+    public let artist: String?
 
     public init(_ text: String) {
-        words = text.split(whereSeparator: \.isWhitespace).map(String.init)
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        if trimmed.lowercased().hasPrefix(Self.artistPrefix) {
+            let phrase = trimmed.dropFirst(Self.artistPrefix.count).trimmingCharacters(in: .whitespaces)
+            artist = phrase.isEmpty ? nil : phrase
+            words = []
+        } else {
+            artist = nil
+            words = text.split(whereSeparator: \.isWhitespace).map(String.init)
+        }
     }
 
-    public var isEmpty: Bool { words.isEmpty }
+    /// The text that shows the albums of one artist.
+    public static func text(forArtist artist: String) -> String { artistPrefix + artist }
+
+    public var isEmpty: Bool { words.isEmpty && artist == nil }
 
     public func matches(_ track: Track) -> Bool {
+        if let artist {
+            return Self.artistFields(of: track).contains { $0.localizedStandardContains(artist) }
+        }
         if isEmpty { return true }
         let fields = Self.fields(of: track)
         return words.allSatisfy { word in fields.contains { $0.localizedStandardContains(word) } }
     }
 
     public func matches(_ album: Album) -> Bool {
+        if let artist {
+            return album.artist.localizedStandardContains(artist) || album.tracks.contains(where: matches)
+        }
         if isEmpty { return true }
         let fields = Self.fields(of: album)
         if words.allSatisfy({ word in fields.contains { $0.localizedStandardContains(word) } }) {
             return true
         }
         return album.tracks.contains(where: matches)
+    }
+
+    static func artistFields(of track: Track) -> [String] {
+        [track.artist, track.albumArtist].compactMap { $0 }
     }
 
     /// The fields a search looks at; `SearchIndex` folds the same ones.

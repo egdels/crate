@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Christian Kierdorf
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import Foundation
 import Testing
 @testable import CrateCore
 
@@ -70,5 +71,29 @@ import Testing
             #expect(result.albums == albums.filter(query.matches), "\(text)")
             #expect(result.tracks == albums.flatMap(\.tracks).filter(query.matches), "\(text)")
         }
+    }
+
+    @Test func artistPrefixSearchesTheArtistAlone() {
+        let query = SearchQuery("artist:Ada Lark")
+        #expect(query.artist == "Ada Lark")
+        #expect(query.words.isEmpty)
+        #expect(!query.isEmpty)
+        #expect(query.matches(tracks[0]))
+        #expect(query.matches(tracks[1]))
+        #expect(!query.matches(tracks[2]))
+        // The phrase is not looked for in titles or albums.
+        #expect(!SearchQuery("artist:Nobody").matches(tracks[0]))
+        #expect(SearchQuery("ARTIST: ada").matches(tracks[0]))
+        #expect(SearchQuery("artist:").isEmpty)
+        #expect(SearchQuery.text(forArtist: "Río Trio") == "artist:Río Trio")
+    }
+
+    @Test func indexHonoursTheArtistPrefix() {
+        let albums = Album.group(tracks, roots: [URL(fileURLWithPath: "/music")])
+        let index = SearchIndex(albums: albums)
+        let result = index.search(SearchQuery("artist:rio"))
+        #expect(result.tracks.map(\.title) == ["Señorita"])
+        #expect(result.albums.map(\.title) == ["Costa"])
+        #expect(index.search(SearchQuery("artist:Songs")).albums.isEmpty)
     }
 }

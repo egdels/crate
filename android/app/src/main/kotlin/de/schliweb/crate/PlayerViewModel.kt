@@ -193,6 +193,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /** The artist view: the search field takes "artist:Name" and the
+     *  grid shows that artist's albums. The search field is the whole
+     *  mechanism, so clearing it is the way back. */
+    fun showAlbumsOfArtist(artist: String) {
+        searchText = SearchQuery.textForArtist(artist)
+    }
+
     // Favorites
 
     fun isFavorite(track: Track): Boolean = track in favorites

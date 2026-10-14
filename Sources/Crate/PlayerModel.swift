@@ -190,6 +190,13 @@ final class PlayerModel: ObservableObject {
         }
     }
 
+    /// The artist view: the search field takes "artist:Name" and the
+    /// grid shows that artist's albums. The search field is the whole
+    /// mechanism, so clearing it is the way back.
+    func showAlbums(ofArtist artist: String) {
+        searchText = SearchQuery.text(forArtist: artist)
+    }
+
     // MARK: - Favorites
 
     func isFavorite(_ track: Track) -> Bool { favorites.contains(track) }

@@ -19,6 +19,12 @@ version's section from this file as the GitHub release notes.
   Nothing is read until the track plays; the index does not change.
 - `crate-scan --lyrics` counts the files of a folder that carry lyrics,
   by source.
+- Artist view, in both apps: the artist's name in an album's header is
+  a link to that artist's albums. It fills the search field with
+  `artist:Name`, which narrows the grid to albums whose artist or album
+  artist matches, nothing else; the prefix can be typed as well, and
+  clearing the field brings everything back. Also in a track's context
+  menu (Mac) and long-press menu (Android).
 
 ## [0.7.0] - 2026-10-14
 
