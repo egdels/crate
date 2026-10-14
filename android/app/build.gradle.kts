@@ -119,5 +119,7 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
+    testImplementation(kotlin("test-junit"))
+    testImplementation(libs.junit)
     debugImplementation(libs.compose.ui.tooling)
 }

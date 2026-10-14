@@ -50,6 +50,7 @@ Android, from `android/` (needs JDK 17+, Android SDK with platform 37;
 ./gradlew :core:test             # 65 JVM tests, ~2 s
 CRATE_MUSIC_DIRS=~/Music/Music/Media.localized ./gradlew :core:test --tests '*TagParserTest*' -i
                                  # also runs the MP3/MP4 parsers over real files (colon-separated dirs)
+./gradlew :app:testDebugUnitTest # 4 JVM tests in the app module (GainProcessor), ~10 s
 ./gradlew :app:assembleDebug     # -> app/build/outputs/apk/debug/app-debug.apk
 ./gradlew :app:lintDebug         # must stay at zero errors (CI runs it)
 ./gradlew :app:assembleRelease   # R8; unsigned without RELEASE_KEYSTORE_PATH etc.
@@ -107,7 +108,11 @@ Sound Check, which knows no albums: Dark Side of the Moon spans -2.8 to
 between player node and mixer, switched at the gapless hand-over;
 Android through `GainProcessor` (16-bit PCM AudioProcessor in the sink)
 fed from the media item's extras on each item transition, logged as
-"gain: x dB for <title>". The user's volume (Mac mixer, Android system)
+"gain: x dB for <title>". The processor must ignore an empty input:
+the pipeline queues the shared EMPTY_BUFFER and replaceOutputBuffer(0)
+returns that very object; copying it into itself threw and 0.6.0/0.6.1
+could not play untagged files on Android (every verification had used
+tagged files; test untagged ones too). The user's volume (Mac mixer, Android system)
 is a separate stage. Test files with ReplayGain tags can be made with
 ffmpeg (`-metadata replaygain_track_gain="-6.50 dB"`, TXXX) and
 `metaflac --add-replay-gain`; ffmpeg's mp4 muxer drops them, so an M4A

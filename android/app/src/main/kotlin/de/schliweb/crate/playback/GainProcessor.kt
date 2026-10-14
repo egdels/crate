@@ -28,7 +28,12 @@ class GainProcessor : BaseAudioProcessor() {
         if (inputAudioFormat.encoding == C.ENCODING_PCM_16BIT) inputAudioFormat else AudioProcessor.AudioFormat.NOT_SET
 
     override fun queueInput(inputBuffer: ByteBuffer) {
+        // The pipeline also queues an empty buffer, the shared EMPTY_BUFFER,
+        // and replaceOutputBuffer(0) hands that same object back: copying
+        // it into itself threw and stopped playback of every untagged
+        // file in 0.6.0. Nothing to do, nothing to output.
         val remaining = inputBuffer.remaining()
+        if (remaining == 0) return
         val out = replaceOutputBuffer(remaining)
         val f = factor
         if (f == 1f) {
@@ -38,6 +43,8 @@ class GainProcessor : BaseAudioProcessor() {
                 val sample = (inputBuffer.short * f).toInt().coerceIn(-32768, 32767)
                 out.putShort(sample.toShort())
             }
+            // An odd trailing byte cannot be a sample; drop it rather than loop forever.
+            if (inputBuffer.hasRemaining()) inputBuffer.position(inputBuffer.limit())
         }
         out.flip()
     }

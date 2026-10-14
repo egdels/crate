@@ -5,6 +5,15 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow takes a
 version's section from this file as the GitHub release notes.
 
+## [Unreleased]
+
+### Fixed
+
+- Android 0.6.0 and 0.6.1 could not play files without a loudness tag,
+  which is most of them: the gain stage tried to copy an empty buffer
+  into itself and the player stopped with "Unexpected runtime error".
+  Tagged files played, which is why the emulator check missed it.
+
 ## [0.6.1] - 2026-10-14
 
 ### Changed
