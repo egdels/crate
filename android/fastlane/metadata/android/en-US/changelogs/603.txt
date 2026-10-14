@@ -1,0 +1,1 @@
+Same as 0.6.2 on Android; this release fixes a crash in the Mac app.
