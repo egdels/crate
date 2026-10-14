@@ -5,6 +5,7 @@ package de.schliweb.crate
 
 import android.app.Application
 import de.schliweb.crate.core.JsonFavoritesStore
+import de.schliweb.crate.core.JsonHistoryStore
 import de.schliweb.crate.core.JsonLibraryStore
 import de.schliweb.crate.core.JsonPlaybackStateStore
 import de.schliweb.crate.core.Library
@@ -34,6 +35,9 @@ class CrateApplication : Application() {
     /** The hearts, in a small file of their own next to the index,
      *  shared with the service for the notification's heart. */
     val favorites: SharedFavorites by lazy { SharedFavorites(JsonFavoritesStore(File(filesDir, "favorites.json"))) }
+
+    /** What was played, newest first, for the Recently Played tile. */
+    val history: SharedHistory by lazy { SharedHistory(JsonHistoryStore(File(filesDir, "history.json"))) }
 
     /** Where playback stood, for the next launch; two small files next
      *  to the index. */

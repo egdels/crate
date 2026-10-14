@@ -44,6 +44,16 @@ struct ContentView: View {
                                 emptyText: model.favorites.isEmpty
                                     ? "No favorites yet. Click the heart on a track."
                                     : "No favorites match the search.")
+                        } else if model.detail == .recentlyAdded {
+                            FlatTrackList(
+                                tracks: model.recentlyAddedTracks, title: "Recently Added",
+                                emptyText: "Nothing matches the search.")
+                        } else if model.detail == .recentlyPlayed {
+                            FlatTrackList(
+                                tracks: model.recentlyPlayedTracks, title: "Recently Played",
+                                emptyText: model.history.isEmpty
+                                    ? "Nothing played yet."
+                                    : "Nothing played matches the search.")
                         } else {
                             TrackList()
                         }
@@ -88,6 +98,10 @@ struct ContentView: View {
             model.play(tracks: model.filteredTracks)
         } else if model.detail == .favorites {
             model.play(tracks: model.favoriteTracks)
+        } else if model.detail == .recentlyAdded {
+            model.play(tracks: model.recentlyAddedTracks)
+        } else if model.detail == .recentlyPlayed {
+            model.play(tracks: model.recentlyPlayedTracks)
         } else if let album = model.selectedAlbum {
             model.play(album: album)
         }
@@ -139,6 +153,16 @@ struct AlbumGrid: View {
                         selected: model.selection == .favorites)
                         .onTapGesture(count: 2) { model.play(tracks: model.favoriteTracks) }
                         .onTapGesture { model.selection = .favorites }
+                    LibraryTile(
+                        title: "Recently Added", count: model.recentlyAddedTracks.count, systemImage: "sparkles",
+                        selected: model.selection == .recentlyAdded)
+                        .onTapGesture(count: 2) { model.play(tracks: model.recentlyAddedTracks) }
+                        .onTapGesture { model.selection = .recentlyAdded }
+                    LibraryTile(
+                        title: "Recently Played", count: model.recentlyPlayedTracks.count, systemImage: "clock.arrow.circlepath",
+                        selected: model.selection == .recentlyPlayed)
+                        .onTapGesture(count: 2) { model.play(tracks: model.recentlyPlayedTracks) }
+                        .onTapGesture { model.selection = .recentlyPlayed }
                     ForEach(model.filteredAlbums) { album in
                         AlbumTile(album: album, selected: model.selection == .album(album.id))
                             .onTapGesture(count: 2) { model.play(album: album) }
@@ -223,8 +247,8 @@ struct AlbumTile: View {
     }
 }
 
-/// The first tiles of the grid: the whole library, and the favorites,
-/// each as one flat list.
+/// The first tiles of the grid: the whole library, the favorites, the
+/// newest files and what was played last, each as one flat list.
 struct LibraryTile: View {
     let title: String
     let count: Int

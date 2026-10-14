@@ -83,7 +83,8 @@ Sources/CrateCore/    UI-free library: Track, Album, LibraryScanner,
                       (+AVAudioPlayer impl), ID3v1Genres, Favorites
                       (+FavoritesStore, JSON impl), ReplayGain,
                       PlaybackState (+PlaybackStateStore, JSON impl),
-                      Lyrics (+LyricsSource, FileLyricsSource)
+                      Lyrics (+LyricsSource, FileLyricsSource), History
+                      (+HistoryStore, JSON impl; Track.recentlyAdded)
 Sources/Crate/        SwiftUI app: CrateApp, PlayerModel (@Observable,
                       the only UI state), ContentView (album grid + track
                       list + empty state), PlayerBar
@@ -143,7 +144,8 @@ android/core/   Kotlin/JVM, package de.schliweb.crate.core: Track (uri +
                 TagText/Id3v1Genres, FolderImages, SearchQuery, Formatting,
                 Favorites (+JsonFavoritesStore), ReplayGain,
                 PlaybackState (+JsonPlaybackStateStore), Lyrics
-                (+LyricsSource; SafLyricsSource lives in the app)
+                (+LyricsSource; SafLyricsSource lives in the app),
+                History (+JsonHistoryStore, recentlyAdded())
 android/app/    de.schliweb.crate: CrateApplication (owns Library and
                 ArtworkCache), PlayerViewModel (the only UI state),
                 MainActivity, ui/CrateScreen (grid + detail, two panes
@@ -342,6 +344,20 @@ because a controller's `addMediaItems` passes through the callback's
 reach the length the controller reported (`KEY_TOTAL`). Verified on the
 Pixel_9a emulator: sheet, tap, ×, Clear, Play Next with and without
 shuffle; and on the Mac on screen.
+Recent tiles (both apps): Recently Added is `Track.recentlyAdded` /
+`recentlyAdded()` over the album-ordered tracks (newest modification
+day first, album order within a day, capped at 200), computed with
+the grid on every refresh. Recently Played is `History` (ids newest
+first, one per track, capped at 500) in `history.json` next to the
+index; the Mac model records in `loadCurrent(autoplay:)` and on Play
+(once per start, `recordedID`), Android's `PlaybackService` records
+on item transitions and play while `playWhenReady` into the
+process-wide `SharedHistory` the view model mirrors, so a restored,
+paused playlist does not count. Both lists follow the search
+(`listsChanged()` on the Mac); `Selection` has `.recentlyAdded` /
+`.recentlyPlayed`, Android `LIBRARY_TILES` = 4. Scanning stays a
+deliberate act: no folder watching, decided 2026-10-14. Verified on
+both.
 Artist view (both apps): no new navigation, a search. `SearchQuery`
 takes "artist:Name" (`SearchQuery.artistPrefix`/`ARTIST_PREFIX`) and
 then matches only the artist and album artist fields with the whole

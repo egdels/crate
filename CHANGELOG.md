@@ -25,6 +25,12 @@ version's section from this file as the GitHub release notes.
   artist matches, nothing else; the prefix can be typed as well, and
   clearing the field brings everything back. Also in a track's context
   menu (Mac) and long-press menu (Android).
+- Two more tiles in the grid, in both apps. Recently Added lists the
+  newest files by their date, newest day first and an album copied in
+  one go together. Recently Played lists what was played last, newest
+  first, one entry per track; kept in `history.json` next to the index
+  (`PRIVACY.md` lists it), a track counts when it starts playing. Both
+  tiles play their list, and the search narrows them.
 
 ## [0.7.0] - 2026-10-14
 

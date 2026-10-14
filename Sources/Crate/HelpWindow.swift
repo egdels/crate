@@ -61,6 +61,7 @@ struct HelpView: View {
                     HelpRow("⌥⌘L", "Lyrics, when the track has them: an .lrc file with the track's name beside it or in a lyrics folder, or the lyrics in its tags. A timed .lrc follows the playback. The button appears in the player bar for such tracks.")
                     HelpRow("⌘U", "Up Next: what plays after this track, also behind the list icon in the player bar. Double-click plays an entry now, the × takes it out. Right-click a track or an album for Play Next and Play Last.")
                     HelpRow("⌘L", "Favorite: a heart on the track that is playing. Rows and the album header have the heart too; the Favorites tile plays them. Favorites are kept on this Mac, in a file next to the library index.")
+                    HelpRow("", "Recently Added lists the newest files by their date, an album copied in one go together; Recently Played what was played last, newest first, kept in a file next to the index like the favorites. Both tiles play their list, and the search narrows them.")
                     HelpRow("", "The media keys and Control Center's Now Playing work as with any player.")
                     HelpRow("", "Crate remembers where you stopped: the next launch comes up with the same queue, at the same spot, paused.")
                 }

@@ -30,6 +30,10 @@ uploaded or changed.
 - Tap the artist's name on an album page to see that artist's albums:
   the search field takes `artist:Name`, which you can type as well.
   Clear the field to see everything again.
+- **Recently Added** lists the newest files by their date, an album
+  copied in one go together; **Recently Played** what was played last,
+  newest first, kept on this device next to the library index. Both
+  tiles play their list, and the search narrows them.
 - The heart on a track, in the player bar or on an album page marks a
   favorite. **Favorites** in the grid lists them; the play button plays
   them. Favorites are kept on this device, in a file next to the library

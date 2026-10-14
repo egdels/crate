@@ -48,13 +48,24 @@ final class PlayerModel: ObservableObject {
     @Published private(set) var favorites = Favorites()
     /// The favorites in album order, narrowed by the search field.
     @Published private(set) var favoriteTracks: [Track] = []
-
-    /// What the detail column shows: one album, every track, or the
+    /// What was played, newest first; its own small file, like the
     /// favorites.
+    @Published private(set) var history = History()
+    /// The newest files of the library, narrowed by the search field.
+    @Published private(set) var recentlyAddedTracks: [Track] = []
+    /// The history's tracks, narrowed by the search field.
+    @Published private(set) var recentlyPlayedTracks: [Track] = []
+    /// `Track.recentlyAdded` of the whole library, computed with the grid.
+    private var recentlyAdded: [Track] = []
+
+    /// What the detail column shows: one album, every track, the
+    /// favorites, or one of the recent lists.
     enum Selection: Hashable {
         case album(Album.ID)
         case allTracks
         case favorites
+        case recentlyAdded
+        case recentlyPlayed
     }
 
     /// Whether the player bar shows the Up Next popover. Held here so the
@@ -75,6 +86,7 @@ final class PlayerModel: ObservableObject {
     private let player: any AudioPlayer
     private let artworkCache: ArtworkCache
     private let favoritesStore: any FavoritesStore
+    private let historyStore: any HistoryStore
     private let playbackStore: any PlaybackStateStore
     private let lyricsSource: any LyricsSource
     private var ticker: Timer?
@@ -87,12 +99,13 @@ final class PlayerModel: ObservableObject {
 
     init(
         library: Library, player: any AudioPlayer, artwork: ArtworkCache, favorites: any FavoritesStore,
-        playback: any PlaybackStateStore, lyrics: any LyricsSource = FileLyricsSource()
+        playback: any PlaybackStateStore, history: any HistoryStore, lyrics: any LyricsSource = FileLyricsSource()
     ) {
         self.library = library
         self.player = player
         self.artworkCache = artwork
         self.favoritesStore = favorites
+        self.historyStore = history
         self.playbackStore = playback
         self.lyricsSource = lyrics
         player.onFinished = { [weak self] in self?.trackFinished() }
@@ -111,10 +124,13 @@ final class PlayerModel: ObservableObject {
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("crate-favorites.json")
         let playbackDirectory = (try? JSONPlaybackStateStore.defaultDirectory(appName: "Crate"))
             ?? FileManager.default.temporaryDirectory
+        let historyURL = (try? JSONHistoryStore.defaultFileURL(appName: "Crate"))
+            ?? FileManager.default.temporaryDirectory.appendingPathComponent("crate-history.json")
         let model = PlayerModel(
             library: library, player: AVAudioEngineBackend(), artwork: artwork,
             favorites: JSONFavoritesStore(fileURL: favoritesURL),
-            playback: JSONPlaybackStateStore(directory: playbackDirectory))
+            playback: JSONPlaybackStateStore(directory: playbackDirectory),
+            history: JSONHistoryStore(fileURL: historyURL))
         model.nowPlaying = NowPlaying(model: model)
         return model
     }
@@ -178,7 +194,7 @@ final class PlayerModel: ObservableObject {
         if query.isEmpty {
             filteredAlbums = index.albums
             filteredTracks = index.tracks
-            favoriteTracks = favorites.filter(filteredTracks)
+            listsChanged()
             return
         }
         searchTask = Task {
@@ -186,8 +202,37 @@ final class PlayerModel: ObservableObject {
             guard !Task.isCancelled else { return }
             filteredAlbums = result.albums
             filteredTracks = result.tracks
-            favoriteTracks = favorites.filter(filteredTracks)
+            listsChanged()
         }
+    }
+
+    /// The three flat lists follow the search: each is its own order
+    /// narrowed to the tracks the search left.
+    private func listsChanged() {
+        favoriteTracks = favorites.filter(filteredTracks)
+        if SearchQuery(searchText).isEmpty {
+            recentlyAddedTracks = recentlyAdded
+            recentlyPlayedTracks = history.tracks(from: tracks)
+        } else {
+            let shown = Set(filteredTracks.map(\.id))
+            recentlyAddedTracks = recentlyAdded.filter { shown.contains($0.id) }
+            recentlyPlayedTracks = history.tracks(from: filteredTracks)
+        }
+    }
+
+    // MARK: - History
+
+    /// The id the history was last told about, so a track counts once
+    /// per start, not once per pause and play.
+    private var recordedID: String?
+
+    /// Writes the file right away, like the favorites: a few kilobytes.
+    private func recordPlay(_ track: Track) {
+        guard recordedID != track.id else { return }
+        recordedID = track.id
+        history.record(track)
+        listsChanged()
+        try? historyStore.save(history)
     }
 
     /// The artist view: the search field takes "artist:Name" and the
@@ -225,7 +270,7 @@ final class PlayerModel: ObservableObject {
     /// kilobytes in Application Support, and writing it in order is what
     /// matters after two quick taps.
     private func favoritesChanged() {
-        favoriteTracks = favorites.filter(filteredTracks)
+        listsChanged()
         do {
             try favoritesStore.save(favorites)
         } catch {
@@ -244,6 +289,7 @@ final class PlayerModel: ObservableObject {
                 do {
                     try await library.load()
                     favorites = try favoritesStore.load() ?? Favorites()
+                    history = try historyStore.load() ?? History()
                     await refresh()
                 } catch {
                     lastError = "Could not load the library: \(error.localizedDescription)"
@@ -347,6 +393,8 @@ final class PlayerModel: ObservableObject {
         lastScan = nil
         favorites.removeAll(under: url)
         favoritesChanged()
+        history.removeAll(under: url)
+        try? historyStore.save(history)
         let wasCurrent = current
         queue.removeAll { Library.isUnder($0.url, url) }
         if let wasCurrent, current?.id != wasCurrent.id {
@@ -411,17 +459,19 @@ final class PlayerModel: ObservableObject {
         // would stall the window on a slow Mac.
         let folders = await library.folders
         let tracks = await library.tracks
-        let (albums, index) = await Task.detached(priority: .userInitiated) {
+        let (albums, index, recent) = await Task.detached(priority: .userInitiated) {
             let albums = Album.group(tracks, roots: folders)
-            return (albums, SearchIndex(albums: albums))
+            let index = SearchIndex(albums: albums)
+            return (albums, index, Track.recentlyAdded(index.tracks))
         }.value
         self.albums = albums
         searchIndex = index
-        updateSearch()
+        recentlyAdded = recent
         self.tracks = tracks
         self.folders = folders
+        updateSearch()
         switch selection {
-        case .allTracks, .favorites:
+        case .allTracks, .favorites, .recentlyAdded, .recentlyPlayed:
             break
         case .album(let id) where albums.contains(where: { $0.id == id }):
             break
@@ -528,6 +578,7 @@ final class PlayerModel: ObservableObject {
         } else {
             player.play()
             isPlaying = true
+            if let current { recordPlay(current) }
         }
         syncNowPlaying()
     }
@@ -591,6 +642,7 @@ final class PlayerModel: ObservableObject {
             if autoplay {
                 player.play()
                 isPlaying = true
+                recordPlay(track)
             }
             startTicking()
             syncNowPlaying()

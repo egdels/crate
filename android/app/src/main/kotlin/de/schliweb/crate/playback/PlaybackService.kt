@@ -119,8 +119,16 @@ class PlaybackService : MediaSessionService() {
             }
         })
         player.addListener(object : Player.Listener {
-            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = updateHeart()
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                updateHeart()
+                recordPlay(player)
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) recordPlay(player)
+            }
         })
+        scope.launch { (application as CrateApplication).history.load() }
         val openApp = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
@@ -135,6 +143,19 @@ class PlaybackService : MediaSessionService() {
             favorites.load()
             favorites.state.collect { updateHeart() }
         }
+    }
+
+    /** The id the history was last told about, so a track counts once
+     *  per start, not once per pause and play. */
+    private var recordedId: String? = null
+
+    /** Recently Played: a track counts when it is playing (a restored,
+     *  paused playlist does not count until Play). */
+    private fun recordPlay(player: Player) {
+        val id = player.currentMediaItem?.mediaId ?: return
+        if (!player.playWhenReady || id == recordedId) return
+        recordedId = id
+        (application as CrateApplication).history.update { it.record(id) }
     }
 
     /** The notification's heart, filled when the current track has one. */

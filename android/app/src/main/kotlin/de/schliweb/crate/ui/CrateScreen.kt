@@ -51,6 +51,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.Lock
@@ -283,6 +285,8 @@ private fun TopBar(
                     onBack != null -> model.selectedAlbum?.title ?: when (model.selection) {
                         Selection.AllTracks -> "All Tracks"
                         Selection.Favorites -> "Favorites"
+                        Selection.RecentlyAdded -> "Recently Added"
+                        Selection.RecentlyPlayed -> "Recently Played"
                         else -> "Crate"
                     }
                     else -> "Crate"
@@ -308,6 +312,10 @@ private fun TopBar(
                             model.play(model.filteredTracks)
                         } else if (model.detail == Selection.Favorites) {
                             model.play(model.favoriteTracks)
+                        } else if (model.detail == Selection.RecentlyAdded) {
+                            model.play(model.recentlyAddedTracks)
+                        } else if (model.detail == Selection.RecentlyPlayed) {
+                            model.play(model.recentlyPlayedTracks)
                         } else {
                             model.selectedAlbum?.let { model.play(it) }
                         }
@@ -439,6 +447,8 @@ private fun AlbumGrid(model: PlayerViewModel, state: LazyGridState, modifier: Mo
         val index = when (val selection = model.selection) {
             Selection.AllTracks -> 0
             Selection.Favorites -> 1
+            Selection.RecentlyAdded -> 2
+            Selection.RecentlyPlayed -> 3
             is Selection.AlbumId -> albums.indexOfFirst { it.id == selection.id }.takeIf { it >= 0 }?.plus(LIBRARY_TILES)
             null -> null
         } ?: return@LaunchedEffect
@@ -486,6 +496,36 @@ private fun AlbumGrid(model: PlayerViewModel, state: LazyGridState, modifier: Mo
                 }
             }
         }
+        item(key = "recently-added") {
+            Tile(
+                selected = model.selection == Selection.RecentlyAdded,
+                onClick = { model.selection = Selection.RecentlyAdded },
+                title = "Recently Added",
+                subtitle = countText(model.recentlyAddedTracks.size, "track"),
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.AutoAwesome, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(48.dp),
+                    )
+                }
+            }
+        }
+        item(key = "recently-played") {
+            Tile(
+                selected = model.selection == Selection.RecentlyPlayed,
+                onClick = { model.selection = Selection.RecentlyPlayed },
+                title = "Recently Played",
+                subtitle = countText(model.recentlyPlayedTracks.size, "track"),
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.History, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(48.dp),
+                    )
+                }
+            }
+        }
         items(albums, key = { it.id }) { album ->
             var menuOpen by remember { mutableStateOf(false) }
             Box {
@@ -511,8 +551,9 @@ private fun AlbumGrid(model: PlayerViewModel, state: LazyGridState, modifier: Mo
     }
 }
 
-/** Tiles before the first album: All Tracks and Favorites. */
-private const val LIBRARY_TILES = 2
+/** Tiles before the first album: All Tracks, Favorites, Recently Added,
+ *  Recently Played. */
+private const val LIBRARY_TILES = 4
 
 @Composable
 private fun Tile(
@@ -580,6 +621,11 @@ private fun Detail(model: PlayerViewModel) {
         Selection.Favorites -> FlatTrackList(
             model, model.favoriteTracks,
             emptyText = if (model.favorites.isEmpty) "No favorites yet. Tap the heart on a track." else "No favorites match the search.",
+        )
+        Selection.RecentlyAdded -> FlatTrackList(model, model.recentlyAddedTracks, emptyText = "Nothing matches the search.")
+        Selection.RecentlyPlayed -> FlatTrackList(
+            model, model.recentlyPlayedTracks,
+            emptyText = if (model.history.isEmpty) "Nothing played yet." else "Nothing played matches the search.",
         )
         is Selection.AlbumId -> model.selectedAlbum?.let { TrackList(model, it) }
             ?: Placeholder("Select an album")

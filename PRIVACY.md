@@ -42,6 +42,9 @@ its own. It only reads the music files in the folders you point it at.
 - **Favorites**: the file paths of the tracks you marked with a heart,
   in a second JSON file next to the index (`favorites.json`). Nothing is
   written into the music files themselves.
+- **Recently played**: the file paths of the last tracks that played,
+  newest first and at most a few hundred, in `history.json` next to the
+  index, for the Recently Played tile.
 - **Where playback stood**: the file paths of the queued tracks, which
   one was playing and how far into it, so that the next launch comes up
   there (`queue.json` and `position.json` next to the index).

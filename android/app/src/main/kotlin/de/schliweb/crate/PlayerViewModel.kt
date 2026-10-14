@@ -30,6 +30,7 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import de.schliweb.crate.core.Album
 import de.schliweb.crate.core.Favorites
+import de.schliweb.crate.core.History
 import de.schliweb.crate.core.Folder
 import de.schliweb.crate.core.Library
 import de.schliweb.crate.core.Lyrics
@@ -39,6 +40,7 @@ import de.schliweb.crate.core.SearchIndex
 import de.schliweb.crate.core.SearchQuery
 import de.schliweb.crate.core.Track
 import de.schliweb.crate.core.countText
+import de.schliweb.crate.core.recentlyAdded
 import de.schliweb.crate.library.SafFileSource
 import de.schliweb.crate.core.PlaybackState
 import de.schliweb.crate.playback.PlaybackService
@@ -104,14 +106,28 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /** The favorites in album order, narrowed by the search field. */
     var favoriteTracks by mutableStateOf<List<Track>>(emptyList())
         private set
+    /** What was played, newest first: a mirror of the process-wide
+     *  [SharedHistory], which the service records into. */
+    var history by mutableStateOf(History())
+        private set
+    /** The newest files of the library, narrowed by the search field. */
+    var recentlyAddedTracks by mutableStateOf<List<Track>>(emptyList())
+        private set
+    /** The history's tracks, narrowed by the search field. */
+    var recentlyPlayedTracks by mutableStateOf<List<Track>>(emptyList())
+        private set
+    /** `recentlyAdded` of the whole library, computed with the grid. */
+    private var recentlyAdded: List<Track> = emptyList()
     private var searchIndex by mutableStateOf(SearchIndex(emptyList()))
 
-    /** What the detail pane shows: one album, every track, or the
-     *  favorites. */
+    /** What the detail pane shows: one album, every track, the
+     *  favorites, or one of the recent lists. */
     sealed interface Selection {
         data class AlbumId(val id: String) : Selection
         data object AllTracks : Selection
         data object Favorites : Selection
+        data object RecentlyAdded : Selection
+        data object RecentlyPlayed : Selection
     }
 
     // Playback
@@ -159,6 +175,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val t0 = System.currentTimeMillis()
                 withContext(Dispatchers.IO) { library.load() }
                 app.favorites.load()
+                app.history.load()
                 val t1 = System.currentTimeMillis()
                 refresh()
                 Log.i(TAG, "load: ${tracks.size} tracks, read ${t1 - t0} ms, grouped ${System.currentTimeMillis() - t1} ms")
@@ -180,6 +197,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 favoriteTracks = it.filter(filteredTracks)
             }
         }
+        viewModelScope.launch {
+            app.history.state.collect {
+                history = it
+                recentlyPlayedTracks = it.tracks(if (searchText.isBlank()) tracks else filteredTracks)
+            }
+        }
         viewModelScope.launch { app.favorites.errors.collect { lastError = it } }
         // Off the main thread and once per keystroke: the field shows
         // what was typed right away, the lists follow when they are ready.
@@ -189,6 +212,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 filteredAlbums = result.albums
                 filteredTracks = result.tracks
                 favoriteTracks = favorites.filter(result.tracks)
+                // The recent lists keep their own order, narrowed to what
+                // the search left.
+                if (text.isBlank()) {
+                    recentlyAddedTracks = recentlyAdded
+                    recentlyPlayedTracks = history.tracks(result.tracks)
+                } else {
+                    val shown = result.tracks.mapTo(HashSet()) { it.id }
+                    recentlyAddedTracks = recentlyAdded.filter { it.id in shown }
+                    recentlyPlayedTracks = history.tracks(result.tracks)
+                }
             }
         }
     }
@@ -288,6 +321,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             lastScan = null
             notice = "Removed ${folder.name}"
             app.favorites.update { it.removeAllUnder(folder.path) }
+            app.history.update { it.removeAllUnder(folder.path) }
             val controller = controllerReady.takeIf { it.isCompleted }?.await()
             if (controller != null) {
                 val keep = (0 until controller.mediaItemCount).filter { !Paths.isUnder(controller.getMediaItemAt(it).mediaId, folder.path) }
@@ -341,12 +375,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private suspend fun refresh() {
-        val (grouped, index) = withContext(Dispatchers.Default) { library.albums.let { it to SearchIndex(it) } }
-        // All three at once, after the grouping: setting folders first
-        // showed an empty grid for as long as the grouping took.
+        val (grouped, index, recent) = withContext(Dispatchers.Default) {
+            val albums = library.albums
+            val index = SearchIndex(albums)
+            Triple(albums, index, recentlyAdded(index.tracks))
+        }
+        // All at once, after the grouping: setting folders first showed
+        // an empty grid for as long as the grouping took.
         folders = library.folders
         tracks = library.tracks
         albums = grouped
+        recentlyAdded = recent
         searchIndex = index
         val selected = selection
         if (selected is Selection.AlbumId && grouped.none { it.id == selected.id }) selection = null
