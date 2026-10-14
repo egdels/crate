@@ -55,6 +55,7 @@ struct HelpView: View {
                     HelpRow("Space", "Play or pause.")
                     HelpRow("⌘→  ⌘←", "Next and previous track.")
                     HelpRow("⇧⌘S", "Shuffle. Repeat is in the Playback menu.")
+                    HelpRow("⌘L", "Favorite: a heart on the track that is playing. Rows and the album header have the heart too; the Favorites tile plays them. Favorites are kept on this Mac, in a file next to the library index.")
                     HelpRow("", "The media keys and Control Center's Now Playing work as with any player.")
                 }
 

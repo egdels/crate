@@ -43,11 +43,18 @@ final class PlayerModel: ObservableObject {
     @Published private(set) var filteredAlbums: [Album] = []
     /// Every track in album order, narrowed by the search field.
     @Published private(set) var filteredTracks: [Track] = []
+    /// The tracks marked with a heart. Saved in a file of their own, so
+    /// a tap on a heart never rewrites the library's index.
+    @Published private(set) var favorites = Favorites()
+    /// The favorites in album order, narrowed by the search field.
+    @Published private(set) var favoriteTracks: [Track] = []
 
-    /// What the detail column shows: one album, or every track.
+    /// What the detail column shows: one album, every track, or the
+    /// favorites.
     enum Selection: Hashable {
         case album(Album.ID)
         case allTracks
+        case favorites
     }
 
     @Published var volume: Float = 1 {
@@ -57,6 +64,7 @@ final class PlayerModel: ObservableObject {
     private let library: Library
     private let player: any AudioPlayer
     private let artworkCache: ArtworkCache
+    private let favoritesStore: any FavoritesStore
     private var ticker: Timer?
     private var artworkTask: Task<Void, Never>?
     private var searchIndex = SearchIndex(albums: [])
@@ -64,10 +72,11 @@ final class PlayerModel: ObservableObject {
     /// Set by `live()`; nil in tests and previews.
     var nowPlaying: NowPlaying?
 
-    init(library: Library, player: any AudioPlayer, artwork: ArtworkCache) {
+    init(library: Library, player: any AudioPlayer, artwork: ArtworkCache, favorites: any FavoritesStore) {
         self.library = library
         self.player = player
         self.artworkCache = artwork
+        self.favoritesStore = favorites
         player.onFinished = { [weak self] in self?.trackFinished() }
     }
 
@@ -80,7 +89,11 @@ final class PlayerModel: ObservableObject {
         let artworkDirectory = (try? ArtworkCache.defaultDirectory(appName: "Crate"))
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("crate-artwork", isDirectory: true)
         let artwork = ArtworkCache(directory: artworkDirectory, reader: AVFoundationArtworkReader())
-        let model = PlayerModel(library: library, player: AVAudioEngineBackend(), artwork: artwork)
+        let favoritesURL = (try? JSONFavoritesStore.defaultFileURL(appName: "Crate"))
+            ?? FileManager.default.temporaryDirectory.appendingPathComponent("crate-favorites.json")
+        let model = PlayerModel(
+            library: library, player: AVAudioEngineBackend(), artwork: artwork,
+            favorites: JSONFavoritesStore(fileURL: favoritesURL))
         model.nowPlaying = NowPlaying(model: model)
         return model
     }
@@ -144,6 +157,7 @@ final class PlayerModel: ObservableObject {
         if query.isEmpty {
             filteredAlbums = index.albums
             filteredTracks = index.tracks
+            favoriteTracks = favorites.filter(filteredTracks)
             return
         }
         searchTask = Task {
@@ -151,6 +165,43 @@ final class PlayerModel: ObservableObject {
             guard !Task.isCancelled else { return }
             filteredAlbums = result.albums
             filteredTracks = result.tracks
+            favoriteTracks = favorites.filter(filteredTracks)
+        }
+    }
+
+    // MARK: - Favorites
+
+    func isFavorite(_ track: Track) -> Bool { favorites.contains(track) }
+
+    /// Whether every track of the album has a heart.
+    func isFavorite(_ album: Album) -> Bool { favorites.containsAll(album.tracks) }
+
+    func toggleFavorite(_ track: Track) {
+        favorites.toggle(track)
+        favoritesChanged()
+    }
+
+    /// Hearts the whole album, or takes the hearts off all of it.
+    func setFavorite(_ on: Bool, album: Album) {
+        favorites.set(on, for: album.tracks)
+        favoritesChanged()
+    }
+
+    /// The Playback menu's item, for the track that is playing.
+    func toggleCurrentFavorite() {
+        guard let current else { return }
+        toggleFavorite(current)
+    }
+
+    /// Writes the file right away, on the main actor: it is a few
+    /// kilobytes in Application Support, and writing it in order is what
+    /// matters after two quick taps.
+    private func favoritesChanged() {
+        favoriteTracks = favorites.filter(filteredTracks)
+        do {
+            try favoritesStore.save(favorites)
+        } catch {
+            lastError = "Could not save the favorites: \(error.localizedDescription)"
         }
     }
 
@@ -164,6 +215,7 @@ final class PlayerModel: ObservableObject {
             startTask = Task {
                 do {
                     try await library.load()
+                    favorites = try favoritesStore.load() ?? Favorites()
                     await refresh()
                 } catch {
                     lastError = "Could not load the library: \(error.localizedDescription)"
@@ -258,6 +310,8 @@ final class PlayerModel: ObservableObject {
             return
         }
         lastScan = nil
+        favorites.removeAll(under: url)
+        favoritesChanged()
         let wasCurrent = current
         queue.removeAll { Library.isUnder($0.url, url) }
         if let wasCurrent, current?.id != wasCurrent.id {
@@ -332,7 +386,7 @@ final class PlayerModel: ObservableObject {
         self.tracks = tracks
         self.folders = folders
         switch selection {
-        case .allTracks:
+        case .allTracks, .favorites:
             break
         case .album(let id) where albums.contains(where: { $0.id == id }):
             break

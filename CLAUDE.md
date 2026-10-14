@@ -27,7 +27,7 @@ never sees it.
 
 ```sh
 swift build                    # whole package
-swift test                     # 72 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
+swift test                     # 78 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
 swift run crate-scan <folder>  # tag-reader check against real files, prints gaps
 scripts/bundle.sh              # release build -> build/Crate.app (ad-hoc signed)
 scripts/dmg.sh --universal     # -> build/Crate-<version>.dmg, what a release ships
@@ -46,7 +46,7 @@ Android, from `android/` (needs JDK 17+, Android SDK with platform 37;
 `ANDROID_HOME` is set on this machine, Gradle 9.7 via the wrapper):
 
 ```sh
-./gradlew :core:test             # 45 JVM tests, ~2 s
+./gradlew :core:test             # 51 JVM tests, ~2 s
 CRATE_MUSIC_DIRS=~/Music/Music/Media.localized ./gradlew :core:test --tests '*TagParserTest*' -i
                                  # also runs the MP3/MP4 parsers over real files (colon-separated dirs)
 ./gradlew :app:assembleDebug     # -> app/build/outputs/apk/debug/app-debug.apk
@@ -70,7 +70,8 @@ inspect `~/Library/Application Support/Crate/library.json` after a scan.
 Sources/CrateCore/    UI-free library: Track, Album, LibraryScanner,
                       MetadataReader (+AVFoundation impl), Library (actor),
                       LibraryStore (+JSON impl), PlayQueue, AudioPlayer
-                      (+AVAudioPlayer impl), ID3v1Genres
+                      (+AVAudioPlayer impl), ID3v1Genres, Favorites
+                      (+FavoritesStore, JSON impl)
 Sources/Crate/        SwiftUI app: CrateApp, PlayerModel (@Observable,
                       the only UI state), ContentView (album grid + track
                       list + empty state), PlayerBar
@@ -96,7 +97,8 @@ android/core/   Kotlin/JVM, package de.schliweb.crate.core: Track (uri +
                 document paths), Library (Mutex, incremental rescans),
                 JsonLibraryStore (kotlinx.serialization), FileSource
                 (+LocalFileSource for tests), MetadataReader, FlacMetadata,
-                TagText/Id3v1Genres, FolderImages, SearchQuery, Formatting
+                TagText/Id3v1Genres, FolderImages, SearchQuery, Formatting,
+                Favorites (+JsonFavoritesStore)
 android/app/    de.schliweb.crate: CrateApplication (owns Library and
                 ArtworkCache), PlayerViewModel (the only UI state),
                 MainActivity, ui/CrateScreen (grid + detail, two panes
@@ -171,7 +173,7 @@ output switching, playback on the phone by ear.
 
 ## Status
 
-Done and committed: CrateCore with 72 tests; crate-scan; the app verified
+Done and committed: CrateCore with 78 tests; crate-scan; the app verified
 end to end on screen (empty state, folder picker, grid, double-click,
 transport, seek, volume, auto-advance, rescan); album artwork
 (`ArtworkReader`/`ArtworkCache`, thumbnails under Application
@@ -248,6 +250,18 @@ privacy policy dialog, generalised); verified on the Pixel_9a emulator.
 Finder integration: CFBundleDocumentTypes in Packaging/Info.plist,
 `AppDelegate.application(_:open:)` in CrateApp.swift buffers URLs until the
 model is attached, `PlayerModel.open(_:)` decides what to play.
+Favorites (both apps): a set of track ids (paths) in `favorites.json`
+next to the library index, deliberately not a field on `Track` (rebuilt
+on every rescan) and not in the library snapshot (the developer's
+`library.json` is 10.7 MB; a heart tap must not rewrite it). Ids of
+files that are gone stay; only removing a folder prunes them. UI: heart
+on rows (Mac: visible on hover or when set), album header (all tracks),
+player bar, a Favorites tile after All Tracks (`Selection.favorites`;
+Android's grid auto-select counts `LIBRARY_TILES` = 2), Mac menu
+Playback > Add to Favorites ⌘L and row context menu. Verified on screen
+on the Mac and on the Pixel_9a emulator incl. restart. Not done: a heart
+in the Android media notification (needs a session callback in
+`PlaybackService`).
 
 **Open, in no fixed order:**
 

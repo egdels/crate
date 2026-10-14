@@ -50,6 +50,11 @@ struct PlayerBar: View {
             }
             .frame(maxWidth: 520)
 
+            if let track = model.current {
+                HeartButton(isOn: model.isFavorite(track)) { model.toggleFavorite(track) }
+                    .font(.title3)
+            }
+
             Spacer()
 
             HStack(spacing: 6) {

@@ -33,7 +33,15 @@ struct ContentView: View {
                 } else if model.folders.isEmpty {
                     EmptyLibraryView()
                 } else if model.detail == .allTracks {
-                    AllTracksView()
+                    FlatTrackList(
+                        tracks: model.filteredTracks,
+                        title: model.searchText.isEmpty ? "All Tracks" : "Search")
+                } else if model.detail == .favorites {
+                    FlatTrackList(
+                        tracks: model.favoriteTracks, title: "Favorites",
+                        emptyText: model.favorites.isEmpty
+                            ? "No favorites yet. Click the heart on a track."
+                            : "No favorites match the search.")
                 } else {
                     TrackList()
                 }
@@ -67,6 +75,8 @@ struct ContentView: View {
     private func playSelection() {
         if model.detail == .allTracks {
             model.play(tracks: model.filteredTracks)
+        } else if model.detail == .favorites {
+            model.play(tracks: model.favoriteTracks)
         } else if let album = model.selectedAlbum {
             model.play(album: album)
         }
@@ -108,9 +118,16 @@ struct AlbumGrid: View {
                 LazyVGrid(columns: columns, spacing: 16) {
                     // Double tap first: a single-tap modifier applied before
                     // it would claim every click and the double tap never fires.
-                    AllTracksTile(count: model.filteredTracks.count, selected: model.selection == .allTracks)
+                    LibraryTile(
+                        title: "All Tracks", count: model.filteredTracks.count, systemImage: "music.note.list",
+                        selected: model.selection == .allTracks)
                         .onTapGesture(count: 2) { model.play(tracks: model.filteredTracks) }
                         .onTapGesture { model.selection = .allTracks }
+                    LibraryTile(
+                        title: "Favorites", count: model.favoriteTracks.count, systemImage: "heart",
+                        selected: model.selection == .favorites)
+                        .onTapGesture(count: 2) { model.play(tracks: model.favoriteTracks) }
+                        .onTapGesture { model.selection = .favorites }
                     ForEach(model.filteredAlbums) { album in
                         AlbumTile(album: album, selected: model.selection == .album(album.id))
                             .onTapGesture(count: 2) { model.play(album: album) }
@@ -167,6 +184,15 @@ struct AlbumTile: View {
         VStack(alignment: .leading, spacing: 6) {
             ArtworkView(image: image, placeholder: initials, cornerRadius: 8)
                 .task(id: album.id) { image = await model.artwork(for: album) }
+                .overlay(alignment: .bottomTrailing) {
+                    if model.isFavorite(album) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.6), radius: 2)
+                            .padding(6)
+                    }
+                }
             Text(album.title)
                 .font(.headline)
                 .lineLimit(1)
@@ -185,9 +211,12 @@ struct AlbumTile: View {
     }
 }
 
-/// The first tile of the grid: the whole library as one flat list.
-struct AllTracksTile: View {
+/// The first tiles of the grid: the whole library, and the favorites,
+/// each as one flat list.
+struct LibraryTile: View {
+    let title: String
     let count: Int
+    let systemImage: String
     let selected: Bool
 
     var body: some View {
@@ -196,11 +225,11 @@ struct AllTracksTile: View {
                 .fill(.quaternary)
                 .aspectRatio(1, contentMode: .fit)
                 .overlay {
-                    Image(systemName: "music.note.list")
+                    Image(systemName: systemImage)
                         .font(.system(size: 44, weight: .regular))
                         .foregroundStyle(.secondary)
                 }
-            Text("All Tracks")
+            Text(title)
                 .font(.headline)
                 .lineLimit(1)
             Text(count == 1 ? "1 track" : "\(count) tracks")
@@ -214,40 +243,103 @@ struct AllTracksTile: View {
     }
 }
 
-/// Every track as one flat list with title, artist, album and time; the
-/// search field narrows it. Double-click plays from that row through the
-/// end of the list. A List, not a Table: Table has no double-click
-/// action before macOS 13.
-struct AllTracksView: View {
+/// Tracks as one flat list with title, artist, album and time: every
+/// track, or the favorites; the search field narrows both. Double-click
+/// plays from that row through the end of the list. A List, not a Table:
+/// Table has no double-click action before macOS 13.
+struct FlatTrackList: View {
     @EnvironmentObject private var model: PlayerModel
+    let tracks: [Track]
+    let title: String
+    var emptyText: String? = nil
 
     var body: some View {
-        let tracks = model.filteredTracks
-        List {
-            ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-                HStack(spacing: 12) {
-                    Group {
-                        if track.id == model.current?.id {
-                            Image(systemName: "speaker.wave.2.fill").foregroundStyle(Color.accentColor)
-                        }
+        Group {
+            if tracks.isEmpty, let emptyText {
+                Text(emptyText)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+                        FlatTrackRow(track: track, playing: track.id == model.current?.id)
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) { model.play(tracks: tracks, startingAt: index) }
+                            .favoriteContextMenu(track)
                     }
-                    .frame(width: 16)
-                    // Three equal columns that follow the window width.
-                    Text(track.title).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
-                    Text(track.artist ?? "").lineLimit(1).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(track.album ?? "").lineLimit(1).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(timeText(track.duration)).monospacedDigit().foregroundStyle(.secondary)
-                        .frame(width: 44, alignment: .trailing)
                 }
-                .padding(.vertical, 2)
-                .contentShape(Rectangle())
-                .onTapGesture(count: 2) { model.play(tracks: tracks, startingAt: index) }
+                .listStyle(.inset)
             }
         }
-        .listStyle(.inset)
-        .navigationTitle(model.searchText.isEmpty ? "All Tracks" : "Search")
+        .navigationTitle(title)
+    }
+}
+
+struct FlatTrackRow: View {
+    @EnvironmentObject private var model: PlayerModel
+    let track: Track
+    let playing: Bool
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Group {
+                if playing {
+                    Image(systemName: "speaker.wave.2.fill").foregroundStyle(Color.accentColor)
+                }
+            }
+            .frame(width: 16)
+            // Three equal columns that follow the window width.
+            Text(track.title).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+            Text(track.artist ?? "").lineLimit(1).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(track.album ?? "").lineLimit(1).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HeartButton(isOn: model.isFavorite(track), visible: hovering) { model.toggleFavorite(track) }
+            Text(timeText(track.duration)).monospacedDigit().foregroundStyle(.secondary)
+                .frame(width: 44, alignment: .trailing)
+        }
+        .padding(.vertical, 2)
+        .onHover { hovering = $0 }
+    }
+}
+
+/// The heart on a row or in the player bar. A filled heart is always
+/// there; an empty one only while the pointer is over the row, so a
+/// list does not show a column of grey hearts.
+struct HeartButton: View {
+    let isOn: Bool
+    var visible = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: isOn ? "heart.fill" : "heart")
+                .foregroundStyle(isOn ? Color.accentColor : Color.secondary)
+        }
+        .buttonStyle(.borderless)
+        .opacity(isOn || visible ? 1 : 0)
+        .help(isOn ? "Remove from Favorites" : "Add to Favorites")
+    }
+}
+
+extension View {
+    /// Right-click: the same as the heart.
+    func favoriteContextMenu(_ track: Track) -> some View {
+        modifier(FavoriteContextMenu(track: track))
+    }
+}
+
+private struct FavoriteContextMenu: ViewModifier {
+    @EnvironmentObject private var model: PlayerModel
+    let track: Track
+
+    func body(content: Content) -> some View {
+        content.contextMenu {
+            Button(model.isFavorite(track) ? "Remove from Favorites" : "Add to Favorites") {
+                model.toggleFavorite(track)
+            }
+        }
     }
 }
 
@@ -300,6 +392,13 @@ struct TrackList: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    Spacer()
+                    // Hearts the whole album; a filled heart means every
+                    // track has one.
+                    HeartButton(isOn: model.isFavorite(album)) {
+                        model.setFavorite(!model.isFavorite(album), album: album)
+                    }
+                    .font(.title2)
                 }
                 .padding(16)
                 List {
@@ -307,6 +406,7 @@ struct TrackList: View {
                         TrackRow(track: track, playing: track.id == model.current?.id)
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) { model.play(album: album, startingAt: index) }
+                            .favoriteContextMenu(track)
                     }
                 }
                 .listStyle(.inset)
@@ -325,8 +425,10 @@ struct TrackList: View {
 }
 
 struct TrackRow: View {
+    @EnvironmentObject private var model: PlayerModel
     let track: Track
     let playing: Bool
+    @State private var hovering = false
 
     var body: some View {
         HStack {
@@ -345,10 +447,12 @@ struct TrackRow: View {
                 }
             }
             Spacer()
+            HeartButton(isOn: model.isFavorite(track), visible: hovering) { model.toggleFavorite(track) }
             Text(timeText(track.duration))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
+        .onHover { hovering = $0 }
     }
 }

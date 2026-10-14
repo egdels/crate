@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -41,6 +42,8 @@ import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Lock
@@ -144,8 +147,9 @@ fun CrateScreen(model: PlayerViewModel) {
             val selection = model.selection
             if (wide && selection == null) {
                 val albums = model.filteredAlbums.ifEmpty { model.albums }
-                // Item 0 of the grid is the "All Tracks" tile.
-                albums.getOrNull((gridState.firstVisibleItemIndex - 1).coerceAtLeast(0))?.let {
+                // The first items of the grid are the All Tracks and
+                // Favorites tiles.
+                albums.getOrNull((gridState.firstVisibleItemIndex - LIBRARY_TILES).coerceAtLeast(0))?.let {
                     model.selection = Selection.AlbumId(it.id)
                     autoSelected = it.id
                 }
@@ -246,7 +250,11 @@ private fun TopBar(
                 )
             } else {
                 val title = when {
-                    onBack != null -> model.selectedAlbum?.title ?: if (model.selection == Selection.AllTracks) "All Tracks" else "Crate"
+                    onBack != null -> model.selectedAlbum?.title ?: when (model.selection) {
+                        Selection.AllTracks -> "All Tracks"
+                        Selection.Favorites -> "Favorites"
+                        else -> "Crate"
+                    }
                     else -> "Crate"
                 }
                 Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -268,6 +276,8 @@ private fun TopBar(
                     IconButton(onClick = {
                         if (model.detail == Selection.AllTracks || (!wide && model.selection == null)) {
                             model.play(model.filteredTracks)
+                        } else if (model.detail == Selection.Favorites) {
+                            model.play(model.favoriteTracks)
                         } else {
                             model.selectedAlbum?.let { model.play(it) }
                         }
@@ -398,7 +408,8 @@ private fun AlbumGrid(model: PlayerViewModel, state: LazyGridState, modifier: Mo
     LaunchedEffect(Unit) {
         val index = when (val selection = model.selection) {
             Selection.AllTracks -> 0
-            is Selection.AlbumId -> albums.indexOfFirst { it.id == selection.id }.takeIf { it >= 0 }?.plus(1)
+            Selection.Favorites -> 1
+            is Selection.AlbumId -> albums.indexOfFirst { it.id == selection.id }.takeIf { it >= 0 }?.plus(LIBRARY_TILES)
             null -> null
         } ?: return@LaunchedEffect
         val layout = snapshotFlow { state.layoutInfo }.first { it.visibleItemsInfo.isNotEmpty() }
@@ -430,6 +441,21 @@ private fun AlbumGrid(model: PlayerViewModel, state: LazyGridState, modifier: Mo
                 }
             }
         }
+        item(key = "favorites") {
+            Tile(
+                selected = model.selection == Selection.Favorites,
+                onClick = { model.selection = Selection.Favorites },
+                title = "Favorites",
+                subtitle = countText(model.favoriteTracks.size, "track"),
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.FavoriteBorder, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(48.dp),
+                    )
+                }
+            }
+        }
         items(albums, key = { it.id }) { album ->
             Tile(
                 selected = model.selection == Selection.AlbumId(album.id),
@@ -438,10 +464,20 @@ private fun AlbumGrid(model: PlayerViewModel, state: LazyGridState, modifier: Mo
                 subtitle = album.artist,
             ) {
                 Artwork(model, album, placeholder = initials(album.title))
+                // A heart means every track of the album has one.
+                if (model.isFavorite(album)) {
+                    Icon(
+                        Icons.Default.Favorite, contentDescription = "Favorite album", tint = Color.White,
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(16.dp),
+                    )
+                }
             }
         }
     }
 }
+
+/** Tiles before the first album: All Tracks and Favorites. */
+private const val LIBRARY_TILES = 2
 
 @Composable
 private fun Tile(
@@ -449,7 +485,7 @@ private fun Tile(
     onClick: () -> Unit,
     title: String,
     subtitle: String,
-    picture: @Composable () -> Unit,
+    picture: @Composable BoxScope.() -> Unit,
 ) {
     val background = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent
     Column(
@@ -504,7 +540,11 @@ private fun ArtworkImage(image: Bitmap?, placeholder: String = "") {
 @Composable
 private fun Detail(model: PlayerViewModel) {
     when (model.detail) {
-        Selection.AllTracks -> AllTracks(model)
+        Selection.AllTracks -> FlatTrackList(model, model.filteredTracks)
+        Selection.Favorites -> FlatTrackList(
+            model, model.favoriteTracks,
+            emptyText = if (model.favorites.isEmpty) "No favorites yet. Tap the heart on a track." else "No favorites match the search.",
+        )
         is Selection.AlbumId -> model.selectedAlbum?.let { TrackList(model, it) }
             ?: Placeholder("Select an album")
         null -> Placeholder("Select an album")
@@ -524,7 +564,7 @@ private fun TrackList(model: PlayerViewModel, album: Album) {
         item(key = "header") {
             Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Box(Modifier.size(96.dp).clip(RoundedCornerShape(6.dp))) { Artwork(model, album) }
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(album.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text(
                         listOfNotNull(album.artist, album.year?.toString()).joinToString(" · "),
@@ -536,16 +576,23 @@ private fun TrackList(model: PlayerViewModel, album: Album) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                // Hearts the whole album; a filled heart means every
+                // track has one.
+                val all = model.isFavorite(album)
+                HeartButton(on = all, onClick = { model.setFavorite(!all, album) })
             }
         }
         itemsIndexed(album.tracks, key = { _, track -> track.id }) { index, track ->
-            TrackRow(track, playing = track.id == model.current?.id, onClick = { model.play(album, index) })
+            TrackRow(
+                track, playing = track.id == model.current?.id, favorite = model.isFavorite(track),
+                onClick = { model.play(album, index) }, onHeart = { model.toggleFavorite(track) },
+            )
         }
     }
 }
 
 @Composable
-private fun TrackRow(track: Track, playing: Boolean, onClick: () -> Unit) {
+private fun TrackRow(track: Track, playing: Boolean, favorite: Boolean, onClick: () -> Unit, onHeart: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -565,15 +612,32 @@ private fun TrackRow(track: Track, playing: Boolean, onClick: () -> Unit) {
                 Text(artist, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
         }
+        HeartButton(on = favorite, onClick = onHeart)
         Text(timeText(track.duration), fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
-/** Every track as one flat list; the search field narrows it. A tap
- *  plays from that row through the end of the list. */
+/** The heart on a row, an album header or the player bar. */
 @Composable
-private fun AllTracks(model: PlayerViewModel) {
-    val tracks = model.filteredTracks
+private fun HeartButton(on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    IconButton(onClick = onClick, modifier = modifier) {
+        Icon(
+            if (on) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+            contentDescription = if (on) "Remove from favorites" else "Add to favorites",
+            tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Tracks as one flat list: every track, or the favorites; the search
+ *  field narrows both. A tap plays from that row through the end of the
+ *  list. */
+@Composable
+private fun FlatTrackList(model: PlayerViewModel, tracks: List<Track>, emptyText: String? = null) {
+    if (tracks.isEmpty() && emptyText != null) {
+        Placeholder(emptyText)
+        return
+    }
     LazyColumn(Modifier.fillMaxSize()) {
         itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
             Row(
@@ -596,6 +660,7 @@ private fun AllTracks(model: PlayerViewModel) {
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                HeartButton(on = model.isFavorite(track), onClick = { model.toggleFavorite(track) })
                 Text(timeText(track.duration), fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -620,6 +685,7 @@ private fun PlayerBar(model: PlayerViewModel) {
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                HeartButton(on = model.isFavorite(track), onClick = { model.toggleFavorite(track) })
                 IconButton(onClick = model::previous) { Icon(Icons.Default.SkipPrevious, contentDescription = "Previous") }
                 IconButton(onClick = model::togglePlayPause) {
                     Icon(

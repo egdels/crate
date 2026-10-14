@@ -5,6 +5,20 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow takes a
 version's section from this file as the GitHub release notes.
 
+## [Unreleased]
+
+### Added
+
+- Favorites, in both apps: a heart on every track row, on the album
+  page (for the whole album) and in the player bar; a Favorites tile in
+  the grid lists them in album order and plays them; the search narrows
+  them like everything else. Mac: Playback > Add to Favorites (⌘L) and
+  the row's context menu. The hearts are kept per device in
+  `favorites.json` next to the library index, a few kilobytes that are
+  written on every change instead of the whole index; nothing is
+  written into the music files. `PRIVACY.md` lists the new file
+  (effective 2026-10-14).
+
 ## [0.5.0] - 2026-10-12
 
 ### Changed

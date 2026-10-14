@@ -25,6 +25,10 @@ uploaded or changed.
   of the list.
 - The search icon narrows albums and tracks by title, artist and album.
   Back closes the search.
+- The heart on a track, in the player bar or on an album page marks a
+  favorite. **Favorites** in the grid lists them; the play button plays
+  them. Favorites are kept on this device, in a file next to the library
+  index.
 - **Shuffle** and **Repeat** are in the menu. Albums play gapless.
 - The notification, the lock screen and headphone buttons control
   playback; the music keeps playing when the app is in the background.

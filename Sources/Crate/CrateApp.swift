@@ -179,6 +179,12 @@ struct CrateApp: App {
                     Text("All").tag(PlayQueueRepeat.all)
                     Text("One").tag(PlayQueueRepeat.one)
                 }
+                Divider()
+                Button(model.current.map(model.isFavorite) == true ? "Remove from Favorites" : "Add to Favorites") {
+                    model.toggleCurrentFavorite()
+                }
+                .keyboardShortcut("l")
+                .disabled(model.current == nil)
             }
         }
     }

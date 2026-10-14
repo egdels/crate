@@ -1,6 +1,6 @@
 # Privacy Policy
 
-*Crate for Android and macOS. Effective 2026-10-10. The Android app shows
+*Crate for Android and macOS. Effective 2026-10-14. The Android app shows
 this text under Privacy Policy in its menu.*
 
 ## Who is responsible
@@ -37,6 +37,9 @@ its own. It only reads the music files in the folders you point it at.
   does not have to read every file again on each launch. It is one JSON
   file in the app's private storage (Android) or in
   `~/Library/Application Support/Crate/library.json` (macOS).
+- **Favorites**: the file paths of the tracks you marked with a heart,
+  in a second JSON file next to the index (`favorites.json`). Nothing is
+  written into the music files themselves.
 - **Cover thumbnails**: scaled-down copies of the album covers embedded in
   your files or lying next to them, in the app's cache directory (Android,
   the system may clear it at any time) or in
@@ -89,9 +92,11 @@ from anyone, of any age.
 
 ## Deleting your data
 
-Uninstalling the app removes the library index, the cover thumbnails and
-the folder grants. "Remove folder" in the app drops that folder's entries
-from the index. On macOS, deleting
+Uninstalling the app removes the library index, the favorites, the
+cover thumbnails and the folder grants. Taking the heart off a track
+removes it from the favorites file right away. "Remove folder" in the
+app drops that folder's entries from the index and its favorites. On
+macOS, deleting
 `~/Library/Application Support/Crate/` removes everything Crate has ever
 written. Your music files are never touched.
 

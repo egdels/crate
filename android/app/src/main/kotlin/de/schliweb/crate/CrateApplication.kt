@@ -4,6 +4,8 @@
 package de.schliweb.crate
 
 import android.app.Application
+import de.schliweb.crate.core.FavoritesStore
+import de.schliweb.crate.core.JsonFavoritesStore
 import de.schliweb.crate.core.JsonLibraryStore
 import de.schliweb.crate.core.Library
 import de.schliweb.crate.library.AndroidArtworkReader
@@ -27,6 +29,9 @@ class CrateApplication : Application() {
             concurrency = 16, // see Library: measured, not guessed
         )
     }
+
+    /** The hearts, in a small file of their own next to the index. */
+    val favorites: FavoritesStore by lazy { JsonFavoritesStore(File(filesDir, "favorites.json")) }
 
     val artwork: ArtworkCache by lazy {
         ArtworkCache(File(cacheDir, "artwork"), AndroidArtworkReader(this))

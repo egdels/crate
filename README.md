@@ -17,8 +17,8 @@ see [Android](#android) below.
 This repository holds **CrateCore**, the UI-free Swift package, and the
 **Crate** app on top of it. The app works end to end against a real
 collection: pick a folder, browse the album grid with covers, search,
-play with gapless transitions, and control it from the media keys and
-Control Center. Version 0.1.0 is the first release; see `CHANGELOG.md`
+mark favorites, play with gapless transitions, and control it from the
+media keys and Control Center. Version 0.1.0 is the first release; see `CHANGELOG.md`
 for what is in it.
 
 ## Download
@@ -49,6 +49,8 @@ What the package does:
 - **Find covers** embedded in the files or lying next to them and cache
   them as thumbnails (`ArtworkReader`, `ArtworkCache`)
 - **Search** titles, artists and albums (`SearchQuery`)
+- **Favorites** as a set of track paths in a small file of its own, so
+  a tap on a heart never rewrites the index (`Favorites`)
 
 Formats are whatever AVFoundation decodes: MP3, AAC/M4A (including M4B
 audiobooks), FLAC, ALAC, WAV, AIFF, CAF. Ogg Vorbis and Opus are not supported, because the system
@@ -114,7 +116,8 @@ few thousand files takes seconds; Ogg and Opus go through the platform.
 
 ```
 android/core/   UI-free Kotlin library: Track, Album grouping, Library with
-                incremental rescans, JSON store, FLAC parser, search (JVM tests)
+                incremental rescans, JSON store, FLAC parser, search,
+                favorites (JVM tests)
 android/app/    Jetpack Compose UI, Media3/ExoPlayer playback service,
                 Storage Access Framework file source, cover cache
 ```
