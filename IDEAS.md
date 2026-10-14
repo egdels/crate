@@ -17,8 +17,14 @@ Entries move to CHANGELOG.md when they ship and are deleted here.
   filters the grid to that artist's albums, using the sort names read
   since 0.6. No new navigation, only a pre-filled search.
 - **Lyrics.** USLT in MP3, ©lyr in M4A, LYRICS as a Vorbis comment, and
-  `.lrc` next to the file. Shown as a collapsible field under the
-  player. Count them first with `crate-scan` before building.
+  `.lrc` next to the file or in a `lyrics/` subfolder. Shown as a
+  collapsible field under the player. Counted with
+  `crate-scan --lyrics` on 2026-10-14: 55 of the 1,985 music files
+  have any (3 USLT, 11 FLAC LYRICS, 41 `.lrc`, of which 39 sit in a
+  `lyrics/` subfolder), all 41 `.lrc` are timed and all 14 tagged ones
+  plain; the 15,913 audio-play files and the Music app's M4As have
+  none. Small base, so a sidecar-first, plain-text display would cover
+  it; timed display is a second step.
 - **Folder watching on the Mac.** FSEvents on the library folders, so a
   freshly copied album appears without a rescan. Unreliable over SMB,
   pleasant locally; the manual rescan stays as the fallback.

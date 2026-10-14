@@ -29,6 +29,7 @@ never sees it.
 swift build                    # whole package
 swift test                     # 92 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
 swift run crate-scan <folder>  # tag-reader check against real files, prints gaps
+swift run crate-scan <folder> --lyrics   # counts files with lyrics (USLT/SYLT, ©lyr, FLAC LYRICS, .lrc)
 scripts/bundle.sh              # release build -> build/Crate.app (ad-hoc signed)
 scripts/dmg.sh --universal     # -> build/Crate-<version>.dmg, what a release ships
 scripts/icon.sh                # redraw Packaging/AppIcon.icns, the README PNG and the Android icon
@@ -337,6 +338,13 @@ because a controller's `addMediaItems` passes through the callback's
 reach the length the controller reported (`KEY_TOTAL`). Verified on the
 Pixel_9a emulator: sheet, tap, ×, Clear, Play Next with and without
 shuffle; and on the Mac on screen.
+Lyrics, not built, only counted (`crate-scan --lyrics`, 2026-10-14):
+55 of the 1,985 music files have lyrics (3 USLT, 11 FLAC LYRICS, 41
+`.lrc`, 39 of those in a `lyrics/` subfolder next to the album; the
+`.lrc` files are timed, some with "[mm:ss:xx]" colons instead of the
+LRC dot), the audio plays and the Music app M4As none. main.swift
+gotcha: a top-level `let` is initialised when execution reaches its
+line, so the `--lyrics` branch runs below every declaration.
 Disc separators (both apps): `Album.discs` groups the sorted tracks
 by `discNumber ?? 1`; the album page shows a "Disc n" line per disc
 only when there is more than one (Mac: List sections with a

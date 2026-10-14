@@ -6,11 +6,16 @@
 // collection instead of in bug reports. Not part of the app.
 //
 //   swift run crate-scan <folder> [--all] [--albums] [--concurrency N]
+//   swift run crate-scan <folder> --lyrics [--concurrency N]
 //
 // Prints a summary and every track that is missing a field; --all prints
 // every track, --albums the albums the grouping makes of them. --concurrency overrides how many files are read at once,
-// for measuring a network share.
+// for measuring a network share. --lyrics instead counts the files that
+// carry lyrics: USLT/SYLT frames (MP3), the ©lyr atom (M4A), LYRICS or
+// UNSYNCEDLYRICS comments (FLAC) and .lrc files next to the audio (same
+// name, or in a "lyrics" subfolder); groundwork for showing them.
 
+import AVFoundation
 import CrateCore
 import Foundation
 
@@ -51,6 +56,120 @@ func describe(_ track: Track) -> String {
 
 extension String {
     var nonEmpty: String? { isEmpty ? nil : self }
+}
+
+/// Where a file's lyrics came from, if anywhere.
+struct LyricsFinding: Sendable {
+    enum Kind: String, CaseIterable, Sendable {
+        case uslt = "USLT (MP3, plain)", sylt = "SYLT (MP3, timed)", lyr = "©lyr (M4A)", vorbis = "LYRICS (FLAC)"
+        case lrc = ".lrc next to the file", lrcFolder = ".lrc in a lyrics/ subfolder"
+    }
+    var url: URL
+    var kinds: [Kind]
+    /// Whether the text carries [mm:ss] time stamps.
+    var timed: Bool
+}
+
+/// Lyrics in a file's own tags.
+func taggedLyrics(_ url: URL) async -> (kinds: [LyricsFinding.Kind], text: String?) {
+    if url.pathExtension.lowercased() == "flac" {
+        guard let flac = try? FLACMetadata.read(url) else { return ([], nil) }
+        let text = flac.value("LYRICS") ?? flac.value("UNSYNCEDLYRICS") ?? flac.value("UNSYNCED LYRICS")
+        return (text.map { _ in [.vorbis] } ?? [], text)
+    }
+    let asset = AVURLAsset(url: url)
+    guard let items = try? await asset.load(.metadata) else { return ([], nil) }
+    var kinds: [LyricsFinding.Kind] = []
+    var text: String?
+    for item in items {
+        guard let identifier = item.identifier else { continue }
+        let kind: LyricsFinding.Kind?
+        switch identifier {
+        case .id3MetadataUnsynchronizedLyric: kind = .uslt
+        case .id3MetadataSynchronizedLyric: kind = .sylt
+        case .iTunesMetadataLyrics: kind = .lyr
+        default: kind = nil
+        }
+        guard let kind, !kinds.contains(kind) else { continue }
+        kinds.append(kind)
+        if text == nil, let string = try? await item.load(.stringValue), !string.isEmpty { text = string }
+    }
+    return (kinds, text)
+}
+
+/// An .lrc with the file's name, next to it or in a lyrics/ subfolder.
+func sidecar(_ url: URL) -> (kind: LyricsFinding.Kind, text: String)? {
+    let base = url.deletingPathExtension().lastPathComponent
+    let folder = url.deletingLastPathComponent()
+    let candidates: [(LyricsFinding.Kind, URL)] = [(.lrc, folder.appendingPathComponent(base + ".lrc"))]
+        + ["lyrics", "Lyrics"].map { (.lrcFolder, folder.appendingPathComponent($0).appendingPathComponent(base + ".lrc")) }
+    for (kind, file) in candidates {
+        guard let data = try? Data(contentsOf: file) else { continue }
+        return (kind, String(decoding: data, as: UTF8.self))
+    }
+    return nil
+}
+
+/// "[mm:ss.xx]" as the LRC format has it, and "[mm:ss:xx]" as some
+/// files in the wild have it.
+let timeStamp = try! NSRegularExpression(pattern: "\\[\\d{1,2}:\\d{2}([.:]\\d{1,3})?\\]")
+
+func countLyrics(in folder: URL, concurrency: Int) async throws {
+    let started = Date()
+    let files = try LibraryScanner().scan(folder).map(\.url).sorted { $0.path < $1.path }
+    var findings: [LyricsFinding] = []
+    var read = 0
+    await withTaskGroup(of: LyricsFinding?.self) { group in
+        var iterator = files.makeIterator()
+        func enqueue() {
+            guard let url = iterator.next() else { return }
+            group.addTask {
+                let tagged = await taggedLyrics(url)
+                var kinds = tagged.kinds
+                var text = tagged.text ?? ""
+                if let side = sidecar(url) {
+                    kinds.append(side.kind)
+                    text += side.text
+                }
+                guard !kinds.isEmpty else { return nil }
+                let timed = kinds.contains(.sylt) || timeStamp.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+                return LyricsFinding(url: url, kinds: kinds, timed: timed)
+            }
+        }
+        for _ in 0..<max(1, concurrency) { enqueue() }
+        for await finding in group {
+            read += 1
+            if read % 2000 == 0 { FileHandle.standardError.write(Data("\(read)/\(files.count)\n".utf8)) }
+            if let finding { findings.append(finding) }
+            enqueue()
+        }
+    }
+    let elapsed = Date().timeIntervalSince(started)
+    print("looked at \(files.count) files in \(String(format: "%.1f", elapsed))s")
+    print("files with lyrics: \(findings.count) (\(findings.filter(\.timed).count) with time stamps)")
+    for kind in LyricsFinding.Kind.allCases {
+        let count = findings.filter { $0.kinds.contains(kind) }.count
+        if count > 0 { print("  \(kind.rawValue): \(count)") }
+    }
+    var byExtension: [String: Int] = [:]
+    for finding in findings { byExtension[finding.url.pathExtension.lowercased(), default: 0] += 1 }
+    print("  by format: " + byExtension.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", "))
+    var folders: [String: Int] = [:]
+    for finding in findings {
+        folders[finding.url.deletingLastPathComponent().path.replacingOccurrences(of: folder.path, with: ""), default: 0] += 1
+    }
+    print("  in \(folders.count) folders")
+    print()
+    for (name, count) in folders.sorted(by: { $0.key < $1.key }) {
+        print("\(count)\t\(name)")
+    }
+}
+
+// Below every declaration: a top-level constant such as `timeStamp` is
+// initialised when the code reaches its line.
+if arguments.contains("--lyrics") {
+    try await countLyrics(in: folder, concurrency: concurrency)
+    exit(0)
 }
 
 let started = Date()
