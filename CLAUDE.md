@@ -371,7 +371,9 @@ relaunch at 1:15 of a track; Android force-stop at 0:15 came back at
    the Mac DMG crashed on Now Playing (all three); 0.6.3 was the first
    good one, its DMG verified on this Mac by download and a two-minute
    play, and 0.7.0 (Up Next, notification heart, resume, disc lines)
-   followed the same day.
+   followed the same day, its DMG verified the same way (two minutes
+   of play with a cover, no crash report) and its APK signed with the
+   same certificate as 0.6.3.
    For
    the next version: bump `Packaging/Info.plist` and
    `android/gradle.properties` (appVersion), turn the CHANGELOG's
