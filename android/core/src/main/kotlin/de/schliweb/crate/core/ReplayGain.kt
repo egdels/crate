@@ -69,4 +69,19 @@ object ReplayGain {
 
     /** dB to the factor a gain stage wants. */
     fun factor(decibels: Double): Float = 10.0.pow(decibels / 20).toFloat()
+
+    /** A stand-in album gain for an album whose files carry only track
+     *  gains (Sound Check knows no albums): the mean of them, so the
+     *  record as a whole lands on level while its own dynamics stay.
+     *  null when no track has a gain. */
+    fun albumMean(tracks: List<Track>): Double? {
+        val gains = tracks.mapNotNull { it.trackGain }
+        return if (gains.isEmpty()) null else gains.average()
+    }
+
+    /** What to play a track at. Listening to an album: its album gain,
+     *  else the album's mean (see [albumMean]), else the track's own.
+     *  Otherwise the track gain, else the album gain. 0 without any. */
+    fun playbackGain(track: Track, asAlbum: Boolean, albumMean: Double?): Double =
+        (if (asAlbum) track.albumGain ?: albumMean ?: track.trackGain else track.trackGain ?: track.albumGain) ?: 0.0
 }

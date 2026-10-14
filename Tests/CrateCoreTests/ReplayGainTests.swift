@@ -55,6 +55,35 @@ import Testing
         #expect(nothing.track == nil && nothing.album == nil)
     }
 
+    @Test func anAlbumOfTrackGainsPlaysAtTheirMean() {
+        var intro = makeTrack("Speak to Me", album: "Dark Side", track: 1)
+        intro.trackGain = 13.9
+        var money = makeTrack("Money", album: "Dark Side", track: 6)
+        money.trackGain = -2.8
+        var untagged = makeTrack("Bonus", album: "Dark Side", track: 11)
+        let album = [intro, money, untagged]
+        let mean = ReplayGain.albumMean(album)
+        #expect(abs(mean! - 5.55) < 0.001, "untagged tracks do not count")
+        #expect(ReplayGain.albumMean([untagged]) == nil)
+
+        // Listening to the album: every track at the mean, the dynamics
+        // between them intact. The untagged one too.
+        for track in album {
+            #expect(abs(ReplayGain.playbackGain(track, asAlbum: true, albumMean: mean) - 5.55) < 0.001)
+        }
+        // Shuffle or All Tracks: each on its own.
+        #expect(ReplayGain.playbackGain(intro, asAlbum: false, albumMean: mean) == 13.9)
+        #expect(ReplayGain.playbackGain(untagged, asAlbum: false, albumMean: mean) == 0)
+
+        // A real album gain beats the mean; alone it also serves the
+        // track outside an album when the track gain is missing.
+        money.albumGain = -7.25
+        #expect(ReplayGain.playbackGain(money, asAlbum: true, albumMean: mean) == -7.25)
+        untagged.albumGain = -7.25
+        #expect(ReplayGain.playbackGain(untagged, asAlbum: false, albumMean: nil) == -7.25)
+        #expect(ReplayGain.playbackGain(intro, asAlbum: true, albumMean: nil) == 13.9, "no mean, no album gain: the track's own")
+    }
+
     @Test func factorIsTheUsualTwentyLog() {
         #expect(ReplayGain.factor(0) == 1)
         #expect(abs(ReplayGain.factor(-6.0206) - 0.5) < 0.001)

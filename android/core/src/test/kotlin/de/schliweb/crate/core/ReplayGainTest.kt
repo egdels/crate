@@ -58,6 +58,30 @@ class ReplayGainTest {
     }
 
     @Test
+    fun anAlbumOfTrackGainsPlaysAtTheirMean() {
+        val intro = makeTrack("Speak to Me", album = "Dark Side", track = 1).copy(trackGain = 13.9)
+        val money = makeTrack("Money", album = "Dark Side", track = 6).copy(trackGain = -2.8)
+        val untagged = makeTrack("Bonus", album = "Dark Side", track = 11)
+        val album = listOf(intro, money, untagged)
+        val mean = assertNotNull(ReplayGain.albumMean(album))
+        assertTrue(abs(mean - 5.55) < 0.001, "untagged tracks do not count")
+        assertNull(ReplayGain.albumMean(listOf(untagged)))
+
+        // Listening to the album: every track at the mean, the dynamics
+        // between them intact. The untagged one too.
+        for (track in album) assertTrue(abs(ReplayGain.playbackGain(track, true, mean) - 5.55) < 0.001)
+        // Shuffle or All Tracks: each on its own.
+        assertEquals(13.9, ReplayGain.playbackGain(intro, false, mean))
+        assertEquals(0.0, ReplayGain.playbackGain(untagged, false, mean))
+
+        // A real album gain beats the mean; alone it also serves the
+        // track outside an album when the track gain is missing.
+        assertEquals(-7.25, ReplayGain.playbackGain(money.copy(albumGain = -7.25), true, mean))
+        assertEquals(-7.25, ReplayGain.playbackGain(untagged.copy(albumGain = -7.25), false, null))
+        assertEquals(13.9, ReplayGain.playbackGain(intro, true, null), "no mean, no album gain: the track's own")
+    }
+
+    @Test
     fun factorIsTheUsualTwentyLog() {
         assertEquals(1f, ReplayGain.factor(0.0))
         assertTrue(abs(ReplayGain.factor(-6.0206) - 0.5f) < 0.001f)

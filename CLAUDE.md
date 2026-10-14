@@ -27,7 +27,7 @@ never sees it.
 
 ```sh
 swift build                    # whole package
-swift test                     # 91 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
+swift test                     # 92 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
 swift run crate-scan <folder>  # tag-reader check against real files, prints gaps
 scripts/bundle.sh              # release build -> build/Crate.app (ad-hoc signed)
 scripts/dmg.sh --universal     # -> build/Crate-<version>.dmg, what a release ships
@@ -47,7 +47,7 @@ Android, from `android/` (needs JDK 17+, Android SDK with platform 37;
 `ANDROID_HOME` is set on this machine, Gradle 9.7 via the wrapper):
 
 ```sh
-./gradlew :core:test             # 64 JVM tests, ~2 s
+./gradlew :core:test             # 65 JVM tests, ~2 s
 CRATE_MUSIC_DIRS=~/Music/Music/Media.localized ./gradlew :core:test --tests '*TagParserTest*' -i
                                  # also runs the MP3/MP4 parsers over real files (colon-separated dirs)
 ./gradlew :app:assembleDebug     # -> app/build/outputs/apk/debug/app-debug.apk
@@ -101,7 +101,9 @@ frame or freeform atom) as the track gain when there is no ReplayGain.
 The developer's collection has no ReplayGain at all but Sound Check in
 ~300 iTunes-ripped files (390 tracks got a gain, -13.9 to +13.9 dB,
 median -1.4). Playback: album gain when `play(album:)` queued the album,
-else track gain; Mac through an `AVAudioUnitEQ` (`globalGain`, ±24 dB)
+else the mean of the album's track gains (`ReplayGain.albumMean`, for
+Sound Check, which knows no albums: Dark Side of the Moon spans -2.8 to
++13.9 dB per track), else track gain; Mac through an `AVAudioUnitEQ` (`globalGain`, ±24 dB)
 between player node and mixer, switched at the gapless hand-over;
 Android through `GainProcessor` (16-bit PCM AudioProcessor in the sink)
 fed from the media item's extras on each item transition, logged as
@@ -199,7 +201,7 @@ output switching, playback on the phone by ear.
 
 ## Status
 
-Done and committed: CrateCore with 91 tests; crate-scan; the app verified
+Done and committed: CrateCore with 92 tests; crate-scan; the app verified
 end to end on screen (empty state, folder picker, grid, double-click,
 transport, seek, volume, auto-advance, rescan); album artwork
 (`ArtworkReader`/`ArtworkCache`, thumbnails under Application

@@ -32,6 +32,7 @@ import de.schliweb.crate.core.Favorites
 import de.schliweb.crate.core.Folder
 import de.schliweb.crate.core.Library
 import de.schliweb.crate.core.Paths
+import de.schliweb.crate.core.ReplayGain
 import de.schliweb.crate.core.ScannedFile
 import de.schliweb.crate.core.SearchIndex
 import de.schliweb.crate.core.SearchQuery
@@ -468,7 +469,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (tracks.isEmpty()) return
         val byPath = HashMap<String, Album>()
         for (album in albums) for (track in album.tracks) byPath[track.id] = album
-        val items = tracks.map { track -> mediaItem(track, byPath[track.id], gain(track, asAlbum)) }
+        val albumMean = if (asAlbum) ReplayGain.albumMean(tracks) else null
+        val items = tracks.map { track -> mediaItem(track, byPath[track.id], ReplayGain.playbackGain(track, asAlbum, albumMean)) }
         queued = tracks.associateBy { it.id }
         withController { controller ->
             controller.setMediaItems(items, index.coerceIn(0, items.size - 1), 0L)
@@ -476,10 +478,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             controller.play()
         }
     }
-
-    /** The loudness correction to play the track with, in dB. */
-    private fun gain(track: Track, asAlbum: Boolean): Double =
-        (if (asAlbum) track.albumGain ?: track.trackGain else track.trackGain ?: track.albumGain) ?: 0.0
 
     private fun mediaItem(track: Track, album: Album?, gain: Double): MediaItem {
         val metadata = MediaMetadata.Builder()

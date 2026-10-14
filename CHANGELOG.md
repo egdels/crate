@@ -30,7 +30,9 @@ version's section from this file as the GitHub release notes.
 - Loudness levelling in both apps: tracks play at the level their
   ReplayGain tags describe (album gain when an album is playing, track
   gain otherwise), and iTunes Sound Check (`iTunNORM`) counts as the
-  track gain when a file has no ReplayGain. Gains are limited by the
+  track gain when a file has no ReplayGain. An album whose files have
+  only track gains plays at their mean, so the record lands on level
+  without its own dynamics being flattened. Gains are limited by the
   tagged peak so nothing clips, and sit in a stage of their own, so the
   volume control behaves as before. No switch: files without tags play
   as they always did. Read from ID3 TXXX and COMM frames, iTunes

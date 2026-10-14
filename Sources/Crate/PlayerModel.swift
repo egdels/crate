@@ -415,15 +415,18 @@ final class PlayerModel: ObservableObject {
     func play(tracks: [Track], startingAt index: Int = 0, asAlbum: Bool = false) {
         queue.replace(with: tracks, startingAt: index)
         queueIsAlbum = asAlbum
+        queueAlbumMean = asAlbum ? ReplayGain.albumMean(tracks) : nil
         loadCurrent(autoplay: true)
     }
 
     private var queueIsAlbum = false
+    /// The mean of the queued album's track gains, for files that have
+    /// only those (Sound Check); nil otherwise.
+    private var queueAlbumMean: Double?
 
     /// The loudness correction to play the track with, in dB.
     func gain(for track: Track) -> Double {
-        let preferred = queueIsAlbum ? track.albumGain ?? track.trackGain : track.trackGain ?? track.albumGain
-        return preferred ?? 0
+        ReplayGain.playbackGain(track, asAlbum: queueIsAlbum, albumMean: queueAlbumMean)
     }
 
     private func preloadNext() {

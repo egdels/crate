@@ -57,4 +57,23 @@ public enum ReplayGain {
     public static func factor(_ decibels: Double) -> Float {
         Float(pow(10, decibels / 20))
     }
+
+    /// A stand-in album gain for an album whose files carry only track
+    /// gains (Sound Check knows no albums): the mean of them, so the
+    /// record as a whole lands on level while its own dynamics stay.
+    /// nil when no track has a gain.
+    public static func albumMean(_ tracks: [Track]) -> Double? {
+        let gains = tracks.compactMap(\.trackGain)
+        return gains.isEmpty ? nil : gains.reduce(0, +) / Double(gains.count)
+    }
+
+    /// What to play a track at. Listening to an album: its album gain,
+    /// else the album's mean (see `albumMean`), else the track's own.
+    /// Otherwise the track gain, else the album gain. 0 without any.
+    public static func playbackGain(_ track: Track, asAlbum: Bool, albumMean: Double?) -> Double {
+        let gain = asAlbum
+            ? track.albumGain ?? albumMean ?? track.trackGain
+            : track.trackGain ?? track.albumGain
+        return gain ?? 0
+    }
 }
