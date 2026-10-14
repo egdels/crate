@@ -293,9 +293,9 @@ in the Android media notification (needs a session callback in
 
 **Open, in no fixed order:**
 
-1. Released: v0.1.0 (DMG only), v0.2.0 (DMG + signed APK) and v0.3.0
-   (DMG + APK + AAB) are published at github.com/egdels/crate, built by
-   `release.yml`. For
+1. Released: v0.1.0 (DMG only), v0.2.0 (DMG + signed APK), v0.3.0 to
+   v0.6.0 (DMG + APK + AAB; 0.6.0 on 2026-10-14) are published at
+   github.com/egdels/crate, built by `release.yml`. For
    the next version: bump `Packaging/Info.plist` and
    `android/gradle.properties` (appVersion), turn the CHANGELOG's
    Unreleased section into the version's, push `main` and the tag only
