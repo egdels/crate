@@ -5,6 +5,15 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow takes a
 version's section from this file as the GitHub release notes.
 
+## [Unreleased]
+
+### Changed
+
+- Help, both apps: how albums sort (a leading "The" is ignored, sort
+  names in the tags count), and that an album keeps its dynamics (one
+  correction for the whole record) while Shuffle and All Tracks level
+  each track on its own.
+
 ## [0.6.0] - 2026-10-14
 
 ### Added

@@ -19,6 +19,8 @@ uploaded or changed.
 
 - Tap an album to open it, then tap a track to play from there through
   the album. On a wide screen the album opens next to the grid.
+- Albums are sorted by artist, ignoring a leading "The" and following
+  the sort names in the tags when the files have them, then by year.
 - The play button in the bar plays the open album, or every track when
   All Tracks is open.
 - **All Tracks** lists everything; a tap plays from that row to the end
@@ -32,7 +34,10 @@ uploaded or changed.
 - **Shuffle** and **Repeat** are in the menu. Albums play gapless.
 - Files tagged with ReplayGain or iTunes Sound Check play at the level
   the tags describe, so albums come out equally loud; the system volume
-  is on top of that. Untagged files play as they are.
+  is on top of that. Untagged files play as they are. Playing an album,
+  every track gets the same correction, so a quiet intro stays quiet and
+  the record keeps its dynamics; in Shuffle and All Tracks each track is
+  levelled on its own.
 - The notification, the lock screen and headphone buttons control
   playback; the music keeps playing when the app is in the background.
 
