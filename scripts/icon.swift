@@ -30,6 +30,22 @@ func color(_ hex: UInt32, _ alpha: CGFloat = 1) -> CGColor {
             blue: CGFloat(hex & 0xff) / 255, alpha: alpha)
 }
 
+// The scene's geometry, in the 1024-point space: shared by the drawing
+// and by the Android monochrome layer derived from it below.
+let crateFront = CGRect(x: 196, y: 150, width: 632, height: 320)
+let crateGap: CGFloat = 18
+let cratePostWidth: CGFloat = 46
+let cratePostInset: CGFloat = 22
+let cratePostOverhang: CGFloat = 6
+let heroCenter = CGPoint(x: 512, y: 560)
+let heroRadius: CGFloat = 262
+let heroLabelRadius = heroRadius * 0.37
+let heroHoleRadius: CGFloat = 13
+let backRecords: [(center: CGPoint, radius: CGFloat)] = [(CGPoint(x: 425, y: 420), 200), (CGPoint(x: 610, y: 428), 200)]
+/// Unframed (Android), the scene is drawn this much smaller about the
+/// centre, so that the circular mask does not clip the crate's corners.
+let androidSceneScale: CGFloat = 0.78
+
 /// Everything is drawn in a 1024-point space, origin bottom-left: a
 /// record pulled halfway out of a crate, the way you flip through one.
 /// `framed` is the macOS icon: the scene inside a rounded square with a
@@ -66,7 +82,7 @@ func draw(in ctx: CGContext, scale: CGFloat, framed: Bool = true) {
     ctx.drawLinearGradient(sky, start: CGPoint(x: 0, y: square.maxY), end: CGPoint(x: 0, y: square.minY), options: [])
     if !framed {
         ctx.translateBy(x: 512, y: 512)
-        ctx.scaleBy(x: 0.78, y: 0.78)
+        ctx.scaleBy(x: androidSceneScale, y: androidSceneScale)
         ctx.translateBy(x: -512, y: -512)
     }
     let glow = CGGradient(colorsSpace: rgb, colors: [color(0xFFFFFF, 0.18), color(0xFFFFFF, 0)] as CFArray, locations: [0, 1])!
@@ -76,7 +92,7 @@ func draw(in ctx: CGContext, scale: CGFloat, framed: Bool = true) {
     // Crate geometry. The front face covers the lower part; the records
     // stand behind it. A sliver of the inside back wall shows above the
     // front edge, which is what makes it a box and not a fence.
-    let front = CGRect(x: 196, y: 150, width: 632, height: 320)
+    let front = crateFront
     let inside = CGRect(x: front.minX + 12, y: front.maxY - 40, width: front.width - 24, height: 150)
     ctx.setFillColor(color(0x2A1A0E))
     ctx.fill(inside)
@@ -87,8 +103,8 @@ func draw(in ctx: CGContext, scale: CGFloat, framed: Bool = true) {
     ctx.restoreGState()
 
     // Two records still in the crate: just their rims above the front edge.
-    for (x, y) in [(CGFloat(425), CGFloat(420)), (CGFloat(610), CGFloat(428))] {
-        let r: CGFloat = 200
+    for (c, r) in backRecords {
+        let (x, y) = (c.x, c.y)
         let disc = CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)
         ctx.saveGState()
         ctx.setShadow(offset: CGSize(width: 0, height: -6), blur: 16, color: color(0x000000, 0.5))
@@ -106,8 +122,8 @@ func draw(in ctx: CGContext, scale: CGFloat, framed: Bool = true) {
 
     // The hero record, pulled up and tilted a little, label showing.
     ctx.saveGState()
-    let center = CGPoint(x: 512, y: 560)
-    let r: CGFloat = 262
+    let center = heroCenter
+    let r = heroRadius
     ctx.translateBy(x: center.x, y: center.y)
     ctx.rotate(by: -0.12)
     let disc = CGRect(x: -r, y: -r, width: r * 2, height: r * 2)
@@ -144,7 +160,7 @@ func draw(in ctx: CGContext, scale: CGFloat, framed: Bool = true) {
     }
     ctx.restoreGState()
     // Label: warm orange with a thin cream ring and the spindle hole.
-    let labelRadius = r * 0.37
+    let labelRadius = heroLabelRadius
     let labelRect = CGRect(x: -labelRadius, y: -labelRadius, width: labelRadius * 2, height: labelRadius * 2)
     ctx.saveGState()
     ctx.addEllipse(in: labelRect)
@@ -159,7 +175,7 @@ func draw(in ctx: CGContext, scale: CGFloat, framed: Bool = true) {
     ctx.setLineWidth(3)
     ctx.strokeEllipse(in: labelRect.insetBy(dx: 1.5, dy: 1.5))
     ctx.setFillColor(color(0x161B33))
-    ctx.fillEllipse(in: CGRect(x: -13, y: -13, width: 26, height: 26))
+    ctx.fillEllipse(in: CGRect(x: -heroHoleRadius, y: -heroHoleRadius, width: heroHoleRadius * 2, height: heroHoleRadius * 2))
     ctx.restoreGState()
 
     // Crate front: three slats with real gaps, rounded ends, corner posts.
@@ -168,7 +184,7 @@ func draw(in ctx: CGContext, scale: CGFloat, framed: Bool = true) {
     ctx.setFillColor(color(0x5C3A1C))
     ctx.fill(front)
     ctx.restoreGState()
-    let gap: CGFloat = 18
+    let gap = crateGap
     let slatHeight = (front.height - gap * 2) / 3
     for i in 0..<3 {
         let slat = CGRect(x: front.minX, y: front.minY + CGFloat(i) * (slatHeight + gap), width: front.width, height: slatHeight)
@@ -197,8 +213,8 @@ func draw(in ctx: CGContext, scale: CGFloat, framed: Bool = true) {
         ctx.addLine(to: CGPoint(x: slat.maxX - 10, y: slat.maxY - 1.5))
         ctx.strokePath()
     }
-    for x in [front.minX + 22, front.maxX - 22 - 46] {
-        let post = CGRect(x: x, y: front.minY - 6, width: 46, height: front.height + 12)
+    for x in [front.minX + cratePostInset, front.maxX - cratePostInset - cratePostWidth] {
+        let post = CGRect(x: x, y: front.minY - cratePostOverhang, width: cratePostWidth, height: front.height + cratePostOverhang * 2)
         ctx.saveGState()
         ctx.addPath(CGPath(roundedRect: post, cornerWidth: 8, cornerHeight: 8, transform: nil))
         ctx.clip()
@@ -272,6 +288,96 @@ if let flag = CommandLine.arguments.firstIndex(of: "--play"), CommandLine.argume
     print("wrote Play icon and feature graphic to \(dir.path)")
 }
 
+/// The themed-icon layer as a vector drawable: the scene's silhouette in
+/// one colour, from the same geometry as the drawing. The scene is scaled
+/// like the foreground layer and then a little more, so that the crate's
+/// corners stay inside the launcher's circular mask (36 dp from the
+/// centre); the colour layer may lose a corner to the mask, a flat
+/// silhouette looks cut. Gaps of about a dp separate the hero record from
+/// the rims behind it and mark its label, since there is no shading.
+func monochromeXML() -> String {
+    let shrink: CGFloat = 0.87
+    let slatGap: CGFloat = 2          // dp; the drawing's 1.5 dp gaps vanish at launcher size
+    let separation: CGFloat = 1.2     // dp around the hero
+    let labelRing: CGFloat = 1        // dp
+    let k = 108 / CGFloat(1024)
+    func dp(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: ((p.x - 512) * androidSceneScale * shrink + 512) * k,
+                y: 108 - ((p.y - 512) * androidSceneScale * shrink + 512) * k)
+    }
+    func dp(_ length: CGFloat) -> CGFloat { length * androidSceneScale * shrink * k }
+    func f(_ v: CGFloat) -> String { String(format: "%.2f", v) }
+    func circle(_ c: CGPoint, _ r: CGFloat, clockwise: Bool = true) -> String {
+        let sweep = clockwise ? 1 : 0
+        return "M\(f(c.x - r)),\(f(c.y)) a\(f(r)),\(f(r)) 0 1,\(sweep) \(f(2 * r)),0 a\(f(r)),\(f(r)) 0 1,\(sweep) \(f(-2 * r)),0 Z"
+    }
+    func rect(_ x0: CGFloat, _ y0: CGFloat, _ x1: CGFloat, _ y1: CGFloat) -> String {
+        "M\(f(x0)),\(f(y0)) H\(f(x1)) V\(f(y1)) H\(f(x0)) Z"
+    }
+
+    let bottomLeft = dp(CGPoint(x: crateFront.minX, y: crateFront.minY))
+    let topRight = dp(CGPoint(x: crateFront.maxX, y: crateFront.maxY))
+    let (left, right, top, bottom) = (bottomLeft.x, topRight.x, topRight.y, bottomLeft.y)
+    let slatHeight = (bottom - top - slatGap * 2) / 3
+    let slats = (0..<3).map { i -> String in
+        let y = top + CGFloat(i) * (slatHeight + slatGap)
+        return rect(left, y, right, y + slatHeight)
+    }
+    let posts = [crateFront.minX + cratePostInset, crateFront.maxX - cratePostInset - cratePostWidth].map { x -> String in
+        let lower = dp(CGPoint(x: x, y: crateFront.minY - cratePostOverhang))
+        let upper = dp(CGPoint(x: x + cratePostWidth, y: crateFront.maxY + cratePostOverhang))
+        return rect(lower.x, upper.y, upper.x, lower.y)
+    }
+    let hero = dp(heroCenter)
+    let heroR = dp(heroRadius)
+    let labelR = dp(heroLabelRadius)
+    let holeR = max(dp(heroHoleRadius), 1.6)
+    let rims = backRecords.map { circle(dp($0.center), dp($0.radius)) }
+
+    return """
+    <?xml version="1.0" encoding="utf-8"?>
+    <!--
+      Copyright (C) 2026 Christian Kierdorf
+      SPDX-License-Identifier: GPL-3.0-or-later
+
+      Themed-icon silhouette of the launcher icon. Generated by
+      scripts/icon.swift from the same geometry as the colour icon; edit
+      the script, not this file.
+    -->
+    <vector xmlns:android="http://schemas.android.com/apk/res/android"
+        android:width="108dp"
+        android:height="108dp"
+        android:viewportWidth="108"
+        android:viewportHeight="108">
+        <!-- The records stand behind the crate's front: only what is above
+             its top edge shows. -->
+        <group>
+            <clip-path android:pathData="\(rect(0, 0, 108, top))" />
+            <!-- Rims of the two records behind the hero, kept clear of it:
+                 the clip is the canvas minus the hero grown by the cut (the
+                 inner circle runs the other way round, so non-zero winding
+                 leaves it out). -->
+            <group>
+                <clip-path android:pathData="\(rect(0, 0, 108, 108)) \(circle(hero, heroR + separation, clockwise: false))" />
+                <path
+                    android:fillColor="#FFFFFFFF"
+                    android:pathData="\(rims.joined(separator: " "))" />
+            </group>
+            <!-- The hero record: disc, a thin ring at the label's edge, the hole. -->
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:fillType="evenOdd"
+                android:pathData="\(circle(hero, heroR)) \(circle(hero, labelR)) \(circle(hero, labelR - labelRing)) \(circle(hero, holeR))" />
+        </group>
+        <!-- Three slats and the corner posts. -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="\(slats.joined(separator: " ")) \(posts.joined(separator: " "))" />
+    </vector>
+
+    """
+}
+
 if let flag = CommandLine.arguments.firstIndex(of: "--android"), CommandLine.arguments.count > flag + 1 {
     let res = URL(fileURLWithPath: CommandLine.arguments[flag + 1], isDirectory: true)
     // Adaptive icon layers are 108 dp; one PNG per density.
@@ -280,5 +386,7 @@ if let flag = CommandLine.arguments.firstIndex(of: "--android"), CommandLine.arg
         let folder = res.appendingPathComponent("mipmap-\(density)", isDirectory: true)
         try writePNG(pixels: Int(108 * factor), framed: false, to: folder.appendingPathComponent("ic_launcher_foreground.png"))
     }
-    print("wrote Android launcher icons to \(res.path)")
+    let monochrome = res.appendingPathComponent("drawable", isDirectory: true).appendingPathComponent("ic_launcher_monochrome.xml")
+    try monochromeXML().write(to: monochrome, atomically: true, encoding: .utf8)
+    print("wrote Android launcher icons and the monochrome layer to \(res.path)")
 }
