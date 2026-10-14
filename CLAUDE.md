@@ -304,9 +304,15 @@ on rows (Mac: visible on hover or when set), album header (all tracks),
 player bar, a Favorites tile after All Tracks (`Selection.favorites`;
 Android's grid auto-select counts `LIBRARY_TILES` = 2), Mac menu
 Playback > Add to Favorites ⌘L and row context menu. Verified on screen
-on the Mac and on the Pixel_9a emulator incl. restart. Not done: a heart
-in the Android media notification (needs a session callback in
-`PlaybackService`).
+on the Mac and on the Pixel_9a emulator incl. restart. Android also has
+the heart in the media notification: `SharedFavorites` in the
+application holds the one in-memory value (StateFlow) and writes the
+file behind it; the view model mirrors it into Compose state, and
+`PlaybackService` puts a `CommandButton` (ICON_HEART_FILLED/UNFILLED,
+custom command `COMMAND_TOGGLE_FAVORITE`) into the session's media
+button preferences, refreshed on every item transition and every
+favorites change. Verified on the emulator both ways and across a
+track skip.
 Up Next (both apps): the queue after the current track, from
 `PlayQueue.upcoming` (Mac, popover on the player bar, `UpNextView`,
 `showsUpNext` on the model for ⌘U) or a walk over the controller's

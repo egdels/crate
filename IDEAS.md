@@ -6,8 +6,6 @@ Entries move to CHANGELOG.md when they ship and are deleted here.
 
 ## Small, directly audible or visible
 
-- **Heart in the Android media notification.** Known open point; needs
-  a session callback in `PlaybackService`. On the Mac ⌘L is enough.
 - **Recently Played / Recently Added tiles.** Two more tiles next to All
   Tracks and Favorites. Recently Added is free: the scanner knows the
   file dates. Recently Played needs a small `history.json` in the
@@ -58,6 +56,6 @@ Entries move to CHANGELOG.md when they ship and are deleted here.
 
 ## Suggested next version (0.7.0)
 
-Heart in the notification, resume on launch, disc separators, on top
-of the Up Next list that is already in. The lyrics count via
+Resume on launch and disc separators, on top of the Up Next list and
+the notification heart that are already in. The lyrics count via
 `crate-scan` as groundwork for 0.8.

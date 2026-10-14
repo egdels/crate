@@ -26,6 +26,7 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ShuffleOrder
+import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
@@ -34,6 +35,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import de.schliweb.crate.CrateApplication
 import de.schliweb.crate.MainActivity
+import de.schliweb.crate.SharedFavorites
 import de.schliweb.crate.core.ReplayGain
 import de.schliweb.crate.library.ArtworkCache
 import kotlinx.coroutines.CoroutineScope
@@ -41,6 +43,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.guava.future
+import kotlinx.coroutines.launch
 import java.io.IOException
 
 /**
@@ -68,11 +71,17 @@ import java.io.IOException
  * track first, and the view model's [COMMAND_QUEUED_NEXT] puts the items
  * it just inserted right behind it. A controller cannot set the shuffle
  * order itself.
+ *
+ * The notification carries a heart for the current track, a custom
+ * command button whose icon follows the process-wide [SharedFavorites];
+ * tapping it toggles the heart there, which the app's own hearts mirror.
  */
 @UnstableApi
 class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
     private val gain = GainProcessor()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val favorites: SharedFavorites get() = (application as CrateApplication).favorites
 
     override fun onCreate() {
         super.onCreate()
@@ -106,6 +115,9 @@ class PlaybackService : MediaSessionService() {
                 if (enabled) reorder(player, queuedNext = IntRange.EMPTY, currentFirst = true)
             }
         })
+        player.addListener(object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = updateHeart()
+        })
         val openApp = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
@@ -114,8 +126,26 @@ class PlaybackService : MediaSessionService() {
             .setCallback(callback)
             .setSessionActivity(openApp)
             .setBitmapLoader(ArtworkBitmapLoader((application as CrateApplication).artwork))
+            .setMediaButtonPreferences(listOf(heartButton(false)))
             .build()
+        scope.launch {
+            favorites.load()
+            favorites.state.collect { updateHeart() }
+        }
     }
+
+    /** The notification's heart, filled when the current track has one. */
+    private fun updateHeart() {
+        val session = session ?: return
+        val id = session.player.currentMediaItem?.mediaId
+        session.setMediaButtonPreferences(listOf(heartButton(id != null && id in favorites.current.ids)))
+    }
+
+    private fun heartButton(on: Boolean): CommandButton =
+        CommandButton.Builder(if (on) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
+            .setDisplayName(if (on) "Remove from favorites" else "Add to favorites")
+            .setSessionCommand(SessionCommand(COMMAND_TOGGLE_FAVORITE, Bundle.EMPTY))
+            .build()
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
@@ -123,6 +153,7 @@ class PlaybackService : MediaSessionService() {
         override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
                 .add(SessionCommand(COMMAND_QUEUED_NEXT, Bundle.EMPTY))
+                .add(SessionCommand(COMMAND_TOGGLE_FAVORITE, Bundle.EMPTY))
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session).setAvailableSessionCommands(commands).build()
         }
@@ -130,6 +161,12 @@ class PlaybackService : MediaSessionService() {
         override fun onCustomCommand(
             session: MediaSession, controller: MediaSession.ControllerInfo, customCommand: SessionCommand, args: Bundle,
         ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction == COMMAND_TOGGLE_FAVORITE) {
+                val id = session.player.currentMediaItem?.mediaId
+                val track = id?.let { (application as CrateApplication).library.track(it) }
+                if (track != null) favorites.update { it.toggle(track) }
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
             if (customCommand.customAction != COMMAND_QUEUED_NEXT) return super.onCustomCommand(session, controller, customCommand, args)
             val start = args.getInt(KEY_START, -1)
             val count = args.getInt(KEY_COUNT, 0)
@@ -192,9 +229,13 @@ class PlaybackService : MediaSessionService() {
         const val KEY_START = "start"
         const val KEY_COUNT = "count"
         const val KEY_TOTAL = "total"
+
+        /** The notification's heart: toggles the current track's favorite. */
+        const val COMMAND_TOGGLE_FAVORITE = "de.schliweb.crate.toggle_favorite"
     }
 
     override fun onDestroy() {
+        scope.cancel()
         session?.run {
             player.release()
             release()

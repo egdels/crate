@@ -45,7 +45,6 @@ import de.schliweb.crate.playback.ArtworkBitmapLoader
 import de.schliweb.crate.playback.PlaybackService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -97,8 +96,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /** Every track in album order, narrowed by the search field. */
     var filteredTracks by mutableStateOf<List<Track>>(emptyList())
         private set
-    /** The tracks marked with a heart. Saved in a file of their own, so
-     *  a tap on a heart never rewrites the library's index. */
+    /** The tracks marked with a heart: a mirror of the process-wide
+     *  [SharedFavorites], which the notification's heart changes too. */
     var favorites by mutableStateOf(Favorites())
         private set
     /** The favorites in album order, narrowed by the search field. */
@@ -152,10 +151,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             try {
                 val t0 = System.currentTimeMillis()
-                withContext(Dispatchers.IO) {
-                    library.load()
-                    favorites = app.favorites.load() ?: Favorites()
-                }
+                withContext(Dispatchers.IO) { library.load() }
+                app.favorites.load()
                 val t1 = System.currentTimeMillis()
                 refresh()
                 Log.i(TAG, "load: ${tracks.size} tracks, read ${t1 - t0} ms, grouped ${System.currentTimeMillis() - t1} ms")
@@ -170,6 +167,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             if (library.needsRescan) rescan()
         }
         viewModelScope.launch { connect() }
+        viewModelScope.launch {
+            app.favorites.state.collect {
+                favorites = it
+                favoriteTracks = it.filter(filteredTracks)
+            }
+        }
+        viewModelScope.launch { app.favorites.errors.collect { lastError = it } }
         // Off the main thread and once per keystroke: the field shows
         // what was typed right away, the lists follow when they are ready.
         viewModelScope.launch {
@@ -189,25 +193,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /** Whether every track of the album has a heart. */
     fun isFavorite(album: Album): Boolean = favorites.containsAll(album.tracks)
 
-    fun toggleFavorite(track: Track) = favoritesChanged(favorites.toggle(track))
+    fun toggleFavorite(track: Track) {
+        app.favorites.update { it.toggle(track) }
+    }
 
     /** Hearts the whole album, or takes the hearts off all of it. */
-    fun setFavorite(on: Boolean, album: Album) = favoritesChanged(favorites.set(on, album.tracks))
-
-    /** One thread, so two quick taps are written in order. */
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private val favoritesWriter = Dispatchers.IO.limitedParallelism(1)
-
-    private fun favoritesChanged(changed: Favorites) {
-        favorites = changed
-        favoriteTracks = changed.filter(filteredTracks)
-        viewModelScope.launch(favoritesWriter) {
-            try {
-                app.favorites.save(changed)
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) { lastError = "Could not save the favorites: ${e.message}" }
-            }
-        }
+    fun setFavorite(on: Boolean, album: Album) {
+        app.favorites.update { it.set(on, album.tracks) }
     }
 
     // Derived state
@@ -281,7 +273,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
             lastScan = null
             notice = "Removed ${folder.name}"
-            favoritesChanged(favorites.removeAllUnder(folder.path))
+            app.favorites.update { it.removeAllUnder(folder.path) }
             val controller = controllerReady.takeIf { it.isCompleted }?.await()
             if (controller != null) {
                 val keep = (0 until controller.mediaItemCount).filter { !Paths.isUnder(controller.getMediaItemAt(it).mediaId, folder.path) }

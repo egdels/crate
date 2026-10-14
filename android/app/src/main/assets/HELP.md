@@ -42,7 +42,8 @@ uploaded or changed.
   the record keeps its dynamics; in Shuffle and All Tracks each track is
   levelled on its own.
 - The notification, the lock screen and headphone buttons control
-  playback; the music keeps playing when the app is in the background.
+  playback, and the notification has the heart too; the music keeps
+  playing when the app is in the background.
 
 ## Opening files
 

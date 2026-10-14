@@ -15,6 +15,8 @@ version's section from this file as the GitHub release notes.
   it out, Clear empties the list. Right-click (Mac) or press and hold
   (Android) a track or an album for Play Next and Play Last; with
   nothing playing, they start right away.
+- Android: the media notification has the heart, so a track can be
+  marked from the lock screen; the app's hearts follow at once.
 
 ### Fixed
 
