@@ -5,6 +5,17 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow takes a
 version's section from this file as the GitHub release notes.
 
+## [Unreleased]
+
+### Fixed
+
+- Mac: the app crashed about a minute into playing a track with a
+  cover (`EXC_BREAKPOINT` on MediaPlayer's queue). The closure that
+  hands the cover to Now Playing inherited the main actor, and macOS
+  27.0.1 calls it on MediaPlayer's own queue when it serialises the
+  artwork; the Swift runtime's isolation check trapped. The closure is
+  nonisolated now.
+
 ## [0.6.2] - 2026-10-14
 
 0.6.0 and 0.6.1 of the same day are withdrawn: their Android builds

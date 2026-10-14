@@ -71,8 +71,14 @@ final class NowPlaying {
         if let albumArtist = track.albumArtist { info[MPMediaItemPropertyAlbumArtist] = albumArtist }
         if let number = track.trackNumber { info[MPMediaItemPropertyAlbumTrackNumber] = number }
         if let artwork {
+            // The request handler runs on MediaPlayer's own queue when the
+            // system serialises the cover (macOS 27.0.1 does, for Control
+            // Center). A plain closure here would inherit this method's
+            // main-actor isolation, and the runtime's isolation check
+            // trapped on that queue. @Sendable keeps it nonisolated; the
+            // image is built here, never mutated, and only read there.
             let image = NSImage(cgImage: artwork, size: NSSize(width: artwork.width, height: artwork.height))
-            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { @Sendable _ in image }
         }
         center.nowPlayingInfo = info
         center.playbackState = isPlaying ? .playing : .paused
