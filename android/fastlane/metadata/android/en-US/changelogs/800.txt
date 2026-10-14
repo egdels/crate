@@ -1,0 +1,4 @@
+New in this version:
+- Lyrics: when a track has them (an .lrc file next to it or in its tags), an icon in the player bar shows them; timed lyrics follow the song.
+- Tap an artist's name on an album page to see that artist's albums.
+- Two new tiles: Recently Added and Recently Played.

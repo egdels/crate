@@ -35,7 +35,8 @@ Entries move to CHANGELOG.md when they ship and are deleted here.
   album appear by itself, but scanning stays a deliberate act: the
   user rescans when the collection changed. Decided 2026-10-14.
 
-## Suggested next version (0.7.0)
+## Suggested next version
 
-0.7.0 shipped with the first group. Lyrics, the artist view and the
-two recent tiles are in for 0.8; that is a release.
+0.7.0 and 0.8.0 shipped on 2026-10-14. What is left above is either
+small (adding a loose file's folder) or a project of its own (loudness
+analysis); the latter would be 0.9.
