@@ -1,0 +1,6 @@
+New:
+- Favorites: a heart on tracks, albums and in the player bar; a Favorites tile in the grid.
+- Albums show their genre; the search finds genre and composer.
+- Albums sort by their sort names, or ignoring a leading "The".
+- Tracks play at the level their ReplayGain or iTunes Sound Check tags describe.
+- Targets Android 17; the themed launcher icon matches the colour icon.
