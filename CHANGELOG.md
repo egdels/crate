@@ -24,6 +24,8 @@ version's section from this file as the GitHub release notes.
   queue changes, the position every few seconds of playback. Android
   also answers the system's playback resumption (its media controls
   after the app was gone) from the same files.
+- Multi-disc albums show a "Disc n" line before each disc's tracks on
+  the album page, in both apps. Albums with one disc look as before.
 
 ### Fixed
 

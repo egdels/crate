@@ -39,7 +39,9 @@ open build/Crate.app           # run it; pkill -x Crate to stop
 scripts/screenshot.sh          # PNG of the Crate window, then Read the file
                                # (captures the screen area: an overlapping window shows instead;
                                # `screencapture -l <CGWindowID>` captures the window itself, and
-                               # `open -g <file>` plays a library file without bringing Crate forward)
+                               # `open -g -a <abs path to build/Crate.app> <file>` plays a library file in that build without
+                               # bringing it forward; a bare `open <file>` goes to /Applications/Crate.app, even
+                               # while a build/Crate.app is running, and then two Crates run)
 ```
 
 No Xcode project. The app is a SwiftPM executable target; `scripts/bundle.sh`
@@ -335,6 +337,14 @@ because a controller's `addMediaItems` passes through the callback's
 reach the length the controller reported (`KEY_TOTAL`). Verified on the
 Pixel_9a emulator: sheet, tap, ×, Clear, Play Next with and without
 shuffle; and on the Mac on screen.
+Disc separators (both apps): `Album.discs` groups the sorted tracks
+by `discNumber ?? 1`; the album page shows a "Disc n" line per disc
+only when there is more than one (Mac: List sections with a
+conditional header; Android: a header item per disc). Verified with a
+two-disc audio play on both. The emulator's Store library has that
+album under `/sdcard/Music/Store/DDF/Papagei/CD1|CD2` (not in the
+repo); `adb shell mkdir` does not quote, so paths there have no
+spaces.
 Resume on launch (both apps): `PlaybackState` (track ids in queue
 order, asAlbum, cursor, position, shuffle, repeat) in two files next to
 the index, `queue.json` written only when the ids change (All Tracks

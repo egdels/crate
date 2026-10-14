@@ -597,11 +597,27 @@ private fun TrackList(model: PlayerViewModel, album: Album) {
                 HeartButton(on = all, onClick = { model.setFavorite(!all, album) })
             }
         }
-        itemsIndexed(album.tracks, key = { _, track -> track.id }) { index, track ->
-            TrackRow(
-                model, track, playing = track.id == model.current?.id, favorite = model.isFavorite(track),
-                onClick = { model.play(album, index) }, onHeart = { model.toggleFavorite(track) },
-            )
+        // One run of rows per disc; the "Disc n" lines only appear when
+        // the album has more than one.
+        val discs = album.discs
+        for (disc in discs) {
+            if (discs.size > 1) {
+                item(key = "disc-${disc.number}") {
+                    Text(
+                        "Disc ${disc.number}",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+                    )
+                }
+            }
+            items(disc.tracks, key = { it.id }) { track ->
+                TrackRow(
+                    model, track, playing = track.id == model.current?.id, favorite = model.isFavorite(track),
+                    onClick = { model.play(album, album.tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)) },
+                    onHeart = { model.toggleFavorite(track) },
+                )
+            }
         }
     }
 }

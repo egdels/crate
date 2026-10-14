@@ -427,12 +427,25 @@ struct TrackList: View {
                     .font(.title2)
                 }
                 .padding(16)
+                // One section per disc; the headers only appear when the
+                // album has more than one.
+                let discs = album.discs
                 List {
-                    ForEach(Array(album.tracks.enumerated()), id: \.element.id) { index, track in
-                        TrackRow(track: track, playing: track.id == model.current?.id)
-                            .contentShape(Rectangle())
-                            .onTapGesture(count: 2) { model.play(album: album, startingAt: index) }
-                            .trackContextMenu(track)
+                    ForEach(discs, id: \.number) { disc in
+                        Section {
+                            ForEach(disc.tracks, id: \.id) { track in
+                                TrackRow(track: track, playing: track.id == model.current?.id)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture(count: 2) {
+                                        model.play(album: album, startingAt: album.tracks.firstIndex { $0.id == track.id } ?? 0)
+                                    }
+                                    .trackContextMenu(track)
+                            }
+                        } header: {
+                            if discs.count > 1 {
+                                Text("Disc \(disc.number)")
+                            }
+                        }
                     }
                 }
                 .listStyle(.inset)

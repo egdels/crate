@@ -36,6 +36,27 @@ public struct Album: Identifiable, Hashable, Sendable {
 
     public var duration: TimeInterval { tracks.reduce(0) { $0 + $1.duration } }
 
+    /// One disc of the album: its number and its tracks, in order.
+    public struct Disc: Equatable, Sendable {
+        public let number: Int
+        public let tracks: [Track]
+    }
+
+    /// The tracks by disc, in order; untagged tracks count as disc 1. An
+    /// album page shows the disc numbers when there is more than one.
+    public var discs: [Disc] {
+        var discs: [Disc] = []
+        for track in tracks {
+            let number = track.discNumber ?? 1
+            if let last = discs.last, last.number == number {
+                discs[discs.count - 1] = Disc(number: number, tracks: last.tracks + [track])
+            } else {
+                discs.append(Disc(number: number, tracks: [track]))
+            }
+        }
+        return discs
+    }
+
     /// What the album sorts by: the tracks' sort tags when they have
     /// them ("Beatles, The"), otherwise the name without a leading
     /// "The". Album artist sort tags win over track artist ones, like

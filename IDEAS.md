@@ -10,9 +10,6 @@ Entries move to CHANGELOG.md when they ship and are deleted here.
   Tracks and Favorites. Recently Added is free: the scanner knows the
   file dates. Recently Played needs a small `history.json` in the
   favorites pattern, without touching the index.
-- **Disc separators in the album page.** Multi-disc albums show one flat
-  list today. A "Disc 2" divider between the tracks is cheap; the data
-  is there.
 
 ## Medium, library
 
@@ -53,6 +50,6 @@ Entries move to CHANGELOG.md when they ship and are deleted here.
 
 ## Suggested next version (0.7.0)
 
-Disc separators, on top of the Up Next list, the notification heart
-and resume on launch that are already in. The lyrics count via
-`crate-scan` as groundwork for 0.8.
+Everything from the first group is in: Up Next, the notification
+heart, resume on launch, disc separators. Release it; the lyrics count
+via `crate-scan` is the groundwork for 0.8.

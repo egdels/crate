@@ -205,4 +205,24 @@ import Testing
         tracks[2].genre = "Rock"
         #expect(Album.group(tracks)[0].genre == "Jazz")
     }
+
+    @Test func discsGroupTheTracksByDiscNumber() {
+        let tracks = [
+            makeTrack("b", album: "Box", track: 1, disc: 2), makeTrack("a2", album: "Box", track: 2, disc: 1),
+            makeTrack("a1", album: "Box", track: 1, disc: 1),
+        ]
+        let album = Album.group(tracks, roots: [URL(fileURLWithPath: "/music")])[0]
+        let discs = album.discs
+        #expect(discs.map(\.number) == [1, 2])
+        #expect(discs[0].tracks.map(\.title) == ["a1", "a2"])
+        #expect(discs[1].tracks.map(\.title) == ["b"])
+    }
+
+    @Test func untaggedDiscsAreOneDisc() {
+        let tracks = [makeTrack("a", album: "One", track: 1), makeTrack("b", album: "One", track: 2)]
+        let album = Album.group(tracks, roots: [URL(fileURLWithPath: "/music")])[0]
+        #expect(album.discs.count == 1)
+        #expect(album.discs[0].number == 1)
+        #expect(album.discs[0].tracks.count == 2)
+    }
 }

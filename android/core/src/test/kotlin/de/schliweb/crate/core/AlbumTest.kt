@@ -229,4 +229,26 @@ class AlbumTest {
         assertTrue(naturalCompare("a", "B") < 0)
         assertTrue(naturalCompare("Éa", "eb") < 0)
     }
+
+    @Test
+    fun discsGroupTheTracksByDiscNumber() {
+        val tracks = listOf(
+            makeTrack("b", album = "Box", track = 1, disc = 2), makeTrack("a2", album = "Box", track = 2, disc = 1),
+            makeTrack("a1", album = "Box", track = 1, disc = 1),
+        )
+        val album = Album.group(tracks, listOf("/music"))[0]
+        val discs = album.discs
+        assertEquals(listOf(1, 2), discs.map { it.number })
+        assertEquals(listOf("a1", "a2"), discs[0].tracks.map { it.title })
+        assertEquals(listOf("b"), discs[1].tracks.map { it.title })
+    }
+
+    @Test
+    fun untaggedDiscsAreOneDisc() {
+        val tracks = listOf(makeTrack("a", album = "One", track = 1), makeTrack("b", album = "One", track = 2))
+        val album = Album.group(tracks, listOf("/music"))[0]
+        assertEquals(1, album.discs.size)
+        assertEquals(1, album.discs[0].number)
+        assertEquals(2, album.discs[0].tracks.size)
+    }
 }

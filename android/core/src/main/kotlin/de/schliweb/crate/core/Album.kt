@@ -32,6 +32,26 @@ data class Album(
      *  album are two albums, which keeps the id unique. */
     val id: String get() = "$folder\u001F$artist\u001F$title"
 
+    /** One disc of the album: its number and its tracks, in order. */
+    data class Disc(val number: Int, val tracks: List<Track>)
+
+    /** The tracks by disc, in order; untagged tracks count as disc 1. An
+     *  album page shows the disc numbers when there is more than one. */
+    val discs: List<Disc>
+        get() {
+            val discs = mutableListOf<Disc>()
+            for (track in tracks) {
+                val number = track.discNumber ?: 1
+                val last = discs.lastOrNull()
+                if (last != null && last.number == number) {
+                    discs[discs.size - 1] = Disc(number, last.tracks + track)
+                } else {
+                    discs += Disc(number, listOf(track))
+                }
+            }
+            return discs
+        }
+
     val duration: Double get() = tracks.sumOf { it.duration }
 
     /** What the album sorts by: the tracks' sort tags when they have
