@@ -76,8 +76,13 @@ import Testing
             Thread.sleep(forTimeInterval: 0.02)
             return TrackLoudness(loudness: -20, peak: 1, histogram: LoudnessHistogram())
         }, concurrency: 2)
-        let task = Task { await analyzer.run(tracks: tracks) { _, _ in } }
-        try await Task.sleep(nanoseconds: 150_000_000)
+        // Cancel once a few files are measured, not after a fixed time:
+        // a slow CI runner may not have finished one by then.
+        nonisolated(unsafe) var done = 0
+        let task = Task { await analyzer.run(tracks: tracks) { progress, _ in done = progress.done } }
+        for _ in 0..<500 where done < 3 {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
         task.cancel()
         let result = await task.value
         #expect(result.count < 40)
