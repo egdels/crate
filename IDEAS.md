@@ -28,5 +28,5 @@ Entries move to CHANGELOG.md when they ship and are deleted here.
 
 ## Suggested next version
 
-0.7.0 and 0.8.0 shipped on 2026-10-14. The loudness analysis is in
-for 0.9; adding a loose file's folder is the small thing left.
+0.7.0, 0.8.0 and 0.9.0 shipped on 2026-10-14. Adding a loose file's
+folder is the one small thing left; gapless by ear is the developer's.

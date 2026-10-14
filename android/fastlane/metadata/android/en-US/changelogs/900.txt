@@ -1,0 +1,2 @@
+New in this version:
+- Albums play equally loud even without ReplayGain tags: Crate measures the loudness of your files itself (EBU R 128) while the app is open, a few files at a time. The files are not changed.

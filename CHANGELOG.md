@@ -5,7 +5,7 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow takes a
 version's section from this file as the GitHub release notes.
 
-## [Unreleased]
+## [0.9.0] - 2026-10-14
 
 ### Added
 
