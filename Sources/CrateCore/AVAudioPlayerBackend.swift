@@ -13,6 +13,9 @@ import Foundation
 public final class AVAudioPlayerBackend: NSObject, AudioPlayer, AVAudioPlayerDelegate {
     private var player: AVAudioPlayer?
     private var storedVolume: Float = 1
+    /// `AVAudioPlayer` only attenuates, so a positive gain is capped at
+    /// unity here; the engine backend has a real gain stage.
+    private var gainFactor: Float = 1
 
     public var onFinished: (@MainActor () -> Void)?
 
@@ -28,15 +31,16 @@ public final class AVAudioPlayerBackend: NSObject, AudioPlayer, AVAudioPlayerDel
         get { storedVolume }
         set {
             storedVolume = min(max(newValue, 0), 1)
-            player?.volume = storedVolume
+            player?.volume = min(storedVolume * gainFactor, 1)
         }
     }
 
-    public func load(_ url: URL) throws {
+    public func load(_ url: URL, gain: Double) throws {
         player?.stop()
         let next = try AVAudioPlayer(contentsOf: url)
         next.delegate = self
-        next.volume = storedVolume
+        gainFactor = ReplayGain.factor(gain)
+        next.volume = min(storedVolume * gainFactor, 1)
         next.prepareToPlay()
         player = next
     }

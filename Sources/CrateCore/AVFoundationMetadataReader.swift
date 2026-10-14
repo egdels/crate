@@ -105,7 +105,32 @@ public struct AVFoundationMetadataReader: MetadataReader {
             meta.albumSort = await string(all, matchingKey: ["tsoa", "soal", "albumsort", "album_sort"])
         }
 
+        // ReplayGain lives in ID3 TXXX frames (the name is the item's
+        // "info" attribute), in iTunes freeform atoms (the name is the
+        // key's last component) and in Vorbis comments; Sound Check in a
+        // COMM frame or a freeform atom named iTunNORM.
+        let trackGain = await userText(all, named: "replaygain_track_gain").flatMap(ReplayGain.decibels)
+        let trackPeak = await userText(all, named: "replaygain_track_peak").flatMap(ReplayGain.peak)
+        let albumGain = await userText(all, named: "replaygain_album_gain").flatMap(ReplayGain.decibels)
+        let albumPeak = await userText(all, named: "replaygain_album_peak").flatMap(ReplayGain.peak)
+        let soundCheck = await userText(all, named: "itunnorm").flatMap(ReplayGain.soundCheck)
+        (meta.trackGain, meta.albumGain) = Self.gains(
+            track: trackGain, trackPeak: trackPeak, album: albumGain, albumPeak: albumPeak, soundCheck: soundCheck)
+
         return meta
+    }
+
+    /// Limited gains from what a file offers: ReplayGain first, Sound
+    /// Check as the track gain when there is no ReplayGain at all.
+    static func gains(
+        track: Double?, trackPeak: Double?, album: Double?, albumPeak: Double?, soundCheck: (gain: Double, peak: Double?)?
+    ) -> (track: Double?, album: Double?) {
+        var trackGain = track.map { ReplayGain.limited($0, peak: trackPeak) }
+        let albumGain = album.map { ReplayGain.limited($0, peak: albumPeak) }
+        if trackGain == nil, albumGain == nil, let soundCheck {
+            trackGain = ReplayGain.limited(soundCheck.gain, peak: soundCheck.peak)
+        }
+        return (trackGain, albumGain)
     }
 
     /// Vorbis comment keys as the common taggers write them.
@@ -128,6 +153,12 @@ public struct AVFoundationMetadataReader: MetadataReader {
         meta.artistSort = flac.value("ARTISTSORT")
         meta.albumArtistSort = flac.value("ALBUMARTISTSORT")
         meta.albumSort = flac.value("ALBUMSORT")
+        (meta.trackGain, meta.albumGain) = gains(
+            track: flac.value("REPLAYGAIN_TRACK_GAIN").flatMap(ReplayGain.decibels),
+            trackPeak: flac.value("REPLAYGAIN_TRACK_PEAK").flatMap(ReplayGain.peak),
+            album: flac.value("REPLAYGAIN_ALBUM_GAIN").flatMap(ReplayGain.decibels),
+            albumPeak: flac.value("REPLAYGAIN_ALBUM_PEAK").flatMap(ReplayGain.peak),
+            soundCheck: flac.value("ITUNNORM").flatMap(ReplayGain.soundCheck))
         return meta
     }
 
@@ -177,6 +208,25 @@ public struct AVFoundationMetadataReader: MetadataReader {
 
     private func string(_ pool: [AVMetadataItem], _ ids: [AVMetadataIdentifier]) async -> String? {
         await firstString(in: items(pool, ids))
+    }
+
+    /// A user-named text: an ID3 TXXX or COMM frame whose description
+    /// (the "info" extra attribute) is `name`, or any item whose key name
+    /// is, as iTunes freeform atoms and Vorbis comments appear.
+    private func userText(_ pool: [AVMetadataItem], named name: String) async -> String? {
+        for item in pool {
+            let key = Self.keyName(of: item)
+            if key == "txxx" || key == "comm" {
+                guard let extra = try? await item.load(.extraAttributes),
+                      let info = extra[.info] as? String, info.lowercased() == name else { continue }
+            } else if key != name {
+                continue
+            }
+            if let value = try? await item.load(.stringValue)?.trimmed.nonEmpty {
+                return value
+            }
+        }
+        return nil
     }
 
     private func string(_ pool: [AVMetadataItem], matchingKey names: [String]) async -> String? {

@@ -38,18 +38,16 @@ object Mp3Metadata {
         return ParsedTags(meta, fields.pictures)
     }
 
-    private fun merge(primary: TrackMetadata, fallback: TrackMetadata) = TrackMetadata(
+    /** ID3v1 fills only what v2 left empty; everything else stays as v2
+     *  read it (a copy, not a rebuild, so no field is lost as more are
+     *  added). */
+    private fun merge(primary: TrackMetadata, fallback: TrackMetadata) = primary.copy(
         title = primary.title ?: fallback.title,
         artist = primary.artist ?: fallback.artist,
-        albumArtist = primary.albumArtist,
         album = primary.album ?: fallback.album,
         trackNumber = primary.trackNumber ?: fallback.trackNumber,
-        trackTotal = primary.trackTotal,
-        discNumber = primary.discNumber,
-        discTotal = primary.discTotal,
         year = primary.year ?: fallback.year,
         genre = primary.genre ?: fallback.genre,
-        duration = primary.duration,
     )
 
     // MPEG audio frames
@@ -187,8 +185,21 @@ internal object Id3v2 {
                 artistSort = text["TSOP"],
                 albumArtistSort = text["TSO2"],
                 albumSort = text["TSOA"],
+                trackGain = gains.first,
+                albumGain = gains.second,
             )
         }
+
+        /** ReplayGain from TXXX frames, iTunes Sound Check from its COMM
+         *  (or TXXX) frame; user frames are keyed "TXXX:name". */
+        private val gains: Pair<Double?, Double?>
+            get() = ReplayGain.gains(
+                track = text["TXXX:replaygain_track_gain"]?.let(ReplayGain::decibels),
+                trackPeak = text["TXXX:replaygain_track_peak"]?.let(ReplayGain::peak),
+                album = text["TXXX:replaygain_album_gain"]?.let(ReplayGain::decibels),
+                albumPeak = text["TXXX:replaygain_album_peak"]?.let(ReplayGain::peak),
+                soundCheck = (text["COMM:itunnorm"] ?: text["TXXX:itunnorm"])?.let(ReplayGain::soundCheck),
+            )
     }
 
     /** v2.2 three-letter ids mapped onto their v2.3 names. */
@@ -199,7 +210,7 @@ internal object Id3v2 {
     )
     private val WANTED = setOf(
         "TIT2", "TPE1", "TPE2", "TALB", "TRCK", "TPOS", "TYER", "TDRC", "TDOR", "TORY", "TCON", "APIC",
-        "TCOM", "TCMP", "TSOP", "TSO2", "TSOA",
+        "TCOM", "TCMP", "TSOP", "TSO2", "TSOA", "TXXX", "COMM",
     )
 
     fun syncsafe(b: ByteArray, i: Int): Int =
@@ -242,8 +253,16 @@ internal object Id3v2 {
                 }
                 val compressedOrEncrypted = version == 3 && frameFlags and 0x00c0 != 0 || version == 4 && frameFlags and 0x000c != 0
                 if (!compressedOrEncrypted) {
-                    if (id == "APIC") picture(data, version)?.let(result.pictures::add)
-                    else textFrame(data)?.let { if (id !in result.text) result.text[id] = it }
+                    when (id) {
+                        "APIC" -> picture(data, version)?.let(result.pictures::add)
+                        // User frames carry their own name: TXXX a description,
+                        // COMM a language and a description. Keyed by both.
+                        "TXXX", "COMM" -> userFrame(data, skip = if (id == "COMM") 3 else 0)?.let { (name, value) ->
+                            val key = "$id:${name.lowercase()}"
+                            if (value.isNotEmpty() && key !in result.text) result.text[key] = value
+                        }
+                        else -> textFrame(data)?.let { if (id !in result.text) result.text[id] = it }
+                    }
                 }
             }
             pos += size
@@ -268,6 +287,25 @@ internal object Id3v2 {
         2 -> Charsets.UTF_16BE
         3 -> Charsets.UTF_8
         else -> Charsets.ISO_8859_1
+    }
+
+    /** A TXXX or COMM frame: encoding, [skip] bytes (the COMM language),
+     *  the name terminated by one or two zero bytes, then the value. */
+    private fun userFrame(data: ByteArray, skip: Int): Pair<String, String>? {
+        if (data.size < 2 + skip) return null
+        val encoding = data.u8(0)
+        val wide = encoding == 1 || encoding == 2
+        val from = 1 + skip
+        var i = from
+        if (wide) {
+            while (i + 1 < data.size && !(data[i].toInt() == 0 && data[i + 1].toInt() == 0)) i += 2
+        } else {
+            while (i < data.size && data[i].toInt() != 0) i++
+        }
+        val name = String(data, from, (i - from).coerceAtLeast(0), charset(encoding)).trim()
+        val valueStart = (i + if (wide) 2 else 1).coerceAtMost(data.size)
+        val value = String(data, valueStart, data.size - valueStart, charset(encoding)).trim('\u0000').trim()
+        return name to value
     }
 
     /** The first value of a text frame; v2.4 may hold several, separated

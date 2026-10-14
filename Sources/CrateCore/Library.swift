@@ -229,6 +229,8 @@ public actor Library {
             artistSort: meta.artistSort?.trimmed.nonEmpty,
             albumArtistSort: meta.albumArtistSort?.trimmed.nonEmpty,
             albumSort: meta.albumSort?.trimmed.nonEmpty,
+            trackGain: meta.trackGain,
+            albumGain: meta.albumGain,
             duration: meta.duration
         )
     }

@@ -52,6 +52,7 @@ struct HelpView: View {
                 HelpSection("Playing") {
                     HelpRow("", "Double-click an album to play it, or a track to start there and play on through the album. All Tracks lists everything; a double-click plays from that row to the end of the list.")
                     HelpRow("", "The search field narrows albums and tracks by title, artist, album, composer and genre. Albums play gapless.")
+                    HelpRow("", "Files tagged with ReplayGain or iTunes Sound Check play at the level the tags describe, so albums come out equally loud; the volume control is on top of that. Untagged files play as they are.")
                     HelpRow("Space", "Play or pause.")
                     HelpRow("⌘→  ⌘←", "Next and previous track.")
                     HelpRow("⇧⌘S", "Shuffle. Repeat is in the Playback menu.")

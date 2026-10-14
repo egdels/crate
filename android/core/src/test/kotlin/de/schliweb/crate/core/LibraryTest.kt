@@ -80,8 +80,8 @@ class LibraryTest {
         // composer or sort fields.
         val store = JsonLibraryStore(storeFile)
         val written = storeFile.readText()
-        assertTrue("\"version\": 2" in written, written.take(200))
-        storeFile.writeText(written.replace(Regex("\"version\": 2,?\\s*"), ""))
+        assertTrue("\"version\": ${LibrarySnapshot.CURRENT_VERSION}" in written, written.take(200))
+        storeFile.writeText(written.replace(Regex("\"version\": ${LibrarySnapshot.CURRENT_VERSION},?\\s*"), ""))
         assertFalse("version" in storeFile.readText())
         assertEquals(1, store.load()!!.version)
 

@@ -43,6 +43,13 @@ class FlacMetadata private constructor() {
 
     /** Vorbis comment keys as the common taggers write them. */
     fun toTrackMetadata(): TrackMetadata {
+        val gains = ReplayGain.gains(
+            track = value("REPLAYGAIN_TRACK_GAIN")?.let(ReplayGain::decibels),
+            trackPeak = value("REPLAYGAIN_TRACK_PEAK")?.let(ReplayGain::peak),
+            album = value("REPLAYGAIN_ALBUM_GAIN")?.let(ReplayGain::decibels),
+            albumPeak = value("REPLAYGAIN_ALBUM_PEAK")?.let(ReplayGain::peak),
+            soundCheck = value("ITUNNORM")?.let(ReplayGain::soundCheck),
+        )
         val track = value("TRACKNUMBER")?.let(TagText::numberAndTotal)
         val disc = value("DISCNUMBER")?.let(TagText::numberAndTotal)
         return TrackMetadata(
@@ -61,6 +68,8 @@ class FlacMetadata private constructor() {
             artistSort = value("ARTISTSORT"),
             albumArtistSort = value("ALBUMARTISTSORT"),
             albumSort = value("ALBUMSORT"),
+            trackGain = gains.first,
+            albumGain = gains.second,
             duration = duration,
         )
     }

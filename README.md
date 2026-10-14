@@ -49,6 +49,8 @@ What the package does:
 - **Find covers** embedded in the files or lying next to them and cache
   them as thumbnails (`ArtworkReader`, `ArtworkCache`)
 - **Search** titles, artists, albums, composers and genres (`SearchQuery`)
+- **Level loudness** from ReplayGain or iTunes Sound Check tags, limited by
+  the peak, through a gain stage separate from the volume (`ReplayGain`)
 - **Favorites** as a set of track paths in a small file of its own, so
   a tap on a heart never rewrites the index (`Favorites`)
 

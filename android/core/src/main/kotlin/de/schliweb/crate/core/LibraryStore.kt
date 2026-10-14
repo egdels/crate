@@ -9,7 +9,8 @@ import java.io.File
 
 /** Everything the library persists between launches. The version goes
  *  up when a rescan has to re-read unchanged files, because the tags a
- *  [Track] holds grew: 2 added composer, compilation and the sort names. */
+ *  [Track] holds grew: 2 added composer, compilation and the sort names,
+ *  3 the loudness gains. */
 @Serializable
 data class LibrarySnapshot(
     /** Defaults to 1, not to the current version: the serializer leaves
@@ -21,7 +22,7 @@ data class LibrarySnapshot(
     val tracks: List<Track> = emptyList(),
 ) {
     companion object {
-        const val CURRENT_VERSION = 2
+        const val CURRENT_VERSION = 3
     }
 }
 

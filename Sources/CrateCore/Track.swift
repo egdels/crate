@@ -35,6 +35,11 @@ public struct Track: Identifiable, Hashable, Codable, Sendable {
     public var artistSort: String?
     public var albumArtistSort: String?
     public var albumSort: String?
+    /// Loudness correction in dB from the tags (ReplayGain, or iTunes
+    /// Sound Check as the track gain), already limited by the peak so
+    /// that applying it cannot clip. nil when the file has none.
+    public var trackGain: Double?
+    public var albumGain: Double?
     /// Seconds. 0 when the file reports no duration.
     public var duration: TimeInterval
 
@@ -57,6 +62,8 @@ public struct Track: Identifiable, Hashable, Codable, Sendable {
         artistSort: String? = nil,
         albumArtistSort: String? = nil,
         albumSort: String? = nil,
+        trackGain: Double? = nil,
+        albumGain: Double? = nil,
         duration: TimeInterval = 0
     ) {
         self.url = url
@@ -77,6 +84,8 @@ public struct Track: Identifiable, Hashable, Codable, Sendable {
         self.artistSort = artistSort
         self.albumArtistSort = albumArtistSort
         self.albumSort = albumSort
+        self.trackGain = trackGain
+        self.albumGain = albumGain
         self.duration = duration
     }
 
@@ -107,6 +116,8 @@ public struct Track: Identifiable, Hashable, Codable, Sendable {
         artistSort = try c.decodeIfPresent(String.self, forKey: .artistSort)
         albumArtistSort = try c.decodeIfPresent(String.self, forKey: .albumArtistSort)
         albumSort = try c.decodeIfPresent(String.self, forKey: .albumSort)
+        trackGain = try c.decodeIfPresent(Double.self, forKey: .trackGain)
+        albumGain = try c.decodeIfPresent(Double.self, forKey: .albumGain)
         duration = try c.decode(TimeInterval.self, forKey: .duration)
     }
 }
@@ -130,6 +141,9 @@ public struct TrackMetadata: Hashable, Sendable {
     public var artistSort: String?
     public var albumArtistSort: String?
     public var albumSort: String?
+    /// Limited gains in dB, see `Track`.
+    public var trackGain: Double?
+    public var albumGain: Double?
     public var duration: TimeInterval
 
     public init(
@@ -148,6 +162,8 @@ public struct TrackMetadata: Hashable, Sendable {
         artistSort: String? = nil,
         albumArtistSort: String? = nil,
         albumSort: String? = nil,
+        trackGain: Double? = nil,
+        albumGain: Double? = nil,
         duration: TimeInterval = 0
     ) {
         self.title = title
@@ -165,6 +181,8 @@ public struct TrackMetadata: Hashable, Sendable {
         self.artistSort = artistSort
         self.albumArtistSort = albumArtistSort
         self.albumSort = albumSort
+        self.trackGain = trackGain
+        self.albumGain = albumGain
         self.duration = duration
     }
 }

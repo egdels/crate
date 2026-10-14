@@ -27,10 +27,18 @@ version's section from this file as the GitHub release notes.
 - The compilation flag taggers set (TCMP, cpil, COMPILATION) marks an
   album as Various Artists even when one artist is on most of its
   tracks, unless an album artist is tagged.
-- The library index is version 2 (composer, compilation flag, sort
-  names). An index from an older version is kept and its files are
-  read again once at the next launch, with the grid already up and the
-  footer showing the progress.
+- Loudness levelling in both apps: tracks play at the level their
+  ReplayGain tags describe (album gain when an album is playing, track
+  gain otherwise), and iTunes Sound Check (`iTunNORM`) counts as the
+  track gain when a file has no ReplayGain. Gains are limited by the
+  tagged peak so nothing clips, and sit in a stage of their own, so the
+  volume control behaves as before. No switch: files without tags play
+  as they always did. Read from ID3 TXXX and COMM frames, iTunes
+  freeform atoms and Vorbis comments.
+- The library index is version 3 (composer, compilation flag, sort
+  names, loudness gains). An index from an older version is kept and
+  its files are read again once at the next launch, with the grid
+  already up and the footer showing the progress.
 
 ### Changed
 

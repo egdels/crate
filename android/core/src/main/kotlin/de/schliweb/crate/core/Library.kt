@@ -200,6 +200,8 @@ class Library(
             artistSort = meta.artistSort.trimmedOrNull(),
             albumArtistSort = meta.albumArtistSort.trimmedOrNull(),
             albumSort = meta.albumSort.trimmedOrNull(),
+            trackGain = meta.trackGain,
+            albumGain = meta.albumGain,
             duration = meta.duration,
         )
 

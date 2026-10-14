@@ -46,6 +46,11 @@ data class Track(
     val artistSort: String? = null,
     val albumArtistSort: String? = null,
     val albumSort: String? = null,
+    /** Loudness correction in dB from the tags (ReplayGain, or iTunes
+     *  Sound Check as the track gain), already limited by the peak so
+     *  that applying it cannot clip. null when the file has none. */
+    val trackGain: Double? = null,
+    val albumGain: Double? = null,
     /** Seconds. 0 when the file reports no duration. */
     val duration: Double = 0.0,
 ) {
@@ -77,6 +82,9 @@ data class TrackMetadata(
     val artistSort: String? = null,
     val albumArtistSort: String? = null,
     val albumSort: String? = null,
+    /** Limited gains in dB, see [Track]. */
+    val trackGain: Double? = null,
+    val albumGain: Double? = null,
     val duration: Double = 0.0,
 )
 

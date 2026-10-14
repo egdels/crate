@@ -18,8 +18,10 @@ public protocol AudioPlayer: AnyObject {
     /// `stop()`. The queue's owner advances and loads the next track here.
     var onFinished: (@MainActor () -> Void)? { get set }
 
-    /// Replaces whatever is loaded, without starting playback.
-    func load(_ url: URL) throws
+    /// Replaces whatever is loaded, without starting playback. `gain` is
+    /// the file's loudness correction in dB (see `Track.trackGain`), which
+    /// the backend applies on top of `volume`; 0 leaves the file as is.
+    func load(_ url: URL, gain: Double) throws
     func play()
     func pause()
     /// Unloads the file.
@@ -28,10 +30,14 @@ public protocol AudioPlayer: AnyObject {
     /// Announces what will be loaded once the current file finishes, so a
     /// backend that can chain files does so without a gap. nil withdraws
     /// an earlier announcement. Loading that same URL right after
-    /// `onFinished` continues the playback already running.
-    func preload(_ url: URL?)
+    /// `onFinished` continues the playback already running. `gain` is
+    /// that file's correction, applied at the hand-over.
+    func preload(_ url: URL?, gain: Double)
 }
 
 public extension AudioPlayer {
-    func preload(_ url: URL?) {}
+    func preload(_ url: URL?, gain: Double) {}
+
+    func load(_ url: URL) throws { try load(url, gain: 0) }
+    func preload(_ url: URL?) { preload(url, gain: 0) }
 }

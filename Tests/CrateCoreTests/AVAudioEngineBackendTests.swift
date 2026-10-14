@@ -32,6 +32,30 @@ import Testing
         #expect(!player.isPlaying)
     }
 
+    @Test func gainFollowsTheFileAcrossTheHandOver() async throws {
+        let dir = try TemporaryDirectory()
+        let player = AVAudioEngineBackend()
+        var finished = 0
+        player.onFinished = { finished += 1 }
+        let first = try dir.wav("1.wav", seconds: 0.4)
+        let second = try dir.wav("2.wav", seconds: 1)
+        try player.load(first, gain: -6.5)
+        #expect(player.currentGain == -6.5)
+        player.preload(second, gain: 3)
+        #expect(player.currentGain == -6.5, "the next file's gain waits for the hand-over")
+        player.play()
+        try await Task.sleep(nanoseconds: 700_000_000)
+        #expect(finished == 1)
+        try player.load(second, gain: 3)
+        #expect(player.currentGain == 3)
+        #expect(player.isPlaying)
+        player.volume = 0.5
+        #expect(player.currentGain == 3, "volume and gain are separate stages")
+        try player.load(first, gain: 40)
+        #expect(player.currentGain == 24, "clamped to the stage's range")
+        player.stop()
+    }
+
     @Test func preloadedFileContinuesWithoutRestart() async throws {
         let dir = try TemporaryDirectory()
         let player = AVAudioEngineBackend()

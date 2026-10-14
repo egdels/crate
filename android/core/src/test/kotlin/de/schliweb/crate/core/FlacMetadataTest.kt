@@ -20,6 +20,7 @@ class FlacMetadataTest {
             listOf(
                 "TITLE=My Baby", "artist=Ada Lark", "ALBUM=Songs", "TRACKNUMBER=3/12", "DATE=2010-05-01", "DISCNUMBER=1",
                 "COMPOSER=Ada Lark", "COMPILATION=1", "ARTISTSORT=Lark, Ada", "ALBUMARTISTSORT=Lark", "ALBUMSORT=Songs, The",
+                "REPLAYGAIN_TRACK_GAIN=+9.00 dB", "REPLAYGAIN_TRACK_PEAK=0.5", "REPLAYGAIN_ALBUM_GAIN=-7.25 dB",
             ),
             picture = png,
         )
@@ -44,10 +45,14 @@ class FlacMetadataTest {
         assertEquals("Lark, Ada", meta.artistSort)
         assertEquals("Lark", meta.albumArtistSort)
         assertEquals("Songs, The", meta.albumSort)
+        assertTrue(kotlin.math.abs(meta.trackGain!! - 6.02) < 0.01, "limited by the peak")
+        assertEquals(-7.25, meta.albumGain)
 
         val plain = FlacMetadata.read(ByteArrayInputStream(flacBytes(listOf("TITLE=Plain", "COMPILATION=0")))).toTrackMetadata()
         assertFalse(plain.compilation)
         assertEquals(null, plain.composer)
+        assertEquals(null, plain.trackGain)
+        assertEquals(null, plain.albumGain)
     }
 
     @Test

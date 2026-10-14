@@ -97,6 +97,29 @@ class TagParserTest {
     }
 
     @Test
+    fun userFramesCarryReplayGainAndSoundCheck() {
+        fun txxx(encoding: Int, name: String, value: String) =
+            "TXXX" to (text(encoding, name) + (if (encoding == 1) byteArrayOf(0, 0) else byteArrayOf(0)) + text(encoding, value).drop(1).toByteArray())
+        val comm = "COMM" to (byteArrayOf(0) + "eng".toByteArray() + "iTunNORM".toByteArray() + byteArrayOf(0) +
+            " 00001070 0000120F 00008A1B 000082AF 00023568 000234CB 00008000 00007E5F 00000000 00000000".toByteArray())
+        val plainComment = "COMM" to (byteArrayOf(0) + "eng".toByteArray() + byteArrayOf(0) + "ripped".toByteArray())
+        val tag = id3v2(3, listOf(
+            "TIT2" to text(0, "Song"), txxx(0, "replaygain_track_gain", "+9.00 dB"), txxx(1, "REPLAYGAIN_TRACK_PEAK", "0.5"),
+            txxx(0, "replaygain_album_gain", "-7.25 dB"), plainComment, comm,
+        ))
+        val meta = Mp3Metadata.read(ArrayByteSource(tag + mp3Frame())).metadata
+        assertEquals("Song", meta.title)
+        assertTrue(kotlin.math.abs(meta.trackGain!! - 6.02) < 0.01, "limited by the peak, the UTF-16 frame read too")
+        assertEquals(-7.25, meta.albumGain)
+
+        // Sound Check alone: the track gain.
+        val checkOnly = id3v2(3, listOf("TIT2" to text(0, "Song"), plainComment, comm))
+        val checked = Mp3Metadata.read(ArrayByteSource(checkOnly + mp3Frame())).metadata
+        assertTrue(kotlin.math.abs(checked.trackGain!! - (-10 * kotlin.math.log10(4623.0 / 1000))) < 0.001)
+        assertNull(checked.albumGain)
+    }
+
+    @Test
     fun id3v24SyncsafeAndTdrc() {
         val tag = id3v2(4, listOf("TIT2" to text(3, "Later"), "TDRC" to text(3, "2010-05-01T12:00"), "TPE1" to text(3, "A\u0000B")))
         val frames = (1..10).fold(ByteArray(0)) { acc, _ -> acc + mp3Frame() }
@@ -141,10 +164,18 @@ class TagParserTest {
         assertEquals(5, meta.trackNumber)
         assertEquals("Rock", meta.genre)
 
-        val withV2 = id3v2(3, listOf("TIT2" to text(0, "New Title")))
+        val withV2 = id3v2(3, listOf(
+            "TIT2" to text(0, "New Title"), "TCOM" to text(0, "Composer"), "TCMP" to text(0, "1"), "TSOP" to text(0, "Artist, Old"),
+            "COMM" to (byteArrayOf(0) + "eng".toByteArray() + "iTunNORM".toByteArray() + byteArrayOf(0) + " 00001070 00001070".toByteArray()),
+        ))
         val merged = Mp3Metadata.read(ArrayByteSource(withV2 + mp3Frame() + v1)).metadata
         assertEquals("New Title", merged.title)
         assertEquals("Old Artist", merged.artist)
+        // The v1 tail fills gaps only; nothing v2 read is lost in the merge.
+        assertEquals("Composer", merged.composer)
+        assertTrue(merged.compilation)
+        assertEquals("Artist, Old", merged.artistSort)
+        assertTrue(kotlin.math.abs(merged.trackGain!! - (-10 * kotlin.math.log10(4.208))) < 0.001)
     }
 
     @Test
@@ -204,6 +235,26 @@ class TagParserTest {
             assertContentEquals(jpeg, assertNotNull(parsed.cover).data)
             assertEquals("image/jpeg", parsed.cover!!.mimeType)
         }
+    }
+
+    @Test
+    fun mp4FreeformAtomsCarryReplayGainAndSoundCheck() {
+        fun freeform(name: String, value: String) = atom(
+            "----", atom("mean", ByteArray(4), "com.apple.iTunes".toByteArray()), atom("name", ByteArray(4), name.toByteArray()),
+            data(1, value.toByteArray()),
+        )
+        val withGain = mp4(true, atom("©nam", data(1, "Song".toByteArray())), freeform("replaygain_track_gain", "-6.50 dB"),
+                           freeform("replaygain_album_gain", "+9.00 dB"), freeform("replaygain_album_peak", "0.5"),
+                           freeform("iTunNORM", " 0000018B 0000016F 0000290C 0000264E 00013105 00013105 00006000 00005800 00000000 00000000"))
+        val meta = Mp4Metadata.read(ArrayByteSource(withGain)).metadata
+        assertEquals("Song", meta.title)
+        assertEquals(-6.5, meta.trackGain)
+        assertTrue(kotlin.math.abs(meta.albumGain!! - 6.02) < 0.01, "limited by the peak")
+
+        val checkOnly = mp4(true, freeform("iTunNORM", " 0000018B 0000016F 0000290C 0000264E 00013105 00013105 00006000 00005800 00000000 00000000"))
+        val checked = Mp4Metadata.read(ArrayByteSource(checkOnly)).metadata
+        assertTrue(kotlin.math.abs(checked.trackGain!! - 2.5) < 0.01, "+4.03 dB, limited by the 0.75 peak to 2.5 dB")
+        assertNull(checked.albumGain)
     }
 
     @Test

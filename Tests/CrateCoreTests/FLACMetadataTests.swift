@@ -47,7 +47,8 @@ func flacBytes(comments: [String], sampleRate: Int = 44_100, totalSamples: Int =
         let file = dir.url.appendingPathComponent("song.flac")
         let png = pngData(width: 8, height: 8)
         try flacBytes(comments: ["TITLE=My Baby", "artist=Ada Lark", "ALBUM=Songs", "TRACKNUMBER=3/12", "DATE=2010-05-01", "DISCNUMBER=1",
-                                 "COMPOSER=Ada Lark", "COMPILATION=1", "ARTISTSORT=Lark, Ada", "ALBUMARTISTSORT=Lark", "ALBUMSORT=Songs, The"],
+                                 "COMPOSER=Ada Lark", "COMPILATION=1", "ARTISTSORT=Lark, Ada", "ALBUMARTISTSORT=Lark", "ALBUMSORT=Songs, The",
+                                 "REPLAYGAIN_TRACK_GAIN=+9.00 dB", "REPLAYGAIN_TRACK_PEAK=0.5", "REPLAYGAIN_ALBUM_GAIN=-7.25 dB"],
                       picture: png).write(to: file)
         let flac = try FLACMetadata.read(file)
         #expect(flac.value("title") == "My Baby")
@@ -69,11 +70,14 @@ func flacBytes(comments: [String], sampleRate: Int = 44_100, totalSamples: Int =
         #expect(meta.artistSort == "Lark, Ada")
         #expect(meta.albumArtistSort == "Lark")
         #expect(meta.albumSort == "Songs, The")
+        #expect(abs(meta.trackGain! - 6.02) < 0.01, "limited by the peak")
+        #expect(meta.albumGain == -7.25)
 
         try flacBytes(comments: ["TITLE=Plain", "COMPILATION=0"]).write(to: file)
         let plain = AVFoundationMetadataReader.metadata(from: try FLACMetadata.read(file))
         #expect(!plain.compilation)
         #expect(plain.composer == nil)
+        #expect(plain.trackGain == nil && plain.albumGain == nil)
     }
 
     @Test func readerUsesTheParserForFLAC() async throws {

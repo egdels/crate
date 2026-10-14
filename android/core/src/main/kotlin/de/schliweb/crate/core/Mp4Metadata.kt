@@ -79,6 +79,23 @@ object Mp4Metadata {
                     for (ilst in children(moov, meta.start + 4, meta.end)) {
                         if (ilst.type != "ilst") continue
                         for (item in children(moov, ilst.start, ilst.end)) {
+                            if (item.type == "----") {
+                                // A freeform item: mean (the namespace), name, data.
+                                // Keyed "----:name"; ReplayGain and Sound Check live here.
+                                var name: String? = null
+                                var value: String? = null
+                                for (part in children(moov, item.start, item.end)) {
+                                    if (part.end - part.start <= 4) continue
+                                    when (part.type) {
+                                        "name" -> name = String(moov, part.start + 4, part.end - part.start - 4, Charsets.UTF_8)
+                                        "data" -> if (part.end - part.start > 8 && moov.u32(part.start).toInt() and 0xffffff == 1) {
+                                            value = String(moov, part.start + 8, part.end - part.start - 8, Charsets.UTF_8).trim()
+                                        }
+                                    }
+                                }
+                                if (name != null && !value.isNullOrEmpty()) text.putIfAbsent("----:${name.lowercase()}", value)
+                                continue
+                            }
                             for (data in children(moov, item.start, item.end)) {
                                 if (data.type != "data" || data.end - data.start < 8) continue
                                 val kind = moov.u32(data.start).toInt() and 0xffffff
@@ -104,6 +121,7 @@ object Mp4Metadata {
                 }
             }
         }
+        val gains = gains(text)
         val metadata = TrackMetadata(
             title = text["©nam"],
             artist = text["©ART"],
@@ -122,12 +140,22 @@ object Mp4Metadata {
             artistSort = text["soar"],
             albumArtistSort = text["soaa"],
             albumSort = text["soal"],
+            trackGain = gains.first,
+            albumGain = gains.second,
             duration = duration,
         )
         return ParsedTags(metadata, pictures)
     }
 
     private fun nonZero(n: Int): Int? = if (n == 0) null else n
+
+    private fun gains(text: Map<String, String>): Pair<Double?, Double?> = ReplayGain.gains(
+        track = text["----:replaygain_track_gain"]?.let(ReplayGain::decibels),
+        trackPeak = text["----:replaygain_track_peak"]?.let(ReplayGain::peak),
+        album = text["----:replaygain_album_gain"]?.let(ReplayGain::decibels),
+        albumPeak = text["----:replaygain_album_peak"]?.let(ReplayGain::peak),
+        soundCheck = text["----:itunnorm"]?.let(ReplayGain::soundCheck),
+    )
 
     private fun mvhdDuration(b: ByteArray, atom: Atom): Double {
         val version = b.u8(atom.start)

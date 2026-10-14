@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
 import androidx.compose.runtime.getValue
@@ -457,15 +458,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /** Queues the album and starts at the given track. */
     fun play(album: Album, index: Int = 0) {
         selection = Selection.AlbumId(album.id)
-        play(album.tracks, index)
+        play(album.tracks, index, asAlbum = true)
     }
 
-    /** Queues the given tracks and starts at the given one. */
-    fun play(tracks: List<Track>, index: Int = 0) {
+    /** Queues the given tracks and starts at the given one. [asAlbum]
+     *  picks the album gain over the track gain, as ReplayGain intends
+     *  for listening to a record as a whole. */
+    fun play(tracks: List<Track>, index: Int = 0, asAlbum: Boolean = false) {
         if (tracks.isEmpty()) return
         val byPath = HashMap<String, Album>()
         for (album in albums) for (track in album.tracks) byPath[track.id] = album
-        val items = tracks.map { track -> mediaItem(track, byPath[track.id]) }
+        val items = tracks.map { track -> mediaItem(track, byPath[track.id], gain(track, asAlbum)) }
         queued = tracks.associateBy { it.id }
         withController { controller ->
             controller.setMediaItems(items, index.coerceIn(0, items.size - 1), 0L)
@@ -474,7 +477,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun mediaItem(track: Track, album: Album?): MediaItem {
+    /** The loudness correction to play the track with, in dB. */
+    private fun gain(track: Track, asAlbum: Boolean): Double =
+        (if (asAlbum) track.albumGain ?: track.trackGain else track.trackGain ?: track.albumGain) ?: 0.0
+
+    private fun mediaItem(track: Track, album: Album?, gain: Double): MediaItem {
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
             .setArtist(track.artist)
@@ -486,6 +493,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .setReleaseYear(track.year)
             .setGenre(track.genre)
             .setArtworkUri(album?.let { ArtworkBitmapLoader.uri(app.artwork.key(it)) })
+            .setExtras(Bundle().apply { putDouble(PlaybackService.KEY_GAIN, gain) })
             .build()
         return MediaItem.Builder()
             .setMediaId(track.id)

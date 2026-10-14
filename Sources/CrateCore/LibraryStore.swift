@@ -5,9 +5,10 @@ import Foundation
 
 /// Everything the library persists between launches. The version goes
 /// up when a rescan has to re-read unchanged files, because the tags a
-/// `Track` holds grew: 2 added composer, compilation and the sort names.
+/// `Track` holds grew: 2 added composer, compilation and the sort names,
+/// 3 the loudness gains.
 public struct LibrarySnapshot: Codable, Equatable, Sendable {
-    public static let currentVersion = 2
+    public static let currentVersion = 3
 
     public var version: Int
     public var folders: [URL]

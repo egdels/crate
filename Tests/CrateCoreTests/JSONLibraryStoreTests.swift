@@ -23,6 +23,8 @@ import Testing
         track.compilation = true
         track.artistSort = "Someone"
         track.albumSort = "Thing"
+        track.trackGain = -6.5
+        track.albumGain = 1.25
         let snapshot = LibrarySnapshot(folders: [dir.url], tracks: [track])
 
         try store.save(snapshot)
@@ -45,5 +47,6 @@ import Testing
         #expect(loaded?.tracks[0].title == "A")
         #expect(loaded?.tracks[0].compilation == false)
         #expect(loaded?.tracks[0].composer == nil)
+        #expect(loaded?.tracks[0].trackGain == nil)
     }
 }

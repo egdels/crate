@@ -326,7 +326,7 @@ final class PlayerModel: ObservableObject {
             // starts something, so the bar should not claim a track either.
             queue.clear()
         } else {
-            player.preload(queue.nextTrack?.url)
+            preloadNext()
         }
         await refresh()
     }
@@ -406,13 +406,29 @@ final class PlayerModel: ObservableObject {
     /// Queues the album and starts at the given track.
     func play(album: Album, startingAt index: Int = 0) {
         selection = .album(album.id)
-        play(tracks: album.tracks, startingAt: index)
+        play(tracks: album.tracks, startingAt: index, asAlbum: true)
     }
 
-    /// Queues the given tracks and starts at the given one.
-    func play(tracks: [Track], startingAt index: Int = 0) {
+    /// Queues the given tracks and starts at the given one. `asAlbum`
+    /// picks the album gain over the track gain, as ReplayGain intends
+    /// for listening to a record as a whole.
+    func play(tracks: [Track], startingAt index: Int = 0, asAlbum: Bool = false) {
         queue.replace(with: tracks, startingAt: index)
+        queueIsAlbum = asAlbum
         loadCurrent(autoplay: true)
+    }
+
+    private var queueIsAlbum = false
+
+    /// The loudness correction to play the track with, in dB.
+    func gain(for track: Track) -> Double {
+        let preferred = queueIsAlbum ? track.albumGain ?? track.trackGain : track.trackGain ?? track.albumGain
+        return preferred ?? 0
+    }
+
+    private func preloadNext() {
+        let next = queue.nextTrack
+        player.preload(next?.url, gain: next.map(gain) ?? 0)
     }
 
     func togglePlayPause() {
@@ -456,12 +472,12 @@ final class PlayerModel: ObservableObject {
 
     func setShuffle(_ on: Bool) {
         queue.setShuffle(on)
-        player.preload(queue.nextTrack?.url)
+        preloadNext()
     }
 
     func setRepeat(_ mode: PlayQueue.RepeatMode) {
         queue.repeatMode = mode
-        player.preload(queue.nextTrack?.url)
+        preloadNext()
     }
 
     var duration: TimeInterval {
@@ -475,7 +491,7 @@ final class PlayerModel: ObservableObject {
             return
         }
         do {
-            try player.load(track.url)
+            try player.load(track.url, gain: gain(for: track))
             currentTime = 0
             lastError = nil
             loadArtwork(for: track)
@@ -486,7 +502,7 @@ final class PlayerModel: ObservableObject {
             startTicking()
             syncNowPlaying()
             // Gapless: the backend chains the next file behind this one.
-            player.preload(queue.nextTrack?.url)
+            preloadNext()
         } catch {
             lastError = "Cannot play \(track.url.lastPathComponent): \(error.localizedDescription)"
             isPlaying = false

@@ -27,7 +27,7 @@ never sees it.
 
 ```sh
 swift build                    # whole package
-swift test                     # 85 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
+swift test                     # 91 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
 swift run crate-scan <folder>  # tag-reader check against real files, prints gaps
 scripts/bundle.sh              # release build -> build/Crate.app (ad-hoc signed)
 scripts/dmg.sh --universal     # -> build/Crate-<version>.dmg, what a release ships
@@ -47,7 +47,7 @@ Android, from `android/` (needs JDK 17+, Android SDK with platform 37;
 `ANDROID_HOME` is set on this machine, Gradle 9.7 via the wrapper):
 
 ```sh
-./gradlew :core:test             # 57 JVM tests, ~2 s
+./gradlew :core:test             # 64 JVM tests, ~2 s
 CRATE_MUSIC_DIRS=~/Music/Music/Media.localized ./gradlew :core:test --tests '*TagParserTest*' -i
                                  # also runs the MP3/MP4 parsers over real files (colon-separated dirs)
 ./gradlew :app:assembleDebug     # -> app/build/outputs/apk/debug/app-debug.apk
@@ -72,7 +72,7 @@ Sources/CrateCore/    UI-free library: Track, Album, LibraryScanner,
                       MetadataReader (+AVFoundation impl), Library (actor),
                       LibraryStore (+JSON impl), PlayQueue, AudioPlayer
                       (+AVAudioPlayer impl), ID3v1Genres, Favorites
-                      (+FavoritesStore, JSON impl)
+                      (+FavoritesStore, JSON impl), ReplayGain
 Sources/Crate/        SwiftUI app: CrateApp, PlayerModel (@Observable,
                       the only UI state), ContentView (album grid + track
                       list + empty state), PlayerBar
@@ -90,7 +90,26 @@ TSOA, soar/soaa/soal, ARTISTSORT...) or, without them, by the name with
 a leading "The" moved back. `LibrarySnapshot.currentVersion` is 2; an
 older index sets `Library.needsRescan`, and the app's start triggers one
 full re-read (every file, not only changed ones) with the grid up. Bump
-the version whenever `Track` gains a tag field. `swift run crate-scan <folder> --albums` shows
+the version whenever `Track` gains a tag field. Android: kotlinx leaves
+default values out of the JSON, so `LibrarySnapshot.version` defaults
+to 1 on read and the writer passes `CURRENT_VERSION` explicitly.
+Loudness (version 3): `Track.trackGain`/`albumGain` in dB, already
+limited by the tagged peak (`ReplayGain.limited`); ReplayGain from TXXX
+(Mac: the item's `extraAttributes[.info]` names the frame), iTunes
+freeform atoms and Vorbis comments, iTunes Sound Check (`iTunNORM`, COMM
+frame or freeform atom) as the track gain when there is no ReplayGain.
+The developer's collection has no ReplayGain at all but Sound Check in
+~300 iTunes-ripped files (390 tracks got a gain, -13.9 to +13.9 dB,
+median -1.4). Playback: album gain when `play(album:)` queued the album,
+else track gain; Mac through an `AVAudioUnitEQ` (`globalGain`, ±24 dB)
+between player node and mixer, switched at the gapless hand-over;
+Android through `GainProcessor` (16-bit PCM AudioProcessor in the sink)
+fed from the media item's extras on each item transition, logged as
+"gain: x dB for <title>". The user's volume (Mac mixer, Android system)
+is a separate stage. Test files with ReplayGain tags can be made with
+ffmpeg (`-metadata replaygain_track_gain="-6.50 dB"`, TXXX) and
+`metaflac --add-replay-gain`; ffmpeg's mp4 muxer drops them, so an M4A
+needs the freeform atoms patched in by hand. `swift run crate-scan <folder> --albums` shows
 the result for a real folder.
 Design rules: everything with I/O sits behind a protocol so tests use
 fakes. `Library` is an actor, `PlayQueue` a value type, views never touch
@@ -105,7 +124,7 @@ android/core/   Kotlin/JVM, package de.schliweb.crate.core: Track (uri +
                 JsonLibraryStore (kotlinx.serialization), FileSource
                 (+LocalFileSource for tests), MetadataReader, FlacMetadata,
                 TagText/Id3v1Genres, FolderImages, SearchQuery, Formatting,
-                Favorites (+JsonFavoritesStore)
+                Favorites (+JsonFavoritesStore), ReplayGain
 android/app/    de.schliweb.crate: CrateApplication (owns Library and
                 ArtworkCache), PlayerViewModel (the only UI state),
                 MainActivity, ui/CrateScreen (grid + detail, two panes
@@ -180,7 +199,7 @@ output switching, playback on the phone by ear.
 
 ## Status
 
-Done and committed: CrateCore with 85 tests; crate-scan; the app verified
+Done and committed: CrateCore with 91 tests; crate-scan; the app verified
 end to end on screen (empty state, folder picker, grid, double-click,
 transport, seek, volume, auto-advance, rescan); album artwork
 (`ArtworkReader`/`ArtworkCache`, thumbnails under Application

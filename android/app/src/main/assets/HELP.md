@@ -30,6 +30,9 @@ uploaded or changed.
   them. Favorites are kept on this device, in a file next to the library
   index.
 - **Shuffle** and **Repeat** are in the menu. Albums play gapless.
+- Files tagged with ReplayGain or iTunes Sound Check play at the level
+  the tags describe, so albums come out equally loud; the system volume
+  is on top of that. Untagged files play as they are.
 - The notification, the lock screen and headphone buttons control
   playback; the music keeps playing when the app is in the background.
 

@@ -43,6 +43,8 @@ func describe(_ track: Track) -> String {
         field("year", track.year.map(String.init)), field("genre", track.genre),
         field("composer", track.composer), field("compilation", track.compilation ? "yes" : nil),
         field("artistSort", track.artistSort), field("albumSort", track.albumSort),
+        field("trackGain", track.trackGain.map { String(format: "%.1f dB", $0) }),
+        field("albumGain", track.albumGain.map { String(format: "%.1f dB", $0) }),
         String(format: "duration=%.1fs", track.duration),
     ].joined(separator: "  ")
 }

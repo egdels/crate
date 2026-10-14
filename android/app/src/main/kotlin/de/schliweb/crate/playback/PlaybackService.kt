@@ -8,20 +8,27 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.BitmapLoader
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.FileDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.ListenableFuture
 import de.schliweb.crate.CrateApplication
 import de.schliweb.crate.MainActivity
+import de.schliweb.crate.core.ReplayGain
 import de.schliweb.crate.library.ArtworkCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,14 +48,29 @@ import java.io.IOException
  * shuffle, repeat and gapless transitions itself (MP3 LAME headers,
  * iTunes gapless atoms, FLAC), with audio focus and "becoming noisy"
  * (headphones pulled) handled by the player.
+ *
+ * Loudness: each media item carries its gain in dB in the metadata
+ * extras ([KEY_GAIN]); on every item transition the [GainProcessor] in
+ * the audio sink takes it over. The sink buffers a little ahead, so the
+ * switch lands a fraction of a second off the exact join; within an
+ * album the gain is the album's and does not change.
  */
 @UnstableApi
 class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
+    private val gain = GainProcessor()
 
     override fun onCreate() {
         super.onCreate()
-        val player = ExoPlayer.Builder(this, DefaultMediaSourceFactory(localDataSources(this)))
+        val renderers = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink =
+                DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(arrayOf(gain))
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .build()
+        }
+        val player = ExoPlayer.Builder(this, renderers, DefaultMediaSourceFactory(localDataSources(this)))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -59,6 +81,13 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
+        player.addListener(object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val decibels = mediaItem?.mediaMetadata?.extras?.getDouble(KEY_GAIN) ?: 0.0
+                gain.factor = ReplayGain.factor(decibels)
+                Log.i(TAG, "gain: ${"%.1f".format(decibels)} dB for ${mediaItem?.mediaMetadata?.title}")
+            }
+        })
         val openApp = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
@@ -70,6 +99,13 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
+
+    companion object {
+        private const val TAG = "Crate"
+
+        /** Double, dB: the item's loudness correction, see `Track.trackGain`. */
+        const val KEY_GAIN = "de.schliweb.crate.gain"
+    }
 
     override fun onDestroy() {
         session?.run {
