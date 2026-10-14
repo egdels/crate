@@ -284,11 +284,14 @@ Now Playing: the `MPMediaItemArtwork` request handler in
 `NowPlaying.update` must be a `@Sendable` closure. MediaPlayer calls it
 on its own queue when it serialises the cover; a plain closure inherits
 the method's main-actor isolation and the Swift 6 runtime check traps
-(EXC_BREAKPOINT on "accessQueue", seen three times on 2026-10-14 with
-0.6.0 on macOS 27.0.1, about a minute into playing with a cover; not
-reproducible on demand afterwards, neither with 0.5.0 nor 0.6.0, with or
-without the Now Playing panel). Any closure handed to an Apple framework
-that may call it off the main thread needs the same treatment.
+(EXC_BREAKPOINT on "accessQueue", within a minute of playing a track
+with a cover). Only the release DMGs crashed: the GitHub runner's Xcode
+26.x (SDK 26.5) compiles the dynamic isolation check into that closure,
+the local Xcode 27.0 (Swift 6.4) does not, so every local build passed
+and a half-day bisect over local builds found nothing. Lesson, twice:
+any closure handed to an Apple framework that may call it off the main
+thread is `@Sendable`; and a Mac fix is verified on the DMG the workflow
+built (download, mount, run, play), not only on a local build.
 Finder integration: CFBundleDocumentTypes in Packaging/Info.plist,
 `AppDelegate.application(_:open:)` in CrateApp.swift buffers URLs until the
 model is attached, `PlayerModel.open(_:)` decides what to play.

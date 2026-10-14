@@ -9,12 +9,13 @@ version's section from this file as the GitHub release notes.
 
 ### Fixed
 
-- Mac: the app crashed about a minute into playing a track with a
-  cover (`EXC_BREAKPOINT` on MediaPlayer's queue). The closure that
-  hands the cover to Now Playing inherited the main actor, and macOS
-  27.0.1 calls it on MediaPlayer's own queue when it serialises the
-  artwork; the Swift runtime's isolation check trapped. The closure is
-  nonisolated now.
+- Mac: the 0.6.0 to 0.6.2 DMGs crashed within a minute of playing a
+  track with a cover (`EXC_BREAKPOINT` on MediaPlayer's queue). The
+  closure that hands the cover to Now Playing inherited the main actor,
+  MediaPlayer calls it on its own queue, and the Swift runtime's
+  isolation check trapped; the compiler on the release builder emits
+  that check, the one used for local builds does not, which is why the
+  crash never showed up in testing. The closure is nonisolated now.
 
 ## [0.6.2] - 2026-10-14
 
