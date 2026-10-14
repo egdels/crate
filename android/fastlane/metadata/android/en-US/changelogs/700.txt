@@ -1,0 +1,6 @@
+New in this version:
+- Up Next: the list icon in the player bar shows what plays next; tap an entry to play it, the × removes it. Press and hold a track or album for Play Next and Play Last.
+- The heart in the media notification marks the playing track as a favorite.
+- Crate remembers where you stopped and comes up there, paused.
+- Multi-disc albums show a line per disc.
+- Fixed: turning shuffle on now keeps the current track first.

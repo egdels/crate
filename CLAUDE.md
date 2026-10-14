@@ -365,11 +365,13 @@ relaunch at 1:15 of a track; Android force-stop at 0:15 came back at
 **Open, in no fixed order:**
 
 1. Released: v0.1.0 (DMG only), v0.2.0 (DMG + signed APK), v0.3.0 to
-   v0.6.3 (DMG + APK + AAB) are published at github.com/egdels/crate,
+   v0.7.0 (DMG + APK + AAB) are published at github.com/egdels/crate,
    built by `release.yml`. 0.6.0 to 0.6.2 (all 2026-10-14) are
    withdrawn: Android could not play untagged files (0.6.0, 0.6.1) and
-   the Mac DMG crashed on Now Playing (all three); 0.6.3 is the one to
-   use, its DMG verified on this Mac by download and a two-minute play.
+   the Mac DMG crashed on Now Playing (all three); 0.6.3 was the first
+   good one, its DMG verified on this Mac by download and a two-minute
+   play, and 0.7.0 (Up Next, notification heart, resume, disc lines)
+   followed the same day.
    For
    the next version: bump `Packaging/Info.plist` and
    `android/gradle.properties` (appVersion), turn the CHANGELOG's
