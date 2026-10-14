@@ -459,7 +459,8 @@ relaunch at 1:15 of a track; Android force-stop at 0:15 came back at
    of play with a cover, no crash report) and its APK signed with the
    same certificate as 0.6.3; 0.8.0 (lyrics, artist view, recent
    tiles) the same evening, DMG and APK verified the same way; 0.9.0
-   (loudness analysis) followed.
+   (loudness analysis) followed, verified the same way (the DMG's app
+   ran the analysis at about 100% CPU while playing, no crash report).
    For
    the next version: bump `Packaging/Info.plist` and
    `android/gradle.properties` (appVersion), turn the CHANGELOG's
