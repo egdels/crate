@@ -51,7 +51,7 @@ struct HelpView: View {
 
                 HelpSection("Playing") {
                     HelpRow("", "Double-click an album to play it, or a track to start there and play on through the album. All Tracks lists everything; a double-click plays from that row to the end of the list.")
-                    HelpRow("", "The search field narrows albums and tracks by title, artist and album. Albums play gapless.")
+                    HelpRow("", "The search field narrows albums and tracks by title, artist, album, composer and genre. Albums play gapless.")
                     HelpRow("Space", "Play or pause.")
                     HelpRow("⌘→  ⌘←", "Next and previous track.")
                     HelpRow("⇧⌘S", "Shuffle. Repeat is in the Playback menu.")

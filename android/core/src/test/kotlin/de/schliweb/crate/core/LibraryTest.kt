@@ -8,6 +8,7 @@ import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -63,6 +64,39 @@ class LibraryTest {
         assertEquals(Library.RescanSummary(added = 1, updated = 1, removed = 1, unchanged = 1), summary)
         assertEquals(setOf(b.path, d.path), reader.reads.toSet())
         assertEquals(listOf("a", "B2", "d"), library.tracks.map { it.title })
+    }
+
+    /** An index written by an older version is loaded as is, and the
+     *  next full rescan reads every file once, unchanged or not. */
+    @Test
+    fun olderIndexIsRereadOnceByTheNextRescan() = runTest {
+        dir.file("music/a.mp3")
+        dir.file("music/b.mp3")
+        library.addFolder(folder)
+        reader.reads.clear()
+
+        // Age the index on disk the way version 1 wrote it: without a
+        // version key (the serializer drops defaults) and without the
+        // composer or sort fields.
+        val store = JsonLibraryStore(storeFile)
+        val written = storeFile.readText()
+        assertTrue("\"version\": 2" in written, written.take(200))
+        storeFile.writeText(written.replace(Regex("\"version\": 2,?\\s*"), ""))
+        assertFalse("version" in storeFile.readText())
+        assertEquals(1, store.load()!!.version)
+
+        val reopened = Library(store, reader, LocalFileSource(), concurrency = 2)
+        reopened.load()
+        assertTrue(reopened.needsRescan)
+        assertEquals(2, reopened.tracks.size, "the old tracks stay until the files are read again")
+        assertEquals(Library.RescanSummary(updated = 2), reopened.rescan())
+        assertEquals(2, reader.reads.size)
+        assertFalse(reopened.needsRescan)
+        assertEquals(LibrarySnapshot.CURRENT_VERSION, store.load()!!.version)
+
+        reader.reads.clear()
+        assertEquals(Library.RescanSummary(unchanged = 2), reopened.rescan())
+        assertTrue(reader.reads.isEmpty())
     }
 
     @Test

@@ -36,6 +36,18 @@ class SearchQueryTest {
     }
 
     @Test
+    fun composerAndGenreAreSearchedToo() {
+        val track = makeTrack("Suite", artist = "Glenn Gould", album = "Goldberg").copy(composer = "Johann Sebastian Bach", genre = "Classical")
+        assertTrue(SearchQuery("bach").matches(track))
+        assertTrue(SearchQuery("classical gould").matches(track))
+        assertFalse(SearchQuery("mozart").matches(track))
+        val album = Album.group(listOf(track))[0]
+        assertEquals("Classical", album.genre)
+        assertTrue(SearchQuery("classical").matches(album))
+        assertTrue(SearchQuery("bach").matches(album), "through the track")
+    }
+
+    @Test
     fun albumMatchesThroughTitleArtistOrTrack() {
         val albums = Album.group(tracks)
         val spell = albums.first { it.title == "Night Letters" }
@@ -48,9 +60,10 @@ class SearchQueryTest {
 
     @Test
     fun indexFindsWhatTheQueryMatches() {
-        val albums = Album.group(tracks)
+        val gould = makeTrack("Aria", artist = "Glenn Gould", album = "Goldberg", folder = "/fourth").copy(composer = "Bach", genre = "Classical")
+        val albums = Album.group(tracks + gould)
         val index = SearchIndex(albums)
-        for (text in listOf("", "ada", "morning", "lark night", "senorita", "RIO costa", "nothing", "ada nobody")) {
+        for (text in listOf("", "ada", "morning", "lark night", "senorita", "RIO costa", "nothing", "ada nobody", "bach", "classical gould", "CLASSICAL")) {
             val query = SearchQuery(text)
             val result = index.search(query)
             assertEquals(albums.filter(query::matches), result.albums, text)

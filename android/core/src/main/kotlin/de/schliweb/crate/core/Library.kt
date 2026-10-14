@@ -64,12 +64,20 @@ class Library(
     var tracks: List<Track> = emptyList()
         private set
 
+    /** True after loading an index written by an older version whose
+     *  tracks lack fields a newer one reads: the next full rescan reads
+     *  every file, not only the changed ones, and clears this. */
+    @Volatile
+    var needsRescan = false
+        private set
+
     /** Restores the last saved state. Nothing saved yet means an empty
      *  library, not an error. */
     suspend fun load() = lock.withLock {
         val snapshot = store.load() ?: return@withLock
         folders = snapshot.folders
         tracks = snapshot.tracks.sortedBy { it.path }
+        needsRescan = snapshot.version < LibrarySnapshot.CURRENT_VERSION
     }
 
     val albums: List<Album> get() = Album.group(tracks, folders.map { it.path })
@@ -102,6 +110,10 @@ class Library(
     suspend fun rescan(progress: Progress? = null): RescanSummary {
         var total = RescanSummary()
         for (folder in folders) total += rescan(folder, progress)
+        if (needsRescan) lock.withLock {
+            needsRescan = false
+            save()
+        }
         return total
     }
 
@@ -115,7 +127,7 @@ class Library(
         val toRead = mutableListOf<ScannedFile>()
         for (file in scanned) {
             val track = existing[file.path]
-            if (track != null && isUnchanged(track, file)) unchanged++ else toRead.add(file)
+            if (!needsRescan && track != null && isUnchanged(track, file)) unchanged++ else toRead.add(file)
         }
 
         var added = 0
@@ -145,7 +157,7 @@ class Library(
     // Internals
 
     private fun save() {
-        store.save(LibrarySnapshot(folders = folders, tracks = tracks))
+        store.save(LibrarySnapshot(version = LibrarySnapshot.CURRENT_VERSION, folders = folders, tracks = tracks))
     }
 
     private suspend fun readAll(
@@ -183,6 +195,11 @@ class Library(
             discTotal = meta.discTotal,
             year = meta.year,
             genre = meta.genre.trimmedOrNull(),
+            composer = meta.composer.trimmedOrNull(),
+            compilation = meta.compilation,
+            artistSort = meta.artistSort.trimmedOrNull(),
+            albumArtistSort = meta.albumArtistSort.trimmedOrNull(),
+            albumSort = meta.albumSort.trimmedOrNull(),
             duration = meta.duration,
         )
 

@@ -567,7 +567,7 @@ private fun TrackList(model: PlayerViewModel, album: Album) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(album.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text(
-                        listOfNotNull(album.artist, album.year?.toString()).joinToString(" · "),
+                        listOfNotNull(album.artist, album.year?.toString(), album.genre).joinToString(" · "),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(

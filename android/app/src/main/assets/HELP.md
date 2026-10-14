@@ -23,8 +23,8 @@ uploaded or changed.
   All Tracks is open.
 - **All Tracks** lists everything; a tap plays from that row to the end
   of the list.
-- The search icon narrows albums and tracks by title, artist and album.
-  Back closes the search.
+- The search icon narrows albums and tracks by title, artist, album,
+  composer and genre. Back closes the search.
 - The heart on a track, in the player bar or on an album page marks a
   favorite. **Favorites** in the grid lists them; the play button plays
   them. Favorites are kept on this device, in a file next to the library

@@ -7,6 +7,7 @@ import java.io.ByteArrayInputStream
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -16,7 +17,10 @@ class FlacMetadataTest {
     fun readsCommentsDurationAndCover() {
         val png = ByteArray(64) { it.toByte() }
         val bytes = flacBytes(
-            listOf("TITLE=My Baby", "artist=Ada Lark", "ALBUM=Songs", "TRACKNUMBER=3/12", "DATE=2010-05-01", "DISCNUMBER=1"),
+            listOf(
+                "TITLE=My Baby", "artist=Ada Lark", "ALBUM=Songs", "TRACKNUMBER=3/12", "DATE=2010-05-01", "DISCNUMBER=1",
+                "COMPOSER=Ada Lark", "COMPILATION=1", "ARTISTSORT=Lark, Ada", "ALBUMARTISTSORT=Lark", "ALBUMSORT=Songs, The",
+            ),
             picture = png,
         )
         val flac = FlacMetadata.read(ByteArrayInputStream(bytes))
@@ -35,6 +39,15 @@ class FlacMetadataTest {
         assertEquals(2010, meta.year)
         assertEquals(1, meta.discNumber)
         assertTrue(kotlin.math.abs(meta.duration - 90) < 0.001)
+        assertEquals("Ada Lark", meta.composer)
+        assertTrue(meta.compilation)
+        assertEquals("Lark, Ada", meta.artistSort)
+        assertEquals("Lark", meta.albumArtistSort)
+        assertEquals("Songs, The", meta.albumSort)
+
+        val plain = FlacMetadata.read(ByteArrayInputStream(flacBytes(listOf("TITLE=Plain", "COMPILATION=0")))).toTrackMetadata()
+        assertFalse(plain.compilation)
+        assertEquals(null, plain.composer)
     }
 
     @Test

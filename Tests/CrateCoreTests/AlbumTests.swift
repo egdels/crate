@@ -145,4 +145,64 @@ import Testing
         ]
         #expect(Album.group(tracks).map(\.title) == ["Z", "Early", "Late"])
     }
+
+    @Test func aLeadingTheDoesNotDecideTheOrder() {
+        let tracks = [
+            makeTrack("1", artist: "The Beatles", album: "Help!", folder: "/m/beatles"),
+            makeTrack("2", artist: "Arcade Fire", album: "Funeral", folder: "/m/arcade"),
+            makeTrack("3", artist: "Can", album: "Ege Bamyasi", folder: "/m/can"),
+            makeTrack("4", artist: "Theo Parrish", album: "Parallel", folder: "/m/theo"),
+        ]
+        #expect(Album.group(tracks).map(\.artist) == ["Arcade Fire", "The Beatles", "Can", "Theo Parrish"])
+        #expect(Album.sortName("The Beatles") == "Beatles, The")
+        #expect(Album.sortName("Theo Parrish") == "Theo Parrish")
+        #expect(Album.sortName("The ") == "The ".trimmed)
+    }
+
+    @Test func sortTagsWinOverTheName() {
+        var beatles = makeTrack("1", artist: "The Beatles", album: "Help!", folder: "/m/beatles")
+        beatles.artistSort = "Beatles, The"
+        var zappa = makeTrack("2", artist: "Frank Zappa", album: "Apostrophe", folder: "/m/zappa")
+        zappa.artistSort = "Zappa, Frank"
+        var dylan = makeTrack("3", artist: "Bob Dylan", album: "Desire", albumArtist: "Bob Dylan", folder: "/m/dylan")
+        dylan.artistSort = "Dylan, Bob"
+        dylan.albumArtistSort = "Aaa"  // the album artist's sort tag is the one that counts
+        var titled = makeTrack("4", artist: "Can", album: "The Lost Tapes", folder: "/m/can")
+        titled.albumSort = "Lost Tapes, The"
+        let albums = Album.group([beatles, zappa, dylan, titled])
+        #expect(albums.map(\.artist) == ["Bob Dylan", "The Beatles", "Can", "Frank Zappa"])
+        #expect(albums.map(\.sortArtist) == ["Aaa", "Beatles, The", "Can", "Zappa, Frank"])
+        #expect(albums[2].sortTitle == "Lost Tapes, The")
+    }
+
+    @Test func compilationFlagMakesVariousArtistsWithoutAlbumArtist() {
+        // A tribute album: one artist on two thirds of the tracks would
+        // pass as the album's artist, but the tagger said compilation.
+        var tracks = [
+            makeTrack("1", artist: "Moss Quartet", album: "Tribute", track: 1, folder: "/m/t"),
+            makeTrack("2", artist: "Moss Quartet", album: "Tribute", track: 2, folder: "/m/t"),
+            makeTrack("3", artist: "Guest", album: "Tribute", track: 3, folder: "/m/t"),
+        ]
+        #expect(Album.group(tracks)[0].artist == "Moss Quartet")
+        for i in tracks.indices { tracks[i].compilation = true }
+        #expect(Album.group(tracks)[0].artist == Album.variousArtists)
+
+        // The flag on a minority of tracks changes nothing, and an album
+        // artist tag beats the flag: iTunes sets it on single-artist
+        // albums filed under a name too.
+        tracks[2].compilation = false
+        tracks[1].compilation = false
+        #expect(Album.group(tracks)[0].artist == "Moss Quartet")
+        for i in tracks.indices { tracks[i].compilation = true; tracks[i].albumArtist = "Moss Quartet" }
+        #expect(Album.group(tracks)[0].artist == "Moss Quartet")
+    }
+
+    @Test func genreIsTheMajorityOfTheTracks() {
+        var tracks = (1...3).map { makeTrack(String($0), artist: "A", album: "B", track: $0) }
+        #expect(Album.group(tracks)[0].genre == nil)
+        tracks[0].genre = "Jazz"
+        tracks[1].genre = "Jazz"
+        tracks[2].genre = "Rock"
+        #expect(Album.group(tracks)[0].genre == "Jazz")
+    }
 }

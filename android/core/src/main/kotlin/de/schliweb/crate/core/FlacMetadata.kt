@@ -56,6 +56,11 @@ class FlacMetadata private constructor() {
             discTotal = disc?.second ?: value("DISCTOTAL")?.let(TagText::int) ?: value("TOTALDISCS")?.let(TagText::int),
             year = listOfNotNull(value("DATE"), value("YEAR"), value("ORIGINALDATE")).firstNotNullOfOrNull(TagText::year),
             genre = value("GENRE")?.let(TagText::genre),
+            composer = value("COMPOSER"),
+            compilation = value("COMPILATION")?.let(TagText::flag) ?: false,
+            artistSort = value("ARTISTSORT"),
+            albumArtistSort = value("ALBUMARTISTSORT"),
+            albumSort = value("ALBUMSORT"),
             duration = duration,
         )
     }

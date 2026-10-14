@@ -19,11 +19,31 @@ import Testing
         track.modified = Date(timeIntervalSince1970: 1_700_000_000.123456)
         track.genre = "Rock"
         track.discTotal = 2
+        track.composer = "Someone Else"
+        track.compilation = true
+        track.artistSort = "Someone"
+        track.albumSort = "Thing"
         let snapshot = LibrarySnapshot(folders: [dir.url], tracks: [track])
 
         try store.save(snapshot)
         let loaded = try store.load()
         #expect(loaded == snapshot)
         #expect(Library.unchanged(loaded!.tracks[0], ScannedFile(url: track.url, fileSize: 1, modified: track.modified)))
+    }
+
+    /// An index from version 1 has no composer, compilation or sort
+    /// fields; it still loads, with the flag off.
+    @Test func olderIndexLoadsWithDefaults() throws {
+        let dir = try TemporaryDirectory()
+        let file = try dir.file("library.json", contents: """
+        {"version": 1, "folders": ["file:///music/"], "tracks": [
+          {"url": "file:///music/a.mp3", "fileSize": 1, "modified": 0, "title": "A", "artist": "X", "duration": 10}
+        ]}
+        """)
+        let loaded = try JSONLibraryStore(fileURL: file).load()
+        #expect(loaded?.version == 1)
+        #expect(loaded?.tracks[0].title == "A")
+        #expect(loaded?.tracks[0].compilation == false)
+        #expect(loaded?.tracks[0].composer == nil)
     }
 }

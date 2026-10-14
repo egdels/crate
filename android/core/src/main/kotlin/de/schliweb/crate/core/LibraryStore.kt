@@ -7,15 +7,21 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
 
-/** Everything the library persists between launches. */
+/** Everything the library persists between launches. The version goes
+ *  up when a rescan has to re-read unchanged files, because the tags a
+ *  [Track] holds grew: 2 added composer, compilation and the sort names. */
 @Serializable
 data class LibrarySnapshot(
-    val version: Int = CURRENT_VERSION,
+    /** Defaults to 1, not to the current version: the serializer leaves
+     *  default values out of the file, so version 1 was written without
+     *  the key, and a file without it has to read as version 1. Writers
+     *  pass [CURRENT_VERSION] explicitly. */
+    val version: Int = 1,
     val folders: List<Folder> = emptyList(),
     val tracks: List<Track> = emptyList(),
 ) {
     companion object {
-        const val CURRENT_VERSION = 1
+        const val CURRENT_VERSION = 2
     }
 }
 

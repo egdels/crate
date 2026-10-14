@@ -222,6 +222,12 @@ final class PlayerModel: ObservableObject {
                 }
                 isLoaded = true
                 opensAudioFiles = DefaultApp.opensAudioFiles
+                // An index from an older version lacks tags this one
+                // reads: re-read the files once, with the grid already up
+                // and the footer showing the progress.
+                if await library.needsRescan {
+                    await rescan()
+                }
             }
         }
         await startTask?.value

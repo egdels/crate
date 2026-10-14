@@ -181,6 +181,12 @@ internal object Id3v2 {
                 // TDRC (v2.4) and TYER (v2.3) hold the year; TDAT is day and month and never a year.
                 year = listOfNotNull(text["TDRC"], text["TYER"], text["TDOR"], text["TORY"]).firstNotNullOfOrNull(TagText::year),
                 genre = text["TCON"]?.let(TagText::genre),
+                composer = text["TCOM"],
+                // TCMP is iTunes' extension; "1" when set.
+                compilation = text["TCMP"]?.let(TagText::flag) ?: false,
+                artistSort = text["TSOP"],
+                albumArtistSort = text["TSO2"],
+                albumSort = text["TSOA"],
             )
         }
     }
@@ -189,8 +195,12 @@ internal object Id3v2 {
     private val V22 = mapOf(
         "TT2" to "TIT2", "TP1" to "TPE1", "TP2" to "TPE2", "TAL" to "TALB", "TRK" to "TRCK",
         "TPA" to "TPOS", "TYE" to "TYER", "TCO" to "TCON", "TOR" to "TORY", "PIC" to "APIC",
+        "TCM" to "TCOM", "TCP" to "TCMP", "TSP" to "TSOP", "TS2" to "TSO2", "TSA" to "TSOA",
     )
-    private val WANTED = setOf("TIT2", "TPE1", "TPE2", "TALB", "TRCK", "TPOS", "TYER", "TDRC", "TDOR", "TORY", "TCON", "APIC")
+    private val WANTED = setOf(
+        "TIT2", "TPE1", "TPE2", "TALB", "TRCK", "TPOS", "TYER", "TDRC", "TDOR", "TORY", "TCON", "APIC",
+        "TCOM", "TCMP", "TSOP", "TSO2", "TSOA",
+    )
 
     fun syncsafe(b: ByteArray, i: Int): Int =
         (b.u8(i) and 0x7f shl 21) or (b.u8(i + 1) and 0x7f shl 14) or (b.u8(i + 2) and 0x7f shl 7) or (b.u8(i + 3) and 0x7f)

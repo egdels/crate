@@ -85,6 +85,26 @@ public struct AVFoundationMetadataReader: MetadataReader {
             meta.discTotal = await string(all, matchingKey: ["disctotal", "totaldiscs"]).flatMap(Self.int)
         }
 
+        meta.composer = await string(all, [.id3MetadataComposer, .iTunesMetadataComposer])
+        if meta.composer == nil {
+            meta.composer = await string(all, matchingKey: ["composer", "wrt", "tcom"])
+        }
+        // ID3 has no identifier for TCMP (an iTunes extension); the key
+        // name catches it, and "compilation" the Vorbis-style containers.
+        meta.compilation = await flag(all, [.iTunesMetadataDiscCompilation])
+        if !meta.compilation {
+            meta.compilation = await flag(all, matchingKey: ["tcmp", "cpil", "compilation"])
+        }
+        meta.artistSort = await string(all, [.id3MetadataPerformerSortOrder])
+        if meta.artistSort == nil {
+            meta.artistSort = await string(all, matchingKey: ["tsop", "soar", "artistsort", "artist_sort"])
+        }
+        meta.albumArtistSort = await string(all, matchingKey: ["tso2", "soaa", "albumartistsort", "album_artist_sort"])
+        meta.albumSort = await string(all, [.id3MetadataAlbumSortOrder])
+        if meta.albumSort == nil {
+            meta.albumSort = await string(all, matchingKey: ["tsoa", "soal", "albumsort", "album_sort"])
+        }
+
         return meta
     }
 
@@ -103,7 +123,17 @@ public struct AVFoundationMetadataReader: MetadataReader {
         let disc = flac.value("DISCNUMBER").map(numberAndTotal)
         meta.discNumber = disc?.number
         meta.discTotal = disc?.total ?? flac.value("DISCTOTAL").flatMap(int) ?? flac.value("TOTALDISCS").flatMap(int)
+        meta.composer = flac.value("COMPOSER")
+        meta.compilation = flac.value("COMPILATION").map(flag(fromText:)) ?? false
+        meta.artistSort = flac.value("ARTISTSORT")
+        meta.albumArtistSort = flac.value("ALBUMARTISTSORT")
+        meta.albumSort = flac.value("ALBUMSORT")
         return meta
+    }
+
+    /// "1", "true" or "yes", as the taggers write a set flag.
+    static func flag(fromText text: String) -> Bool {
+        ["1", "true", "yes"].contains(text.trimmed.lowercased())
     }
 
     /// "3/12" or "3".
@@ -163,6 +193,31 @@ public struct AVFoundationMetadataReader: MetadataReader {
             }
         }
         return nil
+    }
+
+    private func flag(_ pool: [AVMetadataItem], _ ids: [AVMetadataIdentifier]) async -> Bool {
+        await firstFlag(in: items(pool, ids))
+    }
+
+    private func flag(_ pool: [AVMetadataItem], matchingKey names: [String]) async -> Bool {
+        await firstFlag(in: items(pool, matchingKey: names))
+    }
+
+    /// A set flag is "1" as text (ID3, Vorbis) or a non-zero number or
+    /// byte (the iTunes cpil atom).
+    private func firstFlag(in candidates: [AVMetadataItem]) async -> Bool {
+        for item in candidates {
+            if let text = try? await item.load(.stringValue)?.trimmed.nonEmpty {
+                return Self.flag(fromText: text)
+            }
+            if let value = try? await item.load(.numberValue) {
+                return value.intValue != 0
+            }
+            if let data = try? await item.load(.dataValue), let byte = data.last {
+                return byte != 0
+            }
+        }
+        return false
     }
 
     private func year(_ pool: [AVMetadataItem], _ ids: [AVMetadataIdentifier]) async -> Int? {

@@ -153,6 +153,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
             isLoaded = true
             started.complete(Unit)
+            // An index from an older version lacks tags this one reads:
+            // re-read the files once, with the grid already up and the
+            // footer showing the progress.
+            if (library.needsRescan) rescan()
         }
         viewModelScope.launch { connect() }
         // Off the main thread and once per keystroke: the field shows

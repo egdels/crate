@@ -38,6 +38,14 @@ data class Track(
     val discTotal: Int? = null,
     val year: Int? = null,
     val genre: String? = null,
+    val composer: String? = null,
+    /** The tagger's "part of a compilation" flag (TCMP, cpil, COMPILATION). */
+    val compilation: Boolean = false,
+    /** Sort names as iTunes and MusicBrainz write them ("Beatles, The");
+     *  null when the file has none. */
+    val artistSort: String? = null,
+    val albumArtistSort: String? = null,
+    val albumSort: String? = null,
     /** Seconds. 0 when the file reports no duration. */
     val duration: Double = 0.0,
 ) {
@@ -64,6 +72,11 @@ data class TrackMetadata(
     val discTotal: Int? = null,
     val year: Int? = null,
     val genre: String? = null,
+    val composer: String? = null,
+    val compilation: Boolean = false,
+    val artistSort: String? = null,
+    val albumArtistSort: String? = null,
+    val albumSort: String? = null,
     val duration: Double = 0.0,
 )
 

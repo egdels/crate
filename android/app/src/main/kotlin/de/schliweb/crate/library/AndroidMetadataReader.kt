@@ -80,6 +80,8 @@ class AndroidMetadataReader(private val context: Context) : MetadataReader {
                 year = listOfNotNull(text(MediaMetadataRetriever.METADATA_KEY_YEAR), text(MediaMetadataRetriever.METADATA_KEY_DATE))
                     .firstNotNullOfOrNull(TagText::year),
                 genre = text(MediaMetadataRetriever.METADATA_KEY_GENRE)?.let(TagText::genre),
+                composer = text(MediaMetadataRetriever.METADATA_KEY_COMPOSER),
+                compilation = text(MediaMetadataRetriever.METADATA_KEY_COMPILATION)?.let(TagText::flag) ?: false,
                 duration = text(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.let { it / 1000.0 } ?: 0.0,
             )
         } finally {

@@ -33,7 +33,8 @@ its own. It only reads the music files in the folders you point it at.
 ## What the app stores on your device
 
 - **The library index**: file paths, tags (title, artist, album, year,
-  track number, genre) and durations of your music files, so that the app
+  track number, genre, composer, sort names) and durations of your music
+  files, so that the app
   does not have to read every file again on each launch. It is one JSON
   file in the app's private storage (Android) or in
   `~/Library/Application Support/Crate/library.json` (macOS).

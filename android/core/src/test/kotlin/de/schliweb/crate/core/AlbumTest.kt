@@ -166,6 +166,64 @@ class AlbumTest {
     }
 
     @Test
+    fun aLeadingTheDoesNotDecideTheOrder() {
+        val tracks = listOf(
+            makeTrack("1", artist = "The Beatles", album = "Help!", folder = "/m/beatles"),
+            makeTrack("2", artist = "Arcade Fire", album = "Funeral", folder = "/m/arcade"),
+            makeTrack("3", artist = "Can", album = "Ege Bamyasi", folder = "/m/can"),
+            makeTrack("4", artist = "Theo Parrish", album = "Parallel", folder = "/m/theo"),
+        )
+        assertEquals(listOf("Arcade Fire", "The Beatles", "Can", "Theo Parrish"), Album.group(tracks).map { it.artist })
+        assertEquals("Beatles, The", Album.sortName("The Beatles"))
+        assertEquals("Theo Parrish", Album.sortName("Theo Parrish"))
+        assertEquals("The", Album.sortName("The "))
+    }
+
+    @Test
+    fun sortTagsWinOverTheName() {
+        val beatles = makeTrack("1", artist = "The Beatles", album = "Help!", folder = "/m/beatles").copy(artistSort = "Beatles, The")
+        val zappa = makeTrack("2", artist = "Frank Zappa", album = "Apostrophe", folder = "/m/zappa").copy(artistSort = "Zappa, Frank")
+        // The album artist's sort tag is the one that counts.
+        val dylan = makeTrack("3", artist = "Bob Dylan", album = "Desire", albumArtist = "Bob Dylan", folder = "/m/dylan")
+            .copy(artistSort = "Dylan, Bob", albumArtistSort = "Aaa")
+        val titled = makeTrack("4", artist = "Can", album = "The Lost Tapes", folder = "/m/can").copy(albumSort = "Lost Tapes, The")
+        val albums = Album.group(listOf(beatles, zappa, dylan, titled))
+        assertEquals(listOf("Bob Dylan", "The Beatles", "Can", "Frank Zappa"), albums.map { it.artist })
+        assertEquals(listOf("Aaa", "Beatles, The", "Can", "Zappa, Frank"), albums.map { it.sortArtist })
+        assertEquals("Lost Tapes, The", albums[2].sortTitle)
+    }
+
+    @Test
+    fun compilationFlagMakesVariousArtistsWithoutAlbumArtist() {
+        // A tribute album: one artist on two thirds of the tracks would
+        // pass as the album's artist, but the tagger said compilation.
+        val tracks = listOf(
+            makeTrack("1", artist = "Moss Quartet", album = "Tribute", track = 1, folder = "/m/t"),
+            makeTrack("2", artist = "Moss Quartet", album = "Tribute", track = 2, folder = "/m/t"),
+            makeTrack("3", artist = "Guest", album = "Tribute", track = 3, folder = "/m/t"),
+        )
+        assertEquals("Moss Quartet", Album.group(tracks)[0].artist)
+        val flagged = tracks.map { it.copy(compilation = true) }
+        assertEquals(Album.VARIOUS_ARTISTS, Album.group(flagged)[0].artist)
+
+        // The flag on a minority of tracks changes nothing, and an album
+        // artist tag beats the flag: iTunes sets it on single-artist
+        // albums filed under a name too.
+        val minority = listOf(flagged[0], tracks[1], tracks[2])
+        assertEquals("Moss Quartet", Album.group(minority)[0].artist)
+        val withAlbumArtist = flagged.map { it.copy(albumArtist = "Moss Quartet") }
+        assertEquals("Moss Quartet", Album.group(withAlbumArtist)[0].artist)
+    }
+
+    @Test
+    fun genreIsTheMajorityOfTheTracks() {
+        val tracks = (1..3).map { makeTrack("$it", artist = "A", album = "B", track = it) }
+        assertEquals(null, Album.group(tracks)[0].genre)
+        val tagged = listOf(tracks[0].copy(genre = "Jazz"), tracks[1].copy(genre = "Jazz"), tracks[2].copy(genre = "Rock"))
+        assertEquals("Jazz", Album.group(tagged)[0].genre)
+    }
+
+    @Test
     fun naturalOrderComparesNumbersByValue() {
         assertEquals(listOf("Track 2", "Track 10", "track 11"), listOf("track 11", "Track 10", "Track 2").sortedWith(::naturalCompare))
         assertTrue(naturalCompare("a", "B") < 0)

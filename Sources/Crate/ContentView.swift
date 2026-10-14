@@ -386,7 +386,7 @@ struct TrackList: View {
                         }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(album.title).font(.title2.bold())
-                        Text([album.artist, album.year.map(String.init)].compactMap { $0 }.joined(separator: " · "))
+                        Text([album.artist, album.year.map(String.init), album.genre].compactMap { $0 }.joined(separator: " · "))
                             .foregroundStyle(.secondary)
                         Text(summary(album))
                             .font(.caption)

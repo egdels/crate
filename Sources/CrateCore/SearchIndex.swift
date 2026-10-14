@@ -27,10 +27,8 @@ public struct SearchIndex: Sendable {
         self.locale = locale
         tracks = albums.flatMap(\.tracks)
         let fold = { (text: String) in Self.fold(text, locale: locale) }
-        albumTexts = albums.map { [$0.title, $0.artist].map(fold).joined(separator: "\n") }
-        trackTexts = tracks.map { track in
-            [track.title, track.artist, track.albumArtist, track.album].compactMap { $0 }.map(fold).joined(separator: "\n")
-        }
+        albumTexts = albums.map { SearchQuery.fields(of: $0).map(fold).joined(separator: "\n") }
+        trackTexts = tracks.map { SearchQuery.fields(of: $0).map(fold).joined(separator: "\n") }
     }
 
     public func search(_ query: SearchQuery) -> Result {

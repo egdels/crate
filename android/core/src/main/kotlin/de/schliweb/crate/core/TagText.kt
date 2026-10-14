@@ -7,6 +7,9 @@ package de.schliweb.crate.core
 object TagText {
     fun int(text: String): Int? = text.trim().toIntOrNull()
 
+    /** "1", "true" or "yes", as the taggers write a set flag. */
+    fun flag(text: String): Boolean = text.trim().lowercase() in setOf("1", "true", "yes")
+
     /** "3/12" or "3": the number and, when given, the total. */
     fun numberAndTotal(text: String): Pair<Int?, Int?> {
         val parts = text.split('/')

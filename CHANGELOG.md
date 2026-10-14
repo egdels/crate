@@ -19,6 +19,19 @@ version's section from this file as the GitHub release notes.
   written into the music files. `PRIVACY.md` lists the new file
   (effective 2026-10-14).
 
+- Albums show their genre in the header, and the search finds genre
+  and composer ("jazz", "bach"), in both apps.
+- Albums sort by the sort names in the tags when the files have them
+  ("Beatles, The"), otherwise a leading "The" is ignored, so The Beatles
+  file under B.
+- The compilation flag taggers set (TCMP, cpil, COMPILATION) marks an
+  album as Various Artists even when one artist is on most of its
+  tracks, unless an album artist is tagged.
+- The library index is version 2 (composer, compilation flag, sort
+  names). An index from an older version is kept and its files are
+  read again once at the next launch, with the grid already up and the
+  footer showing the progress.
+
 ### Changed
 
 - Android targets API 37 (Android 17), the platform it is built and

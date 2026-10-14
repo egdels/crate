@@ -69,6 +69,7 @@ object Mp4Metadata {
         var track: Pair<Int?, Int?>? = null
         var disc: Pair<Int?, Int?>? = null
         var genreIndex: Int? = null
+        var compilation = false
         for (atom in children(moov, 0, moov.size)) {
             when (atom.type) {
                 "mvhd" -> duration = mvhdDuration(moov, atom)
@@ -87,6 +88,8 @@ object Mp4Metadata {
                                     "trkn" -> if (payload.size >= 6) track = nonZero(payload.u16(2)) to nonZero(payload.u16(4))
                                     "disk" -> if (payload.size >= 6) disc = nonZero(payload.u16(2)) to nonZero(payload.u16(4))
                                     "gnre" -> if (payload.size >= 2) genreIndex = payload.u16(0)
+                                    // A one-byte integer atom; iTunes writes 1 when set.
+                                    "cpil" -> if (payload.isNotEmpty()) compilation = payload.last().toInt() != 0
                                     "covr" -> if (payload.isNotEmpty()) {
                                         pictures.add(Picture(3, if (kind == 14) "image/png" else "image/jpeg", payload))
                                     }
@@ -114,6 +117,11 @@ object Mp4Metadata {
             // The binary gnre atom is 1-based into the ID3v1 list; the text
             // form may still carry "(17)".
             genre = text["©gen"]?.let(TagText::genre) ?: genreIndex?.let { Id3v1Genres.name(it - 1) },
+            composer = text["©wrt"],
+            compilation = compilation,
+            artistSort = text["soar"],
+            albumArtistSort = text["soaa"],
+            albumSort = text["soal"],
             duration = duration,
         )
         return ParsedTags(metadata, pictures)

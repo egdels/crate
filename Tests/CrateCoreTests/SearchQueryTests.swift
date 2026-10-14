@@ -28,6 +28,19 @@ import Testing
         #expect(SearchQuery("RIO TRIO").matches(tracks[2]))
     }
 
+    @Test func composerAndGenreAreSearchedToo() {
+        var track = makeTrack("Suite", artist: "Glenn Gould", album: "Goldberg")
+        track.composer = "Johann Sebastian Bach"
+        track.genre = "Classical"
+        #expect(SearchQuery("bach").matches(track))
+        #expect(SearchQuery("classical gould").matches(track))
+        #expect(!SearchQuery("mozart").matches(track))
+        let album = Album.group([track])[0]
+        #expect(album.genre == "Classical")
+        #expect(SearchQuery("classical").matches(album))
+        #expect(SearchQuery("bach").matches(album), "through the track")
+    }
+
     @Test func albumMatchesThroughTitleArtistOrTrack() {
         let albums = Album.group(tracks)
         let spell = albums.first { $0.title == "Night Letters" }!
@@ -39,14 +52,19 @@ import Testing
     }
 
     @Test func indexFindsWhatTheQueryMatches() {
+        var gould = makeTrack("Aria", artist: "Glenn Gould", album: "Goldberg", folder: "/fourth")
+        gould.composer = "Bach"
+        gould.genre = "Classical"
         let tricky = tracks + [
             makeTrack("Straße", artist: "AC/DC", album: "Ｗｉｄｅ", folder: "/other"),
             makeTrack("Ångström", artist: "Björk", album: "Œuvre", folder: "/third"),
+            gould,
         ]
         let albums = Album.group(tricky)
         let index = SearchIndex(albums: albums)
         for text in ["", "ada", "morning", "lark night", "senorita", "RIO costa", "nothing", "ada nobody",
-                     "strasse", "STRASSE", "ac/dc", "acdc", "wide", "ｗｉｄｅ", "angstrom", "bjork", "oeuvre", "œuvre"] {
+                     "strasse", "STRASSE", "ac/dc", "acdc", "wide", "ｗｉｄｅ", "angstrom", "bjork", "oeuvre", "œuvre",
+                     "bach", "classical gould", "CLASSICAL"] {
             let query = SearchQuery(text)
             let result = index.search(query)
             #expect(result.albums == albums.filter(query.matches), "\(text)")

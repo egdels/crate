@@ -26,6 +26,8 @@ public struct Album: Identifiable, Hashable, Sendable {
     public var title: String
     public var artist: String
     public var year: Int?
+    /// The genre most of the tracks carry; nil when none is tagged.
+    public var genre: String?
     /// The folder the tracks lie in; disc subfolders ("CD 2") count as
     /// their parent.
     public var folder: URL
@@ -33,6 +35,20 @@ public struct Album: Identifiable, Hashable, Sendable {
     public var tracks: [Track]
 
     public var duration: TimeInterval { tracks.reduce(0) { $0 + $1.duration } }
+
+    /// What the album sorts by: the tracks' sort tags when they have
+    /// them ("Beatles, The"), otherwise the name without a leading
+    /// "The". Album artist sort tags win over track artist ones, like
+    /// the names themselves.
+    public var sortArtist: String {
+        Self.mostCommon(tracks.compactMap { $0.albumArtistSort?.trimmed.nonEmpty })
+            ?? Self.mostCommon(tracks.compactMap { $0.artistSort?.trimmed.nonEmpty })
+            ?? Self.sortName(artist)
+    }
+
+    public var sortTitle: String {
+        Self.mostCommon(tracks.compactMap { $0.albumSort?.trimmed.nonEmpty }) ?? Self.sortName(title)
+    }
 
     /// Groups by (folder, loosely compared album title) and sorts albums
     /// by artist, then year, then title. `roots` are the watched folders:
@@ -102,6 +118,7 @@ public struct Album: Identifiable, Hashable, Sendable {
                 title: title(of: bucket.tracks, folder: bucket.folder),
                 artist: artist(of: bucket.tracks, fallback: parentName),
                 year: bucket.tracks.compactMap(\.year).min(),
+                genre: mostCommon(bucket.tracks.compactMap { $0.genre?.trimmed.nonEmpty }),
                 folder: bucket.folder,
                 tracks: bucket.tracks.sorted(by: trackOrder)
             )
@@ -123,15 +140,38 @@ public struct Album: Identifiable, Hashable, Sendable {
     /// Album artist tags win over track artists. Either way: a name that
     /// two thirds of the tracks share (ignoring spelling noise) is the
     /// album's artist, so one mistagged track does not turn an album
-    /// into a compilation; anything less does. No name at all falls back
-    /// to the given one (the parent folder) or "Unknown Artist".
+    /// into a compilation; anything less does. A compilation flag on
+    /// most tracks settles it the other way when only track artists are
+    /// tagged: a tribute album with one artist on two thirds of it is
+    /// still a compilation. No name at all falls back to the given one
+    /// (the parent folder) or "Unknown Artist".
     static func artist(of tracks: [Track], fallback: String? = nil) -> String {
-        for names in [tracks.compactMap { $0.albumArtist?.trimmed.nonEmpty }, tracks.compactMap { $0.artist?.trimmed.nonEmpty }] {
-            guard let common = mostCommon(names) else { continue }
-            let share = names.filter { looseKey($0) == looseKey(common) }.count
-            return share * 3 >= names.count * 2 ? common : variousArtists
+        if let common = mostCommon(tracks.compactMap { $0.albumArtist?.trimmed.nonEmpty }) {
+            return agreed(on: common, by: tracks.compactMap { $0.albumArtist?.trimmed.nonEmpty }) ? common : variousArtists
+        }
+        if tracks.filter(\.compilation).count * 2 > tracks.count {
+            return variousArtists
+        }
+        if let common = mostCommon(tracks.compactMap { $0.artist?.trimmed.nonEmpty }) {
+            return agreed(on: common, by: tracks.compactMap { $0.artist?.trimmed.nonEmpty }) ? common : variousArtists
         }
         return fallback ?? unknownArtist
+    }
+
+    private static func agreed(on common: String, by names: [String]) -> Bool {
+        names.filter { looseKey($0) == looseKey(common) }.count * 3 >= names.count * 2
+    }
+
+    /// The name as it sorts: a leading "The " goes to the back, so The
+    /// Beatles file under B. Case and diacritics are left to the
+    /// comparison. Only "The": "A Tribe Called Quest" stays under A, as
+    /// most people would look for it.
+    static func sortName(_ name: String) -> String {
+        let trimmed = name.trimmed
+        if trimmed.count > 4, trimmed.lowercased().hasPrefix("the ") {
+            return String(trimmed.dropFirst(4)).trimmed + ", The"
+        }
+        return trimmed
     }
 
     /// A folder name without its trailing number: "soul_1" and "soul_2"
@@ -161,7 +201,7 @@ public struct Album: Identifiable, Hashable, Sendable {
     }
 
     /// Ties go to the value seen first, so the result is stable.
-    private static func mostCommon(_ values: [String]) -> String? {
+    static func mostCommon(_ values: [String]) -> String? {
         var counts: [String: Int] = [:]
         var first: [String: Int] = [:]
         for (index, value) in values.enumerated() {
@@ -182,11 +222,11 @@ public struct Album: Identifiable, Hashable, Sendable {
     }
 
     private static func albumOrder(_ a: Album, _ b: Album) -> Bool {
-        let byArtist = a.artist.localizedStandardCompare(b.artist)
+        let byArtist = a.sortArtist.localizedStandardCompare(b.sortArtist)
         if byArtist != .orderedSame { return byArtist == .orderedAscending }
         let ya = a.year ?? Int.max, yb = b.year ?? Int.max
         if ya != yb { return ya < yb }
-        return a.title.localizedStandardCompare(b.title) == .orderedAscending
+        return a.sortTitle.localizedStandardCompare(b.sortTitle) == .orderedAscending
     }
 }
 

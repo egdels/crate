@@ -41,6 +41,10 @@ public actor Library {
     public private(set) var folders: [URL] = []
     /// Sorted by path.
     public private(set) var tracks: [Track] = []
+    /// True after loading an index written by an older version whose
+    /// tracks lack fields a newer one reads: the next full rescan reads
+    /// every file, not only the changed ones, and clears this.
+    public private(set) var needsRescan = false
 
     private let store: any LibraryStore
     private let reader: any MetadataReader
@@ -73,6 +77,7 @@ public actor Library {
         guard let snapshot = try store.load() else { return }
         folders = snapshot.folders
         tracks = snapshot.tracks.sorted { $0.url.path < $1.url.path }
+        needsRescan = snapshot.version < LibrarySnapshot.currentVersion
     }
 
     public var albums: [Album] { Album.group(tracks, roots: folders) }
@@ -121,6 +126,10 @@ public actor Library {
         for folder in folders {
             total = total + (try await rescan(folder: folder, progress: progress))
         }
+        if needsRescan {
+            needsRescan = false
+            try save()
+        }
         return total
     }
 
@@ -135,7 +144,7 @@ public actor Library {
         var summary = RescanSummary()
         var toRead: [ScannedFile] = []
         for file in scanned {
-            if let track = existing[file.url.path], Self.unchanged(track, file) {
+            if !needsRescan, let track = existing[file.url.path], Self.unchanged(track, file) {
                 summary.unchanged += 1
             } else {
                 toRead.append(file)
@@ -215,6 +224,11 @@ public actor Library {
             discTotal: meta.discTotal,
             year: meta.year,
             genre: meta.genre?.trimmed.nonEmpty,
+            composer: meta.composer?.trimmed.nonEmpty,
+            compilation: meta.compilation,
+            artistSort: meta.artistSort?.trimmed.nonEmpty,
+            albumArtistSort: meta.albumArtistSort?.trimmed.nonEmpty,
+            albumSort: meta.albumSort?.trimmed.nonEmpty,
             duration: meta.duration
         )
     }

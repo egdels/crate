@@ -110,6 +110,38 @@ import Testing
         #expect(await reader.reads.isEmpty)
     }
 
+    /// An index written by an older version is loaded as is, and the
+    /// next full rescan reads every file once, unchanged or not.
+    @Test func olderIndexIsRereadOnceByTheNextRescan() async throws {
+        let dir = try TemporaryDirectory()
+        let music = dir.url.appendingPathComponent("music")
+        try dir.file("music/a.mp3")
+        try dir.file("music/b.mp3")
+        let reader = FakeMetadataReader()
+        try await makeLibrary(dir, reader: reader).addFolder(music)
+        await reader.resetReads()
+
+        // Age the index on disk.
+        let store = JSONLibraryStore(fileURL: dir.url.appendingPathComponent("state/library.json"))
+        var snapshot = try store.load()!
+        snapshot.version = 1
+        try store.save(snapshot)
+
+        let reloaded = makeLibrary(dir, reader: reader)
+        try await reloaded.load()
+        #expect(await reloaded.needsRescan)
+        #expect(await reloaded.tracks.count == 2, "the old tracks stay until the files are read again")
+        let summary = try await reloaded.rescan()
+        #expect(summary == Library.RescanSummary(updated: 2))
+        #expect(await reader.reads.count == 2)
+        #expect(await !reloaded.needsRescan)
+        #expect(try store.load()?.version == LibrarySnapshot.currentVersion)
+
+        await reader.resetReads()
+        #expect(try await reloaded.rescan() == Library.RescanSummary(unchanged: 2))
+        #expect(await reader.reads.isEmpty)
+    }
+
     @Test func removeFolderDropsOnlyItsTracks() async throws {
         let dir = try TemporaryDirectory()
         let one = dir.url.appendingPathComponent("one")

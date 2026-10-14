@@ -48,7 +48,7 @@ What the package does:
   `AVAudioEngineBackend`; `AVAudioPlayerBackend` is the simpler fallback)
 - **Find covers** embedded in the files or lying next to them and cache
   them as thumbnails (`ArtworkReader`, `ArtworkCache`)
-- **Search** titles, artists and albums (`SearchQuery`)
+- **Search** titles, artists, albums, composers and genres (`SearchQuery`)
 - **Favorites** as a set of track paths in a small file of its own, so
   a tap on a heart never rewrites the index (`Favorites`)
 

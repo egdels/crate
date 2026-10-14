@@ -20,6 +20,8 @@ data class Album(
     val title: String,
     val artist: String,
     val year: Int?,
+    /** The genre most of the tracks carry; null when none is tagged. */
+    val genre: String?,
     /** The folder the tracks lie in; disc subfolders ("CD 2") count as
      *  their parent. */
     val folder: String,
@@ -31,6 +33,18 @@ data class Album(
     val id: String get() = "$folder\u001F$artist\u001F$title"
 
     val duration: Double get() = tracks.sumOf { it.duration }
+
+    /** What the album sorts by: the tracks' sort tags when they have
+     *  them ("Beatles, The"), otherwise the name without a leading
+     *  "The". Album artist sort tags win over track artist ones, like
+     *  the names themselves. */
+    val sortArtist: String
+        get() = mostCommon(tracks.mapNotNull { it.albumArtistSort.trimmedOrNull() })
+            ?: mostCommon(tracks.mapNotNull { it.artistSort.trimmedOrNull() })
+            ?: sortName(artist)
+
+    val sortTitle: String
+        get() = mostCommon(tracks.mapNotNull { it.albumSort.trimmedOrNull() }) ?: sortName(title)
 
     companion object {
         const val UNKNOWN_TITLE = "Unknown Album"
@@ -100,6 +114,7 @@ data class Album(
                     title = title(bucket.tracks, bucket.folder),
                     artist = artist(bucket.tracks, parentName),
                     year = bucket.tracks.mapNotNull { it.year }.minOrNull(),
+                    genre = mostCommon(bucket.tracks.mapNotNull { it.genre.trimmedOrNull() }),
                     folder = bucket.folder,
                     tracks = bucket.tracks.sortedWith(TRACK_ORDER),
                 )
@@ -119,20 +134,34 @@ data class Album(
          * Album artist tags win over track artists. Either way: a name
          * that two thirds of the tracks share (ignoring spelling noise)
          * is the album's artist, so one mistagged track does not turn an
-         * album into a compilation; anything less does. No name at all
-         * falls back to the given one (the parent folder) or "Unknown
-         * Artist".
+         * album into a compilation; anything less does. A compilation
+         * flag on most tracks settles it the other way when only track
+         * artists are tagged: a tribute album with one artist on two
+         * thirds of it is still a compilation. No name at all falls back
+         * to the given one (the parent folder) or "Unknown Artist".
          */
         internal fun artist(tracks: List<Track>, fallback: String? = null): String {
-            for (names in listOf(
-                tracks.mapNotNull { it.albumArtist.trimmedOrNull() },
-                tracks.mapNotNull { it.artist.trimmedOrNull() },
-            )) {
-                val common = mostCommon(names) ?: continue
-                val share = names.count { looseKey(it) == looseKey(common) }
-                return if (share * 3 >= names.size * 2) common else VARIOUS_ARTISTS
-            }
+            val albumArtists = tracks.mapNotNull { it.albumArtist.trimmedOrNull() }
+            mostCommon(albumArtists)?.let { return if (agreed(it, albumArtists)) it else VARIOUS_ARTISTS }
+            if (tracks.count { it.compilation } * 2 > tracks.size) return VARIOUS_ARTISTS
+            val artists = tracks.mapNotNull { it.artist.trimmedOrNull() }
+            mostCommon(artists)?.let { return if (agreed(it, artists)) it else VARIOUS_ARTISTS }
             return fallback ?: UNKNOWN_ARTIST
+        }
+
+        private fun agreed(common: String, names: List<String>): Boolean =
+            names.count { looseKey(it) == looseKey(common) } * 3 >= names.size * 2
+
+        /** The name as it sorts: a leading "The " goes to the back, so
+         *  The Beatles file under B. Only "The": "A Tribe Called Quest"
+         *  stays under A, as most people would look for it. */
+        internal fun sortName(name: String): String {
+            val trimmed = name.trim()
+            return if (trimmed.length > 4 && trimmed.startsWith("the ", ignoreCase = true)) {
+                trimmed.substring(4).trim() + ", The"
+            } else {
+                trimmed
+            }
         }
 
         /** A folder name without its trailing number: "soul_1" and
@@ -178,11 +207,11 @@ data class Album(
         }
 
         private val ALBUM_ORDER = Comparator<Album> { a, b ->
-            val byArtist = naturalCompare(a.artist, b.artist)
+            val byArtist = naturalCompare(a.sortArtist, b.sortArtist)
             if (byArtist != 0) return@Comparator byArtist
             val byYear = (a.year ?: Int.MAX_VALUE).compareTo(b.year ?: Int.MAX_VALUE)
             if (byYear != 0) return@Comparator byYear
-            naturalCompare(a.title, b.title)
+            naturalCompare(a.sortTitle, b.sortTitle)
         }
     }
 }

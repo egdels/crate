@@ -16,10 +16,10 @@ class SearchIndex(val albums: List<Album>) {
     // The folded fields of one item joined by newlines: a word never
     // contains whitespace, so it cannot match across two fields.
     private val albumTexts: List<String> = albums.map { album ->
-        listOf(album.title, album.artist).joinToString("\n") { it.foldedForSearch() }
+        SearchQuery.fields(album).joinToString("\n") { it.foldedForSearch() }
     }
     private val trackTexts: List<String> = tracks.map { track ->
-        listOfNotNull(track.title, track.artist, track.albumArtist, track.album).joinToString("\n") { it.foldedForSearch() }
+        SearchQuery.fields(track).joinToString("\n") { it.foldedForSearch() }
     }
 
     data class Result(val albums: List<Album>, val tracks: List<Track>)

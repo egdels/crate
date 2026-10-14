@@ -27,7 +27,7 @@ never sees it.
 
 ```sh
 swift build                    # whole package
-swift test                     # 78 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
+swift test                     # 85 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
 swift run crate-scan <folder>  # tag-reader check against real files, prints gaps
 scripts/bundle.sh              # release build -> build/Crate.app (ad-hoc signed)
 scripts/dmg.sh --universal     # -> build/Crate-<version>.dmg, what a release ships
@@ -47,7 +47,7 @@ Android, from `android/` (needs JDK 17+, Android SDK with platform 37;
 `ANDROID_HOME` is set on this machine, Gradle 9.7 via the wrapper):
 
 ```sh
-./gradlew :core:test             # 51 JVM tests, ~2 s
+./gradlew :core:test             # 57 JVM tests, ~2 s
 CRATE_MUSIC_DIRS=~/Music/Music/Media.localized ./gradlew :core:test --tests '*TagParserTest*' -i
                                  # also runs the MP3/MP4 parsers over real files (colon-separated dirs)
 ./gradlew :app:assembleDebug     # -> app/build/outputs/apk/debug/app-debug.apk
@@ -83,8 +83,14 @@ Packaging/Info.plist  bundle metadata for scripts/bundle.sh
 
 Album grouping (`Album.group`) is folder-aware by design, not by option:
 key = (folder, loosely compared album title), artist from what the
-tracks agree on, "Various Artists" when they do not, untagged tracks
-named after the folder. `swift run crate-scan <folder> --albums` shows
+tracks agree on, "Various Artists" when they do not or when most tracks
+carry the compilation flag without an album artist, untagged tracks
+named after the folder. Albums sort by the tags' sort names (TSOP/TSO2/
+TSOA, soar/soaa/soal, ARTISTSORT...) or, without them, by the name with
+a leading "The" moved back. `LibrarySnapshot.currentVersion` is 2; an
+older index sets `Library.needsRescan`, and the app's start triggers one
+full re-read (every file, not only changed ones) with the grid up. Bump
+the version whenever `Track` gains a tag field. `swift run crate-scan <folder> --albums` shows
 the result for a real folder.
 Design rules: everything with I/O sits behind a protocol so tests use
 fakes. `Library` is an actor, `PlayQueue` a value type, views never touch
@@ -174,7 +180,7 @@ output switching, playback on the phone by ear.
 
 ## Status
 
-Done and committed: CrateCore with 78 tests; crate-scan; the app verified
+Done and committed: CrateCore with 85 tests; crate-scan; the app verified
 end to end on screen (empty state, folder picker, grid, double-click,
 transport, seek, volume, auto-advance, rescan); album artwork
 (`ArtworkReader`/`ArtworkCache`, thumbnails under Application
