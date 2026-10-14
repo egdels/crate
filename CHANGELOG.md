@@ -19,6 +19,15 @@ version's section from this file as the GitHub release notes.
   written into the music files. `PRIVACY.md` lists the new file
   (effective 2026-10-14).
 
+### Changed
+
+- Android targets API 37 (Android 17), the platform it is built and
+  tested against; before, the app ran on Android 17 devices in the
+  compatibility mode for API 36. Verified on the Pixel_9a emulator:
+  launch with the saved library, album, playback, media notification,
+  playback in the background, rescan, search, the folder picker,
+  "open with", landscape and the help dialog.
+
 ### Fixed
 
 - Android: the themed (monochrome) launcher icon showed a small record

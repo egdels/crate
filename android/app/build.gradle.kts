@@ -29,7 +29,7 @@ android {
     defaultConfig {
         applicationId = "de.schliweb.crate"
         minSdk = 29
-        targetSdk = 36
+        targetSdk = 37
         versionCode = derivedVersionCode
         versionName = appVersion
     }
