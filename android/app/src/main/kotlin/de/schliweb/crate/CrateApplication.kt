@@ -12,6 +12,7 @@ import de.schliweb.crate.library.AndroidArtworkReader
 import de.schliweb.crate.library.AndroidMetadataReader
 import de.schliweb.crate.library.ArtworkCache
 import de.schliweb.crate.library.SafFileSource
+import de.schliweb.crate.library.SafLyricsSource
 import java.io.File
 
 /**
@@ -37,6 +38,9 @@ class CrateApplication : Application() {
     /** Where playback stood, for the next launch; two small files next
      *  to the index. */
     val playback: JsonPlaybackStateStore by lazy { JsonPlaybackStateStore(filesDir) }
+
+    /** Lyrics beside a track or in its tags, looked up when it plays. */
+    val lyrics: SafLyricsSource by lazy { SafLyricsSource(this) }
 
     val artwork: ArtworkCache by lazy {
         ArtworkCache(File(cacheDir, "artwork"), AndroidArtworkReader(this))

@@ -35,7 +35,7 @@ object Mp3Metadata {
         val audioEnd = source.size - (if (id3v1 != null) 128 else 0)
         val audio = if (head.size >= tagSize + 4096) head.copyOfRange(tagSize, head.size) else source.read(tagSize.toLong(), 8192)
         meta = meta.copy(duration = duration(audio, audioEnd - tagSize))
-        return ParsedTags(meta, fields.pictures)
+        return ParsedTags(meta, fields.pictures, fields.lyrics)
     }
 
     /** ID3v1 fills only what v2 left empty; everything else stays as v2
@@ -190,6 +190,10 @@ internal object Id3v2 {
             )
         }
 
+        /** The first USLT frame's text, whatever its descriptor. */
+        val lyrics: String?
+            get() = text.entries.firstOrNull { it.key.startsWith("USLT:") }?.value
+
         /** ReplayGain from TXXX frames, iTunes Sound Check from its COMM
          *  (or TXXX) frame; user frames are keyed "TXXX:name". */
         private val gains: Pair<Double?, Double?>
@@ -206,11 +210,11 @@ internal object Id3v2 {
     private val V22 = mapOf(
         "TT2" to "TIT2", "TP1" to "TPE1", "TP2" to "TPE2", "TAL" to "TALB", "TRK" to "TRCK",
         "TPA" to "TPOS", "TYE" to "TYER", "TCO" to "TCON", "TOR" to "TORY", "PIC" to "APIC",
-        "TCM" to "TCOM", "TCP" to "TCMP", "TSP" to "TSOP", "TS2" to "TSO2", "TSA" to "TSOA",
+        "TCM" to "TCOM", "TCP" to "TCMP", "TSP" to "TSOP", "TS2" to "TSO2", "TSA" to "TSOA", "ULT" to "USLT",
     )
     private val WANTED = setOf(
         "TIT2", "TPE1", "TPE2", "TALB", "TRCK", "TPOS", "TYER", "TDRC", "TDOR", "TORY", "TCON", "APIC",
-        "TCOM", "TCMP", "TSOP", "TSO2", "TSOA", "TXXX", "COMM",
+        "TCOM", "TCMP", "TSOP", "TSO2", "TSOA", "TXXX", "COMM", "USLT",
     )
 
     fun syncsafe(b: ByteArray, i: Int): Int =
@@ -257,7 +261,8 @@ internal object Id3v2 {
                         "APIC" -> picture(data, version)?.let(result.pictures::add)
                         // User frames carry their own name: TXXX a description,
                         // COMM a language and a description. Keyed by both.
-                        "TXXX", "COMM" -> userFrame(data, skip = if (id == "COMM") 3 else 0)?.let { (name, value) ->
+                        // USLT is built like COMM: language, descriptor, text.
+                        "TXXX", "COMM", "USLT" -> userFrame(data, skip = if (id == "TXXX") 0 else 3)?.let { (name, value) ->
                             val key = "$id:${name.lowercase()}"
                             if (value.isNotEmpty() && key !in result.text) result.text[key] = value
                         }

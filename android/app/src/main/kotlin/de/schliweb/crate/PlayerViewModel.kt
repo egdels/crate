@@ -32,6 +32,7 @@ import de.schliweb.crate.core.Album
 import de.schliweb.crate.core.Favorites
 import de.schliweb.crate.core.Folder
 import de.schliweb.crate.core.Library
+import de.schliweb.crate.core.Lyrics
 import de.schliweb.crate.core.Paths
 import de.schliweb.crate.core.ScannedFile
 import de.schliweb.crate.core.SearchIndex
@@ -130,6 +131,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /** Cover of the album the current track belongs to, for the player bar. */
     var currentArtwork by mutableStateOf<Bitmap?>(null)
         private set
+    /** The current track's lyrics, from an .lrc beside it or its tags;
+     *  null while there are none. Looked up when the track changes. */
+    var lyrics by mutableStateOf<Lyrics?>(null)
+        private set
     /** What plays after the current track, in playback order (the
      *  shuffle order while shuffled). The playlist index identifies the
      *  entry; the same track can be queued twice. */
@@ -145,6 +150,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /** Tracks of the playlist last handed to the player, by media id. */
     private var queued: Map<String, Track> = emptyMap()
     private var artworkJob: Job? = null
+    private var lyricsJob: Job? = null
     private val started = CompletableDeferred<Unit>()
 
     init {
@@ -448,6 +454,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (track?.id != current?.id) {
             current = track
             loadArtwork(track)
+            loadLyrics(track)
         }
         if (track != null) lastError = null
         updateUpcoming(controller)
@@ -485,6 +492,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         artworkJob = viewModelScope.launch {
             val image = app.artwork.thumbnail(album)
             if (current?.id == track.id) currentArtwork = image
+        }
+    }
+
+    private fun loadLyrics(track: Track?) {
+        lyricsJob?.cancel()
+        lyrics = null
+        if (track == null) return
+        lyricsJob = viewModelScope.launch {
+            val found = app.lyrics.lyrics(track)
+            if (current?.id == track.id) lyrics = found
         }
     }
 

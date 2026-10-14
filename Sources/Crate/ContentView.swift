@@ -28,22 +28,33 @@ struct ContentView: View {
                     }
                 }
                 .frame(minWidth: 380, idealWidth: 420)
-                if !model.isLoaded {
-                    Color.clear
-                } else if model.folders.isEmpty {
-                    EmptyLibraryView()
-                } else if model.detail == .allTracks {
-                    FlatTrackList(
-                        tracks: model.filteredTracks,
-                        title: model.searchText.isEmpty ? "All Tracks" : "Search")
-                } else if model.detail == .favorites {
-                    FlatTrackList(
-                        tracks: model.favoriteTracks, title: "Favorites",
-                        emptyText: model.favorites.isEmpty
-                            ? "No favorites yet. Click the heart on a track."
-                            : "No favorites match the search.")
-                } else {
-                    TrackList()
+                HStack(spacing: 0) {
+                    Group {
+                        if !model.isLoaded {
+                            Color.clear
+                        } else if model.folders.isEmpty {
+                            EmptyLibraryView()
+                        } else if model.detail == .allTracks {
+                            FlatTrackList(
+                                tracks: model.filteredTracks,
+                                title: model.searchText.isEmpty ? "All Tracks" : "Search")
+                        } else if model.detail == .favorites {
+                            FlatTrackList(
+                                tracks: model.favoriteTracks, title: "Favorites",
+                                emptyText: model.favorites.isEmpty
+                                    ? "No favorites yet. Click the heart on a track."
+                                    : "No favorites match the search.")
+                        } else {
+                            TrackList()
+                        }
+                    }
+                    // The lyrics pane sits beside whatever the detail shows,
+                    // only while the track playing has lyrics.
+                    if model.showsLyrics, let lyrics = model.lyrics {
+                        Divider()
+                        LyricsView(lyrics: lyrics)
+                            .frame(width: 320)
+                    }
                 }
             }
             // Toolbar items live on the navigation view, not on the
@@ -364,6 +375,42 @@ private struct AlbumContextMenu: ViewModifier {
             Divider()
             Button(model.isFavorite(album) ? "Remove from Favorites" : "Add to Favorites") {
                 model.setFavorite(!model.isFavorite(album), album: album)
+            }
+        }
+    }
+}
+
+/// The words of the track playing. Timed lyrics follow the playback:
+/// the current line is bold and kept in view, the rest grey; plain
+/// lyrics are just the text.
+struct LyricsView: View {
+    @EnvironmentObject private var model: PlayerModel
+    let lyrics: Lyrics
+
+    var body: some View {
+        let current = lyrics.index(at: model.currentTime)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let track = model.current {
+                        Text(track.title).font(.headline)
+                        Text(track.artist ?? "").font(.subheadline).foregroundStyle(.secondary)
+                        Divider().padding(.vertical, 4)
+                    }
+                    ForEach(Array(lyrics.lines.enumerated()), id: \.offset) { index, line in
+                        Text(line.text.isEmpty ? " " : line.text)
+                            .font(lyrics.isTimed ? .title3 : .body)
+                            .fontWeight(index == current ? .semibold : .regular)
+                            .foregroundStyle(lyrics.isTimed && index != current ? Color.secondary : Color.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .id(index)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+            }
+            .onChange(of: current) { index in
+                if let index { withAnimation { proxy.scrollTo(index, anchor: .center) } }
             }
         }
     }

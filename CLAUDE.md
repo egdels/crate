@@ -80,7 +80,8 @@ Sources/CrateCore/    UI-free library: Track, Album, LibraryScanner,
                       LibraryStore (+JSON impl), PlayQueue, AudioPlayer
                       (+AVAudioPlayer impl), ID3v1Genres, Favorites
                       (+FavoritesStore, JSON impl), ReplayGain,
-                      PlaybackState (+PlaybackStateStore, JSON impl)
+                      PlaybackState (+PlaybackStateStore, JSON impl),
+                      Lyrics (+LyricsSource, FileLyricsSource)
 Sources/Crate/        SwiftUI app: CrateApp, PlayerModel (@Observable,
                       the only UI state), ContentView (album grid + track
                       list + empty state), PlayerBar
@@ -139,7 +140,8 @@ android/core/   Kotlin/JVM, package de.schliweb.crate.core: Track (uri +
                 (+LocalFileSource for tests), MetadataReader, FlacMetadata,
                 TagText/Id3v1Genres, FolderImages, SearchQuery, Formatting,
                 Favorites (+JsonFavoritesStore), ReplayGain,
-                PlaybackState (+JsonPlaybackStateStore)
+                PlaybackState (+JsonPlaybackStateStore), Lyrics
+                (+LyricsSource; SafLyricsSource lives in the app)
 android/app/    de.schliweb.crate: CrateApplication (owns Library and
                 ArtworkCache), PlayerViewModel (the only UI state),
                 MainActivity, ui/CrateScreen (grid + detail, two panes
@@ -338,13 +340,28 @@ because a controller's `addMediaItems` passes through the callback's
 reach the length the controller reported (`KEY_TOTAL`). Verified on the
 Pixel_9a emulator: sheet, tap, ×, Clear, Play Next with and without
 shuffle; and on the Mac on screen.
-Lyrics, not built, only counted (`crate-scan --lyrics`, 2026-10-14):
-55 of the 1,985 music files have lyrics (3 USLT, 11 FLAC LYRICS, 41
-`.lrc`, 39 of those in a `lyrics/` subfolder next to the album; the
-`.lrc` files are timed, some with "[mm:ss:xx]" colons instead of the
-LRC dot), the audio plays and the Music app M4As none. main.swift
-gotcha: a top-level `let` is initialised when execution reaches its
-line, so the `--lyrics` branch runs below every declaration.
+Lyrics (both apps): `Lyrics.parse` reads LRC (dot or colon
+hundredths, several stamps per line, `[offset:]`, header tags dropped)
+or plain text; `index(at:)`/`indexAt` gives the line being sung.
+Looked up when a track starts, never at scan time (no Track field, no
+index change): `FileLyricsSource` (Mac) and `SafLyricsSource`
+(Android) try an `.lrc` with the track's name beside it or in a
+`lyrics/` subfolder, then the tags (Mac: FLACMetadata LYRICS,
+AVFoundation USLT/©lyr; Android: FlacMetadata, `ParsedTags.lyrics`
+from the MP3 USLT frame and the MP4 ©lyr atom). Android finds the
+sidecar without a directory query by swapping the name in the
+document id and opening it (`buildDocumentUriUsingTree` with the
+track's own URI as the tree); on the storage provider the ids are
+paths. UI: Mac pane beside the detail (`LyricsView`, `showsLyrics`,
+⌥⌘L), Android `LyricsSheet`; the button exists only while
+`lyrics != nil`. Counted first (`crate-scan --lyrics`, 2026-10-14): 55
+of the 1,985 music files have lyrics (3 USLT, 11 FLAC LYRICS, 41
+timed `.lrc`, 39 of those in `lyrics/`), the audio plays none. Verified
+with the Rehab `.lrc` on the Mac (pane, bold line moves) and on the
+emulator (`/sdcard/Music/Store/Amy/rehab.mp3|.lrc`, sheet follows).
+main.swift gotcha: a top-level `let` is initialised when execution
+reaches its line, so the `--lyrics` branch runs below every
+declaration.
 Disc separators (both apps): `Album.discs` groups the sorted tracks
 by `discNumber ?? 1`; the album page shows a "Disc n" line per disc
 only when there is more than one (Mac: List sections with a

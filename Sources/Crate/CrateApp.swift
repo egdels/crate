@@ -200,6 +200,9 @@ struct CrateApp: App {
                 Button(model.showsUpNext ? "Hide Up Next" : "Show Up Next") { model.showsUpNext.toggle() }
                     .keyboardShortcut("u")
                     .disabled(model.queue.isEmpty)
+                Button(model.showsLyrics ? "Hide Lyrics" : "Show Lyrics") { model.showsLyrics.toggle() }
+                    .keyboardShortcut("l", modifiers: [.command, .option])
+                    .disabled(model.lyrics == nil)
             }
         }
     }

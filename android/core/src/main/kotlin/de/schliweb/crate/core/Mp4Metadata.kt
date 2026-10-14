@@ -144,7 +144,7 @@ object Mp4Metadata {
             albumGain = gains.second,
             duration = duration,
         )
-        return ParsedTags(metadata, pictures)
+        return ParsedTags(metadata, pictures, lyrics = text["©lyr"])
     }
 
     private fun nonZero(n: Int): Int? = if (n == 0) null else n

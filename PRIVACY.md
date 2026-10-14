@@ -23,7 +23,8 @@ its own. It only reads the music files in the folders you point it at.
 - **Music files in folders you choose.** On Android you pick a folder with
   the system's folder picker; Crate keeps the access grant for that folder
   and reads the audio files in it to show titles, artists, albums,
-  durations and covers, and to play them. It never requests broad storage
+  durations and covers, and to play them, and a lyrics file (`.lrc`)
+  lying next to a track to show its words. It never requests broad storage
   access, never reads other folders and never modifies, copies, moves or
   uploads a file. On macOS the same applies to folders you open or drop on
   the app.

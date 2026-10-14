@@ -54,6 +54,15 @@ struct PlayerBar: View {
                 HeartButton(isOn: model.isFavorite(track)) { model.toggleFavorite(track) }
                     .font(.title3)
             }
+            // Lyrics: only while the track has some.
+            if model.lyrics != nil {
+                Button { model.showsLyrics.toggle() } label: {
+                    Image(systemName: "text.quote")
+                        .foregroundStyle(model.showsLyrics ? Color.accentColor : Color.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help(model.showsLyrics ? "Hide Lyrics (⌥⌘L)" : "Show Lyrics (⌥⌘L)")
+            }
 
             Spacer()
 

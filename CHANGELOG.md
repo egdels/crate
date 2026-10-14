@@ -5,6 +5,21 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow takes a
 version's section from this file as the GitHub release notes.
 
+## [Unreleased]
+
+### Added
+
+- Lyrics, in both apps. When the track playing has them, a button
+  appears in the player bar: Mac beside the heart (also ⌥⌘L, Playback
+  > Show Lyrics), opening a pane beside the track list; Android next to
+  the slider, opening a sheet. Crate looks for an `.lrc` file with the
+  track's name beside it or in a `lyrics` folder first, then in the
+  tags (USLT in MP3, ©lyr in M4A, LYRICS in FLAC). A timed `.lrc`
+  follows the playback: the current line is bold and kept in view.
+  Nothing is read until the track plays; the index does not change.
+- `crate-scan --lyrics` counts the files of a folder that carry lyrics,
+  by source.
+
 ## [0.7.0] - 2026-10-14
 
 ### Added

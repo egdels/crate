@@ -48,7 +48,7 @@ class Picture(
 )
 
 /** What a tag parser returns: the fields and the pictures. */
-class ParsedTags(val metadata: TrackMetadata, val pictures: List<Picture>) {
+class ParsedTags(val metadata: TrackMetadata, val pictures: List<Picture>, val lyrics: String? = null) {
     /** The front cover if there is one, otherwise the first picture. */
     val cover: Picture? get() = pictures.firstOrNull { it.type == 3 } ?: pictures.firstOrNull()
 }

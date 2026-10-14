@@ -60,6 +60,12 @@ final class PlayerModel: ObservableObject {
     /// Whether the player bar shows the Up Next popover. Held here so the
     /// Playback menu can toggle it.
     @Published var showsUpNext = false
+    /// The current track's lyrics, from an .lrc beside it or its tags;
+    /// nil while there are none. Looked up when the track loads.
+    @Published private(set) var lyrics: Lyrics?
+    /// Whether the detail column shows the lyrics pane; it appears only
+    /// while the track has lyrics.
+    @Published var showsLyrics = false
 
     @Published var volume: Float = 1 {
         didSet { player.volume = volume }
@@ -70,8 +76,10 @@ final class PlayerModel: ObservableObject {
     private let artworkCache: ArtworkCache
     private let favoritesStore: any FavoritesStore
     private let playbackStore: any PlaybackStateStore
+    private let lyricsSource: any LyricsSource
     private var ticker: Timer?
     private var artworkTask: Task<Void, Never>?
+    private var lyricsTask: Task<Void, Never>?
     private var searchIndex = SearchIndex(albums: [])
     private var searchTask: Task<Void, Never>?
     /// Set by `live()`; nil in tests and previews.
@@ -79,13 +87,14 @@ final class PlayerModel: ObservableObject {
 
     init(
         library: Library, player: any AudioPlayer, artwork: ArtworkCache, favorites: any FavoritesStore,
-        playback: any PlaybackStateStore
+        playback: any PlaybackStateStore, lyrics: any LyricsSource = FileLyricsSource()
     ) {
         self.library = library
         self.player = player
         self.artworkCache = artwork
         self.favoritesStore = favorites
         self.playbackStore = playback
+        self.lyricsSource = lyrics
         player.onFinished = { [weak self] in self?.trackFinished() }
     }
 
@@ -571,6 +580,7 @@ final class PlayerModel: ObservableObject {
             currentTime = 0
             lastError = nil
             loadArtwork(for: track)
+            loadLyrics(for: track)
             if autoplay {
                 player.play()
                 isPlaying = true
@@ -606,6 +616,20 @@ final class PlayerModel: ObservableObject {
         }
     }
 
+    /// Off the main actor: a sidecar is one small read, tags may open
+    /// the file. The pane keeps its toggle; it just has nothing to show
+    /// for a track without lyrics.
+    private func loadLyrics(for track: Track) {
+        lyricsTask?.cancel()
+        lyrics = nil
+        let source = lyricsSource
+        lyricsTask = Task { [weak self] in
+            let found = await Task.detached(priority: .userInitiated) { await source.lyrics(for: track) }.value
+            guard let self, !Task.isCancelled, current?.id == track.id else { return }
+            lyrics = found
+        }
+    }
+
     private func trackFinished() {
         if queue.advance() != nil {
             loadCurrent(autoplay: true)
@@ -619,6 +643,8 @@ final class PlayerModel: ObservableObject {
         isPlaying = false
         currentTime = 0
         currentArtwork = nil
+        lyricsTask?.cancel()
+        lyrics = nil
         ticker?.invalidate()
         ticker = nil
         syncNowPlaying()
@@ -701,6 +727,7 @@ final class PlayerModel: ObservableObject {
         }
         currentTime = position
         loadArtwork(for: currentTrack)
+        loadLyrics(for: currentTrack)
         syncNowPlaying()
         preloadNext()
     }

@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -51,6 +52,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
@@ -109,6 +111,7 @@ import androidx.media3.common.Player
 import de.schliweb.crate.PlayerViewModel
 import de.schliweb.crate.PlayerViewModel.Selection
 import de.schliweb.crate.core.Album
+import de.schliweb.crate.core.Lyrics
 import de.schliweb.crate.core.Track
 import de.schliweb.crate.core.countText
 import de.schliweb.crate.core.lengthText
@@ -135,6 +138,9 @@ fun CrateScreen(model: PlayerViewModel) {
         if (showingHelp) HelpDialog(onDismiss = { showingHelp = false })
         var showingUpNext by rememberSaveable { mutableStateOf(false) }
         if (showingUpNext) UpNextSheet(model, onDismiss = { showingUpNext = false })
+        var showingLyrics by rememberSaveable { mutableStateOf(false) }
+        val lyrics = model.lyrics
+        if (showingLyrics && lyrics != null) LyricsSheet(model, lyrics, onDismiss = { showingLyrics = false })
         val showingDetail = !wide && model.selection != null && model.folders.isNotEmpty()
         // On a phone the grid leaves the composition while an album is
         // open; its scroll position lives here so "back" returns to it.
@@ -184,7 +190,11 @@ fun CrateScreen(model: PlayerViewModel) {
                     onShowHelp = { showingHelp = true },
                 )
             },
-            bottomBar = { if (model.current != null) PlayerBar(model, onShowUpNext = { showingUpNext = true }) },
+            bottomBar = {
+                if (model.current != null) {
+                    PlayerBar(model, onShowUpNext = { showingUpNext = true }, onShowLyrics = { showingLyrics = true })
+                }
+            },
         ) { padding ->
             Column(Modifier.padding(padding).fillMaxSize()) {
                 model.lastError?.let { error ->
@@ -735,7 +745,7 @@ private fun FlatTrackList(model: PlayerViewModel, tracks: List<Track>, emptyText
 }
 
 @Composable
-private fun PlayerBar(model: PlayerViewModel, onShowUpNext: () -> Unit) {
+private fun PlayerBar(model: PlayerViewModel, onShowUpNext: () -> Unit, onShowLyrics: () -> Unit) {
     val track = model.current ?: return
     Surface(tonalElevation = 3.dp) {
         // Below the bar is the system's gesture area; keep the slider out of it.
@@ -773,12 +783,51 @@ private fun PlayerBar(model: PlayerViewModel, onShowUpNext: () -> Unit) {
                     modifier = Modifier.weight(1f),
                 )
                 Text(timeText(duration), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                // Up Next: the list of what follows, as a sheet.
+                // Lyrics, only while the track has some; then Up Next.
+                if (model.lyrics != null) {
+                    IconButton(onClick = onShowLyrics, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Lyrics, contentDescription = "Lyrics", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
                 IconButton(onClick = onShowUpNext, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Up Next", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
+    }
+}
+
+/** The words of the track playing. Timed lyrics follow the playback:
+ *  the current line is bold and kept in view, the rest grey; plain
+ *  lyrics are just the text. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LyricsSheet(model: PlayerViewModel, lyrics: Lyrics, onDismiss: () -> Unit) {
+    val current = lyrics.indexAt(model.currentTime)
+    val state = rememberLazyListState()
+    LaunchedEffect(current) {
+        if (current != null) state.animateScrollToItem(current, scrollOffset = -300)
+    }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        model.current?.let { track ->
+            Column(Modifier.padding(horizontal = 24.dp)) {
+                Text(track.title, style = MaterialTheme.typography.titleLarge)
+                Text(track.artist ?: "", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            HorizontalDivider(Modifier.padding(horizontal = 24.dp, vertical = 12.dp))
+        }
+        LazyColumn(state = state, modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp), contentPadding = PaddingValues(horizontal = 24.dp)) {
+            itemsIndexed(lyrics.lines) { index, line ->
+                Text(
+                    line.text.ifEmpty { " " },
+                    style = if (lyrics.isTimed) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (index == current) FontWeight.Bold else FontWeight.Normal,
+                    color = if (lyrics.isTimed && index != current) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(vertical = 4.dp),
+                )
+            }
+        }
+        Spacer(Modifier.navigationBarsPadding().height(16.dp))
     }
 }
 
