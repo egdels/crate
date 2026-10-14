@@ -13,6 +13,10 @@ import SwiftUI
 /// method runs, SwiftUI's WindowGroup has already decided to open a new
 /// window per file, which is not what a player wants. Claiming the event
 /// first keeps it to the one window.
+///
+/// Main actor: AppKit calls the delegate on the main thread, and the
+/// windows it looks at and the model it hands files to live there too.
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var onOpen: (([URL]) -> Void)? {
         didSet { flush() }

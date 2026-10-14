@@ -45,7 +45,7 @@ import Testing
     }
 
     @Test func oneMistaggedTrackDoesNotMakeACompilation() {
-        var tracks = (1...6).map { makeTrack("\($0)", artist: "Moss Quartet", album: "Landfall", track: $0, folder: "/m/a") }
+        var tracks = (1...6).map { makeTrack(String($0), artist: "Moss Quartet", album: "Landfall", track: $0, folder: "/m/a") }
         tracks[5].artist = "Landfall;"
         let albums = Album.group(tracks)
         #expect(albums.count == 1)

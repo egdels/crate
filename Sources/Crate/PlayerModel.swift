@@ -333,7 +333,7 @@ final class PlayerModel: ObservableObject {
     }
 
     private var progress: Library.Progress {
-        { read, total in Task { @MainActor [weak self] in self?.scanProgress = (read, total) } }
+        { [weak self] read, total in Task { @MainActor in self?.scanProgress = (read, total) } }
     }
 
     /// Files the last scan could not read, for the File menu.
