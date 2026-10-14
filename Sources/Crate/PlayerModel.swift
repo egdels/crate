@@ -69,6 +69,7 @@ final class PlayerModel: ObservableObject {
     private let player: any AudioPlayer
     private let artworkCache: ArtworkCache
     private let favoritesStore: any FavoritesStore
+    private let playbackStore: any PlaybackStateStore
     private var ticker: Timer?
     private var artworkTask: Task<Void, Never>?
     private var searchIndex = SearchIndex(albums: [])
@@ -76,11 +77,15 @@ final class PlayerModel: ObservableObject {
     /// Set by `live()`; nil in tests and previews.
     var nowPlaying: NowPlaying?
 
-    init(library: Library, player: any AudioPlayer, artwork: ArtworkCache, favorites: any FavoritesStore) {
+    init(
+        library: Library, player: any AudioPlayer, artwork: ArtworkCache, favorites: any FavoritesStore,
+        playback: any PlaybackStateStore
+    ) {
         self.library = library
         self.player = player
         self.artworkCache = artwork
         self.favoritesStore = favorites
+        self.playbackStore = playback
         player.onFinished = { [weak self] in self?.trackFinished() }
     }
 
@@ -95,9 +100,12 @@ final class PlayerModel: ObservableObject {
         let artwork = ArtworkCache(directory: artworkDirectory, reader: AVFoundationArtworkReader())
         let favoritesURL = (try? JSONFavoritesStore.defaultFileURL(appName: "Crate"))
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("crate-favorites.json")
+        let playbackDirectory = (try? JSONPlaybackStateStore.defaultDirectory(appName: "Crate"))
+            ?? FileManager.default.temporaryDirectory
         let model = PlayerModel(
             library: library, player: AVAudioEngineBackend(), artwork: artwork,
-            favorites: JSONFavoritesStore(fileURL: favoritesURL))
+            favorites: JSONFavoritesStore(fileURL: favoritesURL),
+            playback: JSONPlaybackStateStore(directory: playbackDirectory))
         model.nowPlaying = NowPlaying(model: model)
         return model
     }
@@ -226,6 +234,7 @@ final class PlayerModel: ObservableObject {
                 }
                 isLoaded = true
                 opensAudioFiles = DefaultApp.opensAudioFiles
+                restorePlayback()
                 // An index from an older version lacks tags this one
                 // reads: re-read the files once, with the grid already up
                 // and the footer showing the progress.
@@ -499,6 +508,7 @@ final class PlayerModel: ObservableObject {
         if isPlaying {
             player.pause()
             isPlaying = false
+            savePlayback()
         } else {
             player.play()
             isPlaying = true
@@ -531,16 +541,19 @@ final class PlayerModel: ObservableObject {
         player.seek(to: time)
         currentTime = time
         syncNowPlaying()
+        savePlayback()
     }
 
     func setShuffle(_ on: Bool) {
         queue.setShuffle(on)
         preloadNext()
+        savePlayback()
     }
 
     func setRepeat(_ mode: PlayQueue.RepeatMode) {
         queue.repeatMode = mode
         preloadNext()
+        savePlayback()
     }
 
     var duration: TimeInterval {
@@ -566,6 +579,7 @@ final class PlayerModel: ObservableObject {
             syncNowPlaying()
             // Gapless: the backend chains the next file behind this one.
             preloadNext()
+            savePlayback()
         } catch {
             lastError = "Cannot play \(track.url.lastPathComponent): \(error.localizedDescription)"
             isPlaying = false
@@ -608,6 +622,7 @@ final class PlayerModel: ObservableObject {
         ticker?.invalidate()
         ticker = nil
         syncNowPlaying()
+        savePlayback()
     }
 
     private func syncNowPlaying() {
@@ -625,5 +640,68 @@ final class PlayerModel: ObservableObject {
     private func tick() {
         guard isPlaying else { return }
         currentTime = player.currentTime
+        if Date().timeIntervalSince(lastSave) >= 10 {
+            savePlayback()
+        }
+    }
+
+    // MARK: - Resume
+
+    private var lastSave = Date.distantPast
+
+    /// Writes down the queue, the cursor and the position, so the next
+    /// launch comes up paused right here. Called on every change of
+    /// track or mode, on pause, seek and quit, and every ten seconds of
+    /// playback; the store rewrites the queue only when it changed.
+    func savePlayback() {
+        lastSave = Date()
+        do {
+            guard let currentEntry = queue.currentEntry,
+                  let index = queue.entries.firstIndex(where: { $0.id == currentEntry.id }) else {
+                try playbackStore.clear()
+                return
+            }
+            try playbackStore.save(PlaybackState(
+                trackIDs: queue.entries.map(\.track.id), asAlbum: queueIsAlbum, currentIndex: index,
+                position: currentTime, isShuffled: queue.isShuffled, repeatMode: queue.repeatMode))
+        } catch {
+            // Nothing the user can act on; the next launch starts fresh.
+        }
+    }
+
+    /// Rebuilds the queue the last run left behind, loads its current
+    /// track at the saved position and stays paused. Tracks that are no
+    /// longer in the library are skipped; if the current one is gone,
+    /// nothing is restored.
+    private func restorePlayback() {
+        guard current == nil, let state = try? playbackStore.load() else { return }
+        let byID = Dictionary(tracks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        guard let currentTrack = byID[state.trackIDs[state.currentIndex]] else { return }
+        var restored: [Track] = []
+        var index = 0
+        for (offset, id) in state.trackIDs.enumerated() {
+            guard let track = byID[id] else { continue }
+            if offset == state.currentIndex { index = restored.count }
+            restored.append(track)
+        }
+        queue.replace(with: restored, startingAt: index)
+        queue.repeatMode = state.repeatMode
+        if state.isShuffled { queue.setShuffle(true) }
+        queueIsAlbum = state.asAlbum
+        queueAlbumMean = state.asAlbum ? ReplayGain.albumMean(restored) : nil
+        do {
+            try player.load(currentTrack.url, gain: gain(for: currentTrack))
+        } catch {
+            queue.clear()
+            return
+        }
+        let position = min(state.position, currentTrack.duration)
+        if position > 0 {
+            player.seek(to: position)
+        }
+        currentTime = position
+        loadArtwork(for: currentTrack)
+        syncNowPlaying()
+        preloadNext()
     }
 }

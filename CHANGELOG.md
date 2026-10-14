@@ -17,6 +17,13 @@ version's section from this file as the GitHub release notes.
   nothing playing, they start right away.
 - Android: the media notification has the heart, so a track can be
   marked from the lock screen; the app's hearts follow at once.
+- Both apps remember where playback stood and come up there on the
+  next launch: the same queue, the same track at the same position,
+  paused. Kept in `queue.json` and `position.json` next to the index
+  (`PRIVACY.md` lists them); the queue file is rewritten only when the
+  queue changes, the position every few seconds of playback. Android
+  also answers the system's playback resumption (its media controls
+  after the app was gone) from the same files.
 
 ### Fixed
 

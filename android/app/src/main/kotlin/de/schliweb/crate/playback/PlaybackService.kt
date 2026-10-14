@@ -28,6 +28,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSession.MediaItemsWithStartPosition
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
@@ -37,6 +38,7 @@ import de.schliweb.crate.CrateApplication
 import de.schliweb.crate.MainActivity
 import de.schliweb.crate.SharedFavorites
 import de.schliweb.crate.core.ReplayGain
+import de.schliweb.crate.core.Track
 import de.schliweb.crate.library.ArtworkCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +46,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.guava.future
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.IOException
 
 /**
@@ -156,6 +159,30 @@ class PlaybackService : MediaSessionService() {
                 .add(SessionCommand(COMMAND_TOGGLE_FAVORITE, Bundle.EMPTY))
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session).setAvailableSessionCommands(commands).build()
+        }
+
+        /** The system's "resume" after the process was gone (its media
+         *  controls, a headset button): the playlist the last run wrote
+         *  down, at the saved track and position. */
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession, controller: MediaSession.ControllerInfo,
+        ): ListenableFuture<MediaItemsWithStartPosition> = scope.future {
+            val app = application as CrateApplication
+            val state = withContext(Dispatchers.IO) {
+                if (app.library.tracks.isEmpty()) app.library.load()
+                app.playback.load()
+            } ?: throw IllegalStateException("nothing to resume")
+            val byId = app.library.tracks.associateBy { it.id }
+            if (byId[state.trackIds[state.currentIndex]] == null) throw IllegalStateException("current track is gone")
+            val restored = ArrayList<Track>(state.trackIds.size)
+            var index = 0
+            for ((offset, id) in state.trackIds.withIndex()) {
+                val track = byId[id] ?: continue
+                if (offset == state.currentIndex) index = restored.size
+                restored += track
+            }
+            val items = withContext(Dispatchers.Default) { mediaItems(app, restored, app.library.albums, state.asAlbum) }
+            MediaItemsWithStartPosition(items, index, (state.position * 1000).toLong())
         }
 
         override fun onCustomCommand(

@@ -44,6 +44,8 @@ uploaded or changed.
 - The notification, the lock screen and headphone buttons control
   playback, and the notification has the heart too; the music keeps
   playing when the app is in the background.
+- Crate remembers where you stopped: the next launch comes up with the
+  same queue, at the same spot, paused.
 
 ## Opening files
 

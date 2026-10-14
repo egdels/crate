@@ -37,6 +37,9 @@ scripts/install.sh             # bundle + copy to /Applications + lsregister; qu
 open <file>                    # what Finder does: plays the file (its album if in the library)
 open build/Crate.app           # run it; pkill -x Crate to stop
 scripts/screenshot.sh          # PNG of the Crate window, then Read the file
+                               # (captures the screen area: an overlapping window shows instead;
+                               # `screencapture -l <CGWindowID>` captures the window itself, and
+                               # `open -g <file>` plays a library file without bringing Crate forward)
 ```
 
 No Xcode project. The app is a SwiftPM executable target; `scripts/bundle.sh`
@@ -73,7 +76,8 @@ Sources/CrateCore/    UI-free library: Track, Album, LibraryScanner,
                       MetadataReader (+AVFoundation impl), Library (actor),
                       LibraryStore (+JSON impl), PlayQueue, AudioPlayer
                       (+AVAudioPlayer impl), ID3v1Genres, Favorites
-                      (+FavoritesStore, JSON impl), ReplayGain
+                      (+FavoritesStore, JSON impl), ReplayGain,
+                      PlaybackState (+PlaybackStateStore, JSON impl)
 Sources/Crate/        SwiftUI app: CrateApp, PlayerModel (@Observable,
                       the only UI state), ContentView (album grid + track
                       list + empty state), PlayerBar
@@ -131,7 +135,8 @@ android/core/   Kotlin/JVM, package de.schliweb.crate.core: Track (uri +
                 JsonLibraryStore (kotlinx.serialization), FileSource
                 (+LocalFileSource for tests), MetadataReader, FlacMetadata,
                 TagText/Id3v1Genres, FolderImages, SearchQuery, Formatting,
-                Favorites (+JsonFavoritesStore), ReplayGain
+                Favorites (+JsonFavoritesStore), ReplayGain,
+                PlaybackState (+JsonPlaybackStateStore)
 android/app/    de.schliweb.crate: CrateApplication (owns Library and
                 ArtworkCache), PlayerViewModel (the only UI state),
                 MainActivity, ui/CrateScreen (grid + detail, two panes
@@ -330,6 +335,22 @@ because a controller's `addMediaItems` passes through the callback's
 reach the length the controller reported (`KEY_TOTAL`). Verified on the
 Pixel_9a emulator: sheet, tap, ×, Clear, Play Next with and without
 shuffle; and on the Mac on screen.
+Resume on launch (both apps): `PlaybackState` (track ids in queue
+order, asAlbum, cursor, position, shuffle, repeat) in two files next to
+the index, `queue.json` written only when the ids change (All Tracks
+is every id of the library) and `position.json` on every track or mode
+change, pause, seek, quit and every ten seconds of playback. Mac:
+`PlayerModel.savePlayback`/`restorePlayback`, the quit hook is
+`AppDelegate.onTerminate`; restore loads and seeks the backend without
+playing. Android: the view model saves from the controller's playlist
+(never an empty one, which is what it sees before the restore) and
+restores with `setMediaItems(items, index, position)` + `prepare()`,
+which shows a paused media notification right away; the media items
+come from `playback/MediaItems.kt`, shared with the service's
+`onPlaybackResumption` (the system's resume after the process was
+gone; written, not verified on a device). Verified: Mac quit and
+relaunch at 1:15 of a track; Android force-stop at 0:15 came back at
+0:09 (the last periodic save) and played on from there.
 
 **Open, in no fixed order:**
 

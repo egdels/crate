@@ -21,7 +21,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
@@ -34,17 +33,18 @@ import de.schliweb.crate.core.Favorites
 import de.schliweb.crate.core.Folder
 import de.schliweb.crate.core.Library
 import de.schliweb.crate.core.Paths
-import de.schliweb.crate.core.ReplayGain
 import de.schliweb.crate.core.ScannedFile
 import de.schliweb.crate.core.SearchIndex
 import de.schliweb.crate.core.SearchQuery
 import de.schliweb.crate.core.Track
 import de.schliweb.crate.core.countText
 import de.schliweb.crate.library.SafFileSource
-import de.schliweb.crate.playback.ArtworkBitmapLoader
+import de.schliweb.crate.core.PlaybackState
 import de.schliweb.crate.playback.PlaybackService
+import de.schliweb.crate.playback.mediaItems
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -161,6 +161,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
             isLoaded = true
             started.complete(Unit)
+            restorePlayback()
             // An index from an older version lacks tags this one reads:
             // re-read the files once, with the grid already up and the
             // footer showing the progress.
@@ -281,6 +282,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     if (current?.let { Paths.isUnder(it.path, folder.path) } == true) {
                         controller.stop()
                         controller.clearMediaItems()
+                        viewModelScope.launch(playbackWriter) { app.playback.clear() }
                     } else {
                         for (index in (controller.mediaItemCount - 1) downTo 0) {
                             if (index !in keep) controller.removeMediaItem(index)
@@ -392,8 +394,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         controller.addListener(listener)
         controllerReady.complete(controller)
         syncFromPlayer(controller)
+        var ticks = 0
         while (currentCoroutineContext().isActive) {
-            if (controller.isPlaying) currentTime = controller.currentPosition / 1000.0
+            if (controller.isPlaying) {
+                currentTime = controller.currentPosition / 1000.0
+                if (++ticks % 40 == 0) savePlayback(controller)
+            }
             delay(250)
         }
     }
@@ -401,6 +407,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(playing: Boolean) {
             isPlaying = playing
+            if (!playing) controllerReady.takeIf { it.isCompleted }?.let { viewModelScope.launch { savePlayback(it.await()) } }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -444,6 +451,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
         if (track != null) lastError = null
         updateUpcoming(controller)
+        savePlayback(controller)
     }
 
     /** Walks the timeline from the current item the way the player will,
@@ -495,37 +503,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      *  for listening to a record as a whole. */
     fun play(tracks: List<Track>, index: Int = 0, asAlbum: Boolean = false) {
         if (tracks.isEmpty()) return
-        val byPath = HashMap<String, Album>()
-        for (album in albums) for (track in album.tracks) byPath[track.id] = album
-        val albumMean = if (asAlbum) ReplayGain.albumMean(tracks) else null
-        val items = tracks.map { track -> mediaItem(track, byPath[track.id], ReplayGain.playbackGain(track, asAlbum, albumMean)) }
+        val items = mediaItems(app, tracks, albums, asAlbum)
         queued = tracks.associateBy { it.id }
+        queueIsAlbum = asAlbum
         withController { controller ->
             controller.setMediaItems(items, index.coerceIn(0, items.size - 1), 0L)
             controller.prepare()
             controller.play()
         }
-    }
-
-    private fun mediaItem(track: Track, album: Album?, gain: Double): MediaItem {
-        val metadata = MediaMetadata.Builder()
-            .setTitle(track.title)
-            .setArtist(track.artist)
-            .setAlbumTitle(track.album ?: album?.title)
-            .setAlbumArtist(track.albumArtist ?: album?.artist)
-            .setTrackNumber(track.trackNumber)
-            .setTotalTrackCount(track.trackTotal)
-            .setDiscNumber(track.discNumber)
-            .setReleaseYear(track.year)
-            .setGenre(track.genre)
-            .setArtworkUri(album?.let { ArtworkBitmapLoader.uri(app.artwork.key(it)) })
-            .setExtras(Bundle().apply { putDouble(PlaybackService.KEY_GAIN, gain) })
-            .build()
-        return MediaItem.Builder()
-            .setMediaId(track.id)
-            .setUri(Uri.parse(track.uri))
-            .setMediaMetadata(metadata)
-            .build()
     }
 
     // Up Next
@@ -540,14 +525,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun enqueue(tracks: List<Track>, next: Boolean) {
         if (tracks.isEmpty()) return
-        val byPath = HashMap<String, Album>()
-        for (album in albums) for (track in album.tracks) byPath[track.id] = album
         // Tracks from anywhere: each is levelled on its own.
-        val items = tracks.map { track -> mediaItem(track, byPath[track.id], ReplayGain.playbackGain(track, false, null)) }
+        val items = mediaItems(app, tracks, albums, asAlbum = false)
         queued = queued + tracks.associateBy { it.id }
         withController { controller ->
             when {
                 controller.currentMediaItem == null -> {
+                    queueIsAlbum = false
                     controller.setMediaItems(items, 0, 0L)
                     controller.prepare()
                     controller.play()
@@ -633,6 +617,65 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
         repeatMode = next
         withController { it.repeatMode = next }
+    }
+
+    // Resume
+
+    /** Whether the playlist was started as an album, for the gains on
+     *  restore. */
+    private var queueIsAlbum = false
+
+    /** One thread, so the files are written in order. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val playbackWriter = Dispatchers.IO.limitedParallelism(1)
+
+    /** Writes down the playlist, the cursor and the position, so the
+     *  next launch comes up paused right here. Called on every item
+     *  transition and state change, on pause, and every ten seconds of
+     *  playback; the store rewrites the playlist only when it changed.
+     *  An empty playlist is not written: the app starts with one, before
+     *  the restore. */
+    private fun savePlayback(controller: MediaController) {
+        val count = controller.mediaItemCount
+        val index = controller.currentMediaItemIndex
+        if (count == 0 || index !in 0 until count) return
+        val state = PlaybackState(
+            trackIds = (0 until count).map { controller.getMediaItemAt(it).mediaId },
+            asAlbum = queueIsAlbum,
+            currentIndex = index,
+            position = controller.currentPosition.coerceAtLeast(0) / 1000.0,
+            isShuffled = controller.shuffleModeEnabled,
+            repeatMode = controller.repeatMode,
+        )
+        viewModelScope.launch(playbackWriter) {
+            runCatching { app.playback.save(state) }
+        }
+    }
+
+    /** Rebuilds the playlist the last run left behind, at the saved
+     *  track and position, paused. Tracks no longer in the library are
+     *  skipped; if the current one is gone, nothing is restored. */
+    private suspend fun restorePlayback() {
+        val controller = controllerReady.await()
+        if (controller.mediaItemCount > 0) return
+        val state = withContext(Dispatchers.IO) { runCatching { app.playback.load() }.getOrNull() } ?: return
+        val byId = tracks.associateBy { it.id }
+        if (byId[state.trackIds[state.currentIndex]] == null) return
+        val restored = ArrayList<Track>(state.trackIds.size)
+        var index = 0
+        for ((offset, id) in state.trackIds.withIndex()) {
+            val track = byId[id] ?: continue
+            if (offset == state.currentIndex) index = restored.size
+            restored += track
+        }
+        queueIsAlbum = state.asAlbum
+        val items = withContext(Dispatchers.Default) { mediaItems(app, restored, albums, state.asAlbum) }
+        queued = restored.associateBy { it.id }
+        controller.setMediaItems(items, index, (state.position * 1000).toLong())
+        controller.repeatMode = state.repeatMode
+        controller.shuffleModeEnabled = state.isShuffled
+        controller.prepare()
+        syncFromPlayer(controller)
     }
 
     private companion object {

@@ -10,9 +10,6 @@ Entries move to CHANGELOG.md when they ship and are deleted here.
   Tracks and Favorites. Recently Added is free: the scanner knows the
   file dates. Recently Played needs a small `history.json` in the
   favorites pattern, without touching the index.
-- **Resume on launch.** Remember track and position; the next launch
-  comes up paused at that spot. Media3 does half of it on Android; on
-  the Mac it is a small state file in Application Support.
 - **Disc separators in the album page.** Multi-disc albums show one flat
   list today. A "Disc 2" divider between the tracks is cheap; the data
   is there.
@@ -56,6 +53,6 @@ Entries move to CHANGELOG.md when they ship and are deleted here.
 
 ## Suggested next version (0.7.0)
 
-Resume on launch and disc separators, on top of the Up Next list and
-the notification heart that are already in. The lyrics count via
+Disc separators, on top of the Up Next list, the notification heart
+and resume on launch that are already in. The lyrics count via
 `crate-scan` as groundwork for 0.8.

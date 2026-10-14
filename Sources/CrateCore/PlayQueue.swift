@@ -12,7 +12,7 @@ import Foundation
 /// user built; `playbackOrder` is what actually plays, which only differs
 /// while shuffled.
 public struct PlayQueue: Equatable, Sendable {
-    public enum RepeatMode: CaseIterable, Equatable, Sendable {
+    public enum RepeatMode: String, CaseIterable, Codable, Equatable, Sendable {
         case off, all, one
     }
 

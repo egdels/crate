@@ -21,6 +21,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var onOpen: (([URL]) -> Void)? {
         didSet { flush() }
     }
+    /// Quit: the model writes down where playback stands.
+    var onTerminate: (() -> Void)?
     private var pending: [URL] = []
 
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -75,6 +77,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        onTerminate?()
+    }
+
     /// Dock icon clicked with the window closed: bring it back. A closed
     /// WindowGroup window is gone for good, and the openWindow action
     /// needs macOS 13, so the app opens its own crate://main URL, which
@@ -120,6 +126,7 @@ struct CrateApp: App {
                 .task {
                     NSApp.activate(ignoringOtherApps: true)
                     delegate.onOpen = { [model] urls in Task { await model.open(urls) } }
+                    delegate.onTerminate = { [model] in model.savePlayback() }
                     await model.start()
                 }
         }

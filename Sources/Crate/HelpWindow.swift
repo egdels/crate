@@ -60,6 +60,7 @@ struct HelpView: View {
                     HelpRow("⌘U", "Up Next: what plays after this track, also behind the list icon in the player bar. Double-click plays an entry now, the × takes it out. Right-click a track or an album for Play Next and Play Last.")
                     HelpRow("⌘L", "Favorite: a heart on the track that is playing. Rows and the album header have the heart too; the Favorites tile plays them. Favorites are kept on this Mac, in a file next to the library index.")
                     HelpRow("", "The media keys and Control Center's Now Playing work as with any player.")
+                    HelpRow("", "Crate remembers where you stopped: the next launch comes up with the same queue, at the same spot, paused.")
                 }
 
                 HelpSection("Finder") {
