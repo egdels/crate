@@ -311,8 +311,12 @@ in the Android media notification (needs a session callback in
 **Open, in no fixed order:**
 
 1. Released: v0.1.0 (DMG only), v0.2.0 (DMG + signed APK), v0.3.0 to
-   v0.6.0 (DMG + APK + AAB; 0.6.0 on 2026-10-14) are published at
-   github.com/egdels/crate, built by `release.yml`. For
+   v0.6.3 (DMG + APK + AAB) are published at github.com/egdels/crate,
+   built by `release.yml`. 0.6.0 to 0.6.2 (all 2026-10-14) are
+   withdrawn: Android could not play untagged files (0.6.0, 0.6.1) and
+   the Mac DMG crashed on Now Playing (all three); 0.6.3 is the one to
+   use, its DMG verified on this Mac by download and a two-minute play.
+   For
    the next version: bump `Packaging/Info.plist` and
    `android/gradle.properties` (appVersion), turn the CHANGELOG's
    Unreleased section into the version's, push `main` and the tag only
