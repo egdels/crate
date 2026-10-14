@@ -308,9 +308,10 @@ in the Android media notification (needs a session callback in
    `SIGNING_KEY_PASSWORD`, `SIGNING_STORE_PASSWORD` (same names as the
    other apps; the developer stores them in GitHub). The tag must match
    both `Packaging/Info.plist` and `appVersion` in
-   `android/gradle.properties`; bump both. The Pixel 7a currently runs a
-   release build signed with the debug key; the first properly signed
-   APK needs an uninstall there (different signature), then the folder
+   `android/gradle.properties`; bump both. The Pixel 7a runs the debug
+   build of 2026-10-14 (target 37, favorites, loudness), installed after
+   uninstalling the release-signed 0.5.0; the next signed release APK
+   needs an uninstall there again (different signature), then the folder
    has to be picked again. The workflow ran green for v0.2.0-rc2 and
    v0.2.0; the APK's certificate was verified with apksigner to be the
    shared release key (same digest as the other apps), not the debug key.
