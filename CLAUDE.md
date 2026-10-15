@@ -370,12 +370,30 @@ in flight (125x realtime per thread), 150% CPU, so the developer's
 18,000 files take about an hour; `gain(for:)` prefers tags, then the
 measurement (album gain only when the whole queued album is measured),
 then Sound Check. Android: `MediaCodecLoudness` (MediaExtractor +
-MediaCodec, 16-bit or float PCM to planar floats), the analyzer in the
-application, the view model starts it after load and scans while the
-app is open (no WorkManager, no background service); `mediaItems`
-applies the same precedence. Verified: the Rehab MP3 measures -16.4
-LUFS, peak -6.5 dBFS on both the Mac and the emulator; the emulator's
-software codecs manage about one file per nine seconds.
+MediaCodec, 16-bit or float PCM to planar floats), the analyzer and
+its job in the application (`CrateApplication.startAnalysis`, a
+StateFlow of progress the view model mirrors), started after load and
+after scans, cancelled before them; it runs as long as the process
+does, so Back (which finishes the activity) does not stop it and
+background playback keeps it going, while an idle app in the
+background is frozen by the system until it is opened again (no
+WorkManager, no background service); `mediaItems` applies the same
+precedence. Each buffer costs a round trip to the codec process
+(about 0.75 ms) and one MP3 frame is 26 ms of audio, so frame by
+frame the decoder idles and a four-minute MP3 takes eight seconds
+(30x realtime, with the CPU two thirds idle); on Android 15 and later
+the platform decoders accept batches (`FEATURE_MultipleFrames`,
+`queueInputBuffers`, `KEY_BUFFER_BATCH_MAX_OUTPUT_SIZE`, callback mode
+only: "Large Frame audioconfig works only with async mode"), which
+`decodeBatched` uses on a `HandlerThread`, 250x realtime, a four-minute
+MP3 in under a second; older devices get the synchronous loop. The
+Kotlin analyzer takes results as they finish (a Channel), not in
+library order, which once kept the Pixel 7a's footer at "0 of 4497"
+for minutes, and gives up a file that takes longer than it plays
+(`minTimeoutMillis` floor two minutes). Each file logs one line under
+the tag `Loudness`. Verified: the Rehab MP3 measures -16.4
+LUFS, peak -6.5 dBFS on both the Mac and the emulator, batched and
+frame by frame alike.
 Recent tiles (both apps): Recently Added is `Track.recentlyAdded` /
 `recentlyAdded()` over the album-ordered tracks (newest modification
 day first, album order within a day, capped at 200), computed with

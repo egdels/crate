@@ -119,4 +119,39 @@ class LoudnessTest {
         assertNotNull(partial)
         assertTrue(partial.size in 1 until 40)
     }
+
+    @Test
+    fun progressCountsFilesAsTheyFinishNotInOrder() = runBlocking {
+        // The first file is slow: with two in flight, the others pass
+        // through the second slot and the count moves before it is done.
+        val store = JsonLoudnessStore(dir.file("order.json").also { it.delete() })
+        val analyzer = LoudnessAnalyzer(store, measure = { track ->
+            delay(if (track.title == "slow") 400 else 5)
+            TrackLoudness(-20.0, 0.1, LoudnessHistogram())
+        }, concurrency = 2)
+        val tracks = listOf(makeTrack("slow")) + (0 until 10).map { makeTrack("fast$it") }
+        var last = LoudnessAnalyzer.Progress(0, 0)
+        val job = launch { analyzer.run(tracks) { progress, _ -> last = progress } }
+        delay(200)
+        assertTrue(last.done in 1 until 11, "counted ${last.done} while the slow file was still running")
+        job.join()
+        assertEquals(LoudnessAnalyzer.Progress(11, 11), last)
+        assertEquals(11, store.load()!!.size)
+    }
+
+    @Test
+    fun aFileThatTakesLongerThanItPlaysIsGivenUp() = runBlocking {
+        val store = JsonLoudnessStore(dir.file("timeout.json").also { it.delete() })
+        val analyzer = LoudnessAnalyzer(store, measure = { track ->
+            if (track.title == "stuck") delay(10_000)
+            TrackLoudness(-20.0, 0.1, LoudnessHistogram())
+        }, concurrency = 2, minTimeoutMillis = 50)
+        val tracks = listOf(makeTrack("stuck").copy(duration = 0.01)) + (0 until 3).map { makeTrack("ok$it") }
+        var last = LoudnessAnalyzer.Progress(0, 0)
+        val result = analyzer.run(tracks) { progress, _ -> last = progress }
+        assertEquals(LoudnessAnalyzer.Progress(4, 4), last)
+        assertEquals(3, result.size)
+        assertNull(result.measurement(tracks[0]))
+        assertEquals(listOf(tracks[0]), analyzer.pending(tracks))
+    }
 }

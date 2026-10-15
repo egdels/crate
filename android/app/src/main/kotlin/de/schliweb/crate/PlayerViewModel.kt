@@ -88,10 +88,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var lastScan by mutableStateOf<Library.RescanSummary?>(null)
         private set
     /** Files measured so far and files to measure, while the loudness
-     *  analysis runs; null otherwise. */
+     *  analysis runs; null otherwise. Mirrors the application's. */
     var analysisProgress by mutableStateOf<LoudnessAnalyzer.Progress?>(null)
         private set
-    private var analysisJob: Job? = null
     var lastError by mutableStateOf<String?>(null)
     /** A one-line result of something the user just did, shown in the
      *  footer until the next scan; null most of the time. */
@@ -198,6 +197,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             if (library.needsRescan) rescan() else startAnalysis()
         }
         viewModelScope.launch { connect() }
+        viewModelScope.launch { app.analysisProgress.collect { analysisProgress = it } }
         viewModelScope.launch {
             app.favorites.state.collect {
                 favorites = it
@@ -330,7 +330,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             notice = "Removed ${folder.name}"
             app.favorites.update { it.removeAllUnder(folder.path) }
             app.history.update { it.removeAllUnder(folder.path) }
-            analysisJob?.cancel()
+            app.cancelAnalysis()
             withContext(Dispatchers.IO) { app.loudness.removeAllUnder(folder.path) }
             val controller = controllerReady.takeIf { it.isCompleted }?.await()
             if (controller != null) {
@@ -372,7 +372,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         notice = null
         // The analysis reads the same files: out of the way until the
         // scan is done, then on with whatever is new.
-        analysisJob?.cancel()
+        app.cancelAnalysis()
         val started = System.currentTimeMillis()
         try {
             lastScan = withContext(Dispatchers.IO) { work() }
@@ -390,26 +390,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     // Loudness analysis
 
-    /** Measures files without ReplayGain tags in the background, two at
-     *  a time, while the app is open; results arrive every few files and
-     *  the footer counts along. Cancelled by a scan or a folder removal
-     *  and started again after, picking up where it was. */
-    private fun startAnalysis() {
-        analysisJob?.cancel()
-        val tracks = this.tracks
-        analysisJob = viewModelScope.launch {
-            val pending = app.loudness.pending(tracks).size
-            if (pending == 0) return@launch
-            analysisProgress = LoudnessAnalyzer.Progress(0, pending)
-            try {
-                app.loudness.run(tracks) { progress, _ ->
-                    viewModelScope.launch { analysisProgress = progress }
-                }
-            } finally {
-                analysisProgress = null
-            }
-        }
-    }
+    /** Hands the library to the application's analysis (see
+     *  `CrateApplication.startAnalysis`), which measures files without
+     *  ReplayGain tags in the background; the footer counts along. */
+    private fun startAnalysis() = app.startAnalysis(tracks)
 
     private suspend fun refresh() {
         val (grouped, index, recent) = withContext(Dispatchers.Default) {

@@ -6,13 +6,12 @@ package de.schliweb.crate.core
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -310,14 +309,20 @@ class JsonLoudnessStore(val file: File) : LoudnessStore {
     }
 }
 
-/** Measures what the library has not measured yet, a few files at a
- *  time, and writes the results down every few files, so a run that
- *  is cancelled picks up where it was. */
+/**
+ * Measures the library's files that carry no ReplayGain tags, a few at a
+ * time, and keeps the results in the store. Results are taken as they
+ * finish, so one long file holds up one slot and not the count; a file
+ * that takes longer than its own playing time (and at least
+ * [minTimeoutMillis]) is given up as unmeasured and tried again on the
+ * next run.
+ */
 class LoudnessAnalyzer(
     private val store: LoudnessStore,
     private val measure: suspend (Track) -> TrackLoudness?,
     private val concurrency: Int = 2,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val minTimeoutMillis: Long = 120_000,
 ) {
     data class Progress(val done: Int, val total: Int)
 
@@ -352,16 +357,25 @@ class LoudnessAnalyzer(
         if (total == 0) return loudness
         var done = 0
         var unsaved = 0
-        val semaphore = Semaphore(concurrency)
         try {
             withContext(dispatcher) {
                 coroutineScope {
-                    // Results come back in order; the semaphore keeps a few in flight.
-                    val jobs = pending.map { track ->
-                        async { semaphore.withPermit { track to runCatching { measure(track) }.getOrNull() } }
+                    val results = Channel<Pair<Track, TrackLoudness?>>(Channel.UNLIMITED)
+                    val semaphore = Semaphore(concurrency)
+                    launch {
+                        for (track in pending) {
+                            semaphore.acquire()
+                            launch {
+                                try {
+                                    results.send(track to measureOrNull(track))
+                                } finally {
+                                    semaphore.release()
+                                }
+                            }
+                        }
                     }
-                    for (job in jobs) {
-                        val (track, result) = job.await()
+                    repeat(total) {
+                        val (track, result) = results.receive()
                         if (result != null) { loudness = loudness.set(result, track); unsaved++ }
                         done++
                         if (unsaved >= 10) {
@@ -371,7 +385,6 @@ class LoudnessAnalyzer(
                         } else {
                             progress(Progress(done, total), null)
                         }
-                        currentCoroutineContext().ensureActive()
                     }
                 }
             }
@@ -382,5 +395,17 @@ class LoudnessAnalyzer(
         if (unsaved > 0) runCatching { store.save(loudness) }
         progress(Progress(done, total), loudness)
         return loudness
+    }
+
+    /** null when the file fails or takes longer than it plays. */
+    private suspend fun measureOrNull(track: Track): TrackLoudness? {
+        val limit = max(minTimeoutMillis, (track.duration * 1000).toLong())
+        return try {
+            withTimeoutOrNull(limit) { measure(track) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
     }
 }

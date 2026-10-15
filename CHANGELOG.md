@@ -13,6 +13,25 @@ version's section from this file as the GitHub release notes.
   or in a `lyrics` folder, as plain text; an `.lrc` still wins when
   both exist. Rips often bring these along.
 
+### Changed
+
+- Android: the loudness analysis decodes in batches of frames where
+  the platform's decoders allow it (Android 15 and later), about ten
+  times faster than frame by frame: a four-minute MP3 takes under a
+  second instead of eight. A collection of five thousand files is done
+  in an hour or two instead of a day.
+- Android: the analysis keeps running when you leave the app with
+  Back and while music plays in the background; it only pauses when
+  the system puts the idle app to sleep, and goes on when you return.
+
+### Fixed
+
+- Android: the footer counted measured files in library order, so one
+  long file at the front kept it at "0 of n" for minutes although files
+  behind it were being measured. It now counts files as they finish,
+  and a file that takes longer than it plays is given up and tried on
+  the next run.
+
 ## [0.9.0] - 2026-10-14
 
 ### Added
