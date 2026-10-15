@@ -16,10 +16,11 @@ version's section from this file as the GitHub release notes.
 ### Changed
 
 - Android: the loudness analysis decodes in batches of frames where
-  the platform's decoders allow it (Android 15 and later), about ten
-  times faster than frame by frame: a four-minute MP3 takes under a
-  second instead of eight. A collection of five thousand files is done
-  in an hour or two instead of a day.
+  the platform's decoders allow it (Android 15 and later) and measures
+  up to four files at once on a phone with the cores for it. On a
+  Pixel 7a that is about 90 files a minute instead of one: a
+  collection of 4,500 files is done in under an hour with the app open
+  or playing, instead of days.
 - Android: the analysis keeps running when you leave the app with
   Back and while music plays in the background; it only pauses when
   the system puts the idle app to sleep, and goes on when you return.

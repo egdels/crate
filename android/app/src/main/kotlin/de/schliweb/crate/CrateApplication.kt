@@ -54,7 +54,12 @@ class CrateApplication : Application() {
     /** The measured loudness of files without ReplayGain tags, in
      *  `loudness.json`; the media items read the gains. */
     val loudness: LoudnessAnalyzer by lazy {
-        LoudnessAnalyzer(JsonLoudnessStore(File(filesDir, "loudness.json")), measure = { MediaCodecLoudness.measure(this, it) })
+        LoudnessAnalyzer(
+            JsonLoudnessStore(File(filesDir, "loudness.json")),
+            measure = { MediaCodecLoudness.measure(this, it) },
+            // The meter is CPU work; half the cores, two to four.
+            concurrency = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(2, 4),
+        )
     }
 
     /** Files measured so far and files to measure while the analysis

@@ -390,10 +390,26 @@ MP3 in under a second; older devices get the synchronous loop. The
 Kotlin analyzer takes results as they finish (a Channel), not in
 library order, which once kept the Pixel 7a's footer at "0 of 4497"
 for minutes, and gives up a file that takes longer than it plays
-(`minTimeoutMillis` floor two minutes). Each file logs one line under
-the tag `Loudness`. Verified: the Rehab MP3 measures -16.4
-LUFS, peak -6.5 dBFS on both the Mac and the emulator, batched and
-frame by frame alike.
+(`minTimeoutMillis` floor two minutes); half the cores, two to four,
+run at once. Each file logs one line under the tag `Loudness`.
+Measured on the Pixel 7a (2026-10-15, release build compiled with
+`speed`): frame by frame one file a minute (the signed 0.9.0, which is
+why "it does not work"); batched, four at once, 86 files a minute over
+MP3, FLAC and WAV, no failures, an MP3 in 1 to 1.5 s and a FLAC in
+about 3 s (the platform's FLAC extractor decodes to PCM in the
+extractor process, so its cost shows up as "extract"). Two traps in
+measuring that: the Pixel 7a has `dalvik.vm.usejit=false`, and an
+`adb install` leaves the app `run-from-apk`, so everything runs
+interpreted (the meter took 30 s of a 32 s file) until
+`adb shell cmd package compile -m speed -f <package>`; a Play or
+sideloaded install compiles with `speed` by itself (`cmd package dump
+<package>` shows the "Dexopt state"). And a debug build is six times
+slower than the release build even when compiled. A second instance for
+such experiments goes on the phone with a temporary `applicationId`
+(`de.schliweb.crate.probe`, pick the folder again in the picker, uninstall
+after); the user's install and its data stay untouched. Verified: the
+Rehab MP3 measures -16.4 LUFS, peak -6.5 dBFS on both the Mac and the
+emulator, batched and frame by frame alike.
 Recent tiles (both apps): Recently Added is `Track.recentlyAdded` /
 `recentlyAdded()` over the album-ordered tracks (newest modification
 day first, album order within a day, capped at 200), computed with

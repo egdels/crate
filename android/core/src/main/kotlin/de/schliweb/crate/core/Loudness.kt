@@ -66,18 +66,13 @@ class LoudnessMeter(val sampleRate: Double, val channelCount: Int) {
             val count = minOf(frames - offset, stepFrames - stepFilled)
             for (c in 0 until minOf(channelCount, channels.size)) {
                 val data = channels[c]
-                val filter = filters[c]
-                var sum = 0.0
                 var peak = this.peak
                 for (i in offset until offset + count) {
-                    val x = data[i]
-                    val magnitude = abs(x)
+                    val magnitude = abs(data[i])
                     if (magnitude > peak) peak = magnitude
-                    val y = filter.process(x.toDouble())
-                    sum += y * y
                 }
                 this.peak = peak
-                stepSums[c] += sum
+                stepSums[c] += filters[c].energy(data, offset, offset + count)
             }
             stepFilled += count
             offset += count
@@ -140,6 +135,30 @@ internal class KFilter(fs: Double) {
         val z = hb0 * y + hb1 * hx1 + hb2 * hx2 - ha1 * hy1 - ha2 * hy2
         hx2 = hx1; hx1 = y; hy2 = hy1; hy1 = z
         return z
+    }
+
+    /** The sum of the squared filter output over [data] from [from]
+     *  until [to]. Same arithmetic as [process], but the state and the
+     *  coefficients sit in locals for the loop: as object fields they
+     *  went through memory on every sample, and on a phone that made
+     *  the meter cost more than the decoder. */
+    fun energy(data: FloatArray, from: Int, to: Int): Double {
+        val b0 = b0; val b1 = b1; val b2 = b2; val a1 = a1; val a2 = a2
+        val hb0 = hb0; val hb1 = hb1; val hb2 = hb2; val ha1 = ha1; val ha2 = ha2
+        var x1 = x1; var x2 = x2; var y1 = y1; var y2 = y2
+        var hx1 = hx1; var hx2 = hx2; var hy1 = hy1; var hy2 = hy2
+        var sum = 0.0
+        for (i in from until to) {
+            val x = data[i].toDouble()
+            val y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+            x2 = x1; x1 = x; y2 = y1; y1 = y
+            val z = hb0 * y + hb1 * hx1 + hb2 * hx2 - ha1 * hy1 - ha2 * hy2
+            hx2 = hx1; hx1 = y; hy2 = hy1; hy1 = z
+            sum += z * z
+        }
+        this.x1 = x1; this.x2 = x2; this.y1 = y1; this.y2 = y2
+        this.hx1 = hx1; this.hx2 = hx2; this.hy1 = hy1; this.hy2 = hy2
+        return sum
     }
 }
 
