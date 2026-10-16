@@ -30,8 +30,17 @@ https://huggingface.co/ggerganov/whisper.cpp. Whisper transcripts are
 cached in ~/.cache/crate-lyrics so a second run is quick.
 """
 
-import difflib, hashlib, json, os, re, statistics, subprocess, sys, tempfile, time, unicodedata, urllib.error, urllib.parse, urllib.request
+import difflib, hashlib, json, os, re, socket, statistics, subprocess, sys, tempfile, time, unicodedata, urllib.error, urllib.parse, urllib.request
 from pathlib import Path
+
+# IPv4 before IPv6: urllib tries the addresses in order and waits the full
+# timeout on each, and on this network the IPv6 route to the database's
+# host (Cloudflare) swallowed every SYN, which made each request a 20 s
+# wait before the IPv4 fallback, every retry included.
+_getaddrinfo = socket.getaddrinfo
+def _ipv4_first(*args, **kwargs):
+    return sorted(_getaddrinfo(*args, **kwargs), key=lambda info: info[0] != socket.AF_INET)
+socket.getaddrinfo = _ipv4_first
 
 AUDIO = {'.mp3', '.m4a', '.m4b', '.flac', '.wav', '.aif', '.aiff', '.ogg', '.opus'}
 USER_AGENT = 'crate lyrics (https://github.com/egdels/crate)'
@@ -51,7 +60,7 @@ def lrclib(path, **query):
     url = 'https://lrclib.net/api/' + path + '?' + urllib.parse.urlencode(query)
     for _ in range(15):
         try:
-            with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': USER_AGENT}), timeout=20) as r:
+            with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': USER_AGENT}), timeout=10) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code == 404: return None
