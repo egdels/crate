@@ -113,7 +113,9 @@ def transcribe(file, model, language, prompt=None):
     more but also invents more; the caller uses it as a fallback."""
     stamp = f'{file.stat().st_size}:{file.stat().st_mtime}:{file}:{model.name}:{language}:v2:{prompt or ""}'
     cached = CACHE / f'{hashlib.sha1(stamp.encode()).hexdigest()}.json'
-    if cached.exists(): return json.load(open(cached, errors='replace'))
+    if cached.exists():
+        try: return json.load(open(cached, errors='replace'))
+        except ValueError: cached.unlink()   # a run was killed while writing it
     CACHE.mkdir(parents=True, exist_ok=True)
     kind = {'large-v3-turbo': 'large.v3.turbo', 'large-v3': 'large.v3', 'medium': 'medium', 'small': 'small'}
     dtw = next((v for k, v in kind.items() if k in model.name), 'large.v3.turbo')
@@ -125,7 +127,9 @@ def transcribe(file, model, language, prompt=None):
         if prompt: command += ['--prompt', prompt]
         subprocess.run(command, check=True, capture_output=True)
         result = json.load(open(Path(tmp) / 'out.json', errors='replace'))   # whisper's JSON may split a UTF-8 sequence
-    json.dump(result, open(cached, 'w'))
+    part = cached.with_suffix('.part')
+    json.dump(result, open(part, 'w'))
+    part.replace(cached)
     return result
 
 def hear(file, model, text):
@@ -293,6 +297,21 @@ def main(argv):
     if not files: print('nothing to do', file=sys.stderr); return 2
     counts = {}
     for file in files:
+        try:
+            verdict = handle(file, model, out_dir, dry, check_only, replace)
+        except KeyboardInterrupt:
+            raise
+        except Exception as error:   # a file ffprobe or whisper cannot read, an odd answer from the database
+            verdict = f'failed: {type(error).__name__}: {str(error).strip()[:120]}'
+        print(f'{file.name}: {verdict}')
+        counts[verdict.split(' (')[0].split(': ')[0]] = counts.get(verdict.split(' (')[0].split(': ')[0], 0) + 1
+    print()
+    for k, v in sorted(counts.items(), key=lambda kv: -kv[1]): print(f'{v:5d}  {k}')
+    return 0
+
+def handle(file, model, out_dir, dry, check_only, replace):
+    """One file's verdict; writes its lyrics file unless dry or check_only."""
+    if True:
         tags, duration = probe(file)
         own = sidecar(file)
         if any('lyrics' in k for k in tags) and not own:
@@ -344,17 +363,15 @@ def main(argv):
                         verdict = f'own {own[0].suffix} kept: the new lyrics are heard no better ({heard:.0%} vs {own_heard:.0%})'
                     else:
                         verdict = f'own {own[0].suffix} replaced: ' + verdict
-                        if not dry: own[0].unlink()
                 if not dry and 'kept:' not in verdict:
                     folder = out_dir or file.parent / 'lyrics'
                     folder.mkdir(parents=True, exist_ok=True)
                     target = folder / (file.stem + ext)
-                    if not target.exists(): target.write_text(output.rstrip('\n') + '\n')
-        print(f'{file.name}: {verdict}')
-        counts[verdict.split(' (')[0]] = counts.get(verdict.split(' (')[0], 0) + 1
-    print()
-    for k, v in sorted(counts.items(), key=lambda kv: -kv[1]): print(f'{v:5d}  {k}')
-    return 0
+                    if own and replace:
+                        target.write_text(output.rstrip('\n') + '\n')
+                        if own[0] != target: own[0].unlink()
+                    elif not target.exists(): target.write_text(output.rstrip('\n') + '\n')
+        return verdict
 
 STOPWORDS = {
     'de': 'und der die das ich du nicht ist ein eine es wir ihr sie mich dich mir dir wie was auf mit von zu den dem im wenn aber nur noch',
