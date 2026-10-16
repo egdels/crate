@@ -489,7 +489,7 @@ relaunch at 1:15 of a track; Android force-stop at 0:15 came back at
 **Open, in no fixed order:**
 
 1. Released: v0.1.0 (DMG only), v0.2.0 (DMG + signed APK), v0.3.0 to
-   v0.9.0 (DMG + APK + AAB) are published at github.com/egdels/crate,
+   v0.10.0 (DMG + APK + AAB) are published at github.com/egdels/crate,
    built by `release.yml`. 0.6.0 to 0.6.2 (all 2026-10-14) are
    withdrawn: Android could not play untagged files (0.6.0, 0.6.1) and
    the Mac DMG crashed on Now Playing (all three); 0.6.3 was the first
@@ -500,10 +500,13 @@ relaunch at 1:15 of a track; Android force-stop at 0:15 came back at
    same certificate as 0.6.3; 0.8.0 (lyrics, artist view, recent
    tiles) the same evening, DMG and APK verified the same way; 0.9.0
    (loudness analysis) followed, verified the same way (the DMG's app
-   ran the analysis at about 100% CPU while playing, no crash report).
-   For
-   the next version: bump `Packaging/Info.plist` and
-   `android/gradle.properties` (appVersion), turn the CHANGELOG's
+   ran the analysis at about 100% CPU while playing, no crash report). 0.10.0 (batched
+   loudness decoding, .txt lyrics) on 2026-10-16: the signed 0.9.0 on
+   the Pixel 7a was the frame-by-frame build, one file a minute.
+   For the next version: bump `Packaging/Info.plist` (both
+   CFBundleShortVersionString and CFBundleVersion) and
+   `android/gradle.properties` (appVersion), add the Play changelog
+   `android/fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`, turn the CHANGELOG's
    Unreleased section into the version's, push `main` and the tag only
    (`git push origin main vX.Y.Z`, never `--all` or `--mirror`: local
    branches hold pre-release history that stays local).

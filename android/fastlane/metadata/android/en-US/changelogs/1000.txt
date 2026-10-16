@@ -1,0 +1,3 @@
+New in this version:
+- The loudness measurement is much faster: on Android 15 and later Crate decodes in batches and measures several files at once, so a collection of thousands of files is done in under an hour instead of days. It also keeps running while music plays in the background.
+- Lyrics also come from a plain .txt file beside the track.
