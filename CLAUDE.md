@@ -492,8 +492,20 @@ but invents more). Existing lyrics files are judged the same way:
 track's title) or a plain .txt for a confirmed .lrc. Verified on two
 albums (9 files: 5 confirmed, 4 generated; 13 files: 9 confirmed, 3
 .txt upgraded, one wrong file replaced); whisper's transcripts
-are cached in ~/.cache/crate-lyrics. The whole collection would
-take about 18 hours of whisper.
+are cached in ~/.cache/crate-lyrics. The full `--replace` run over
+the collection (1,985 files, 2026-10-16/17) took 5.5 hours under
+`caffeinate -i`: 730 not in the database, 700 timed and confirmed, 173
+timed by whisper from plain text, 121 doubtful stamps kept as text, 55
+instrumental, 49 too little heard, 18 own files replaced (7 of them
+jazz standards whose old .lrc matched under 30 % of the
+audio while the new one matched nearly all of it), 2 failed. Traps
+met on the way: urllib tries IPv6 first and waits the full timeout
+when that route swallows SYNs (it did here, to Cloudflare), so the
+script sorts IPv4 first (90 s per file became 18 s); whisper-cli
+aborts (SIGABRT) on some files with `-dtw` plus `-mc 0`, and on some
+once a `--prompt` is given, so both have fallbacks; a damaged AAC that
+neither ffmpeg nor afconvert decodes just fails. The
+collection now has 952 .lrc and 243 lyrics/*.txt.
 Disc separators (both apps): `Album.discs` groups the sorted tracks
 by `discNumber ?? 1`; the album page shows a "Disc n" line per disc
 only when there is more than one (Mac: List sections with a

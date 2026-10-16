@@ -134,7 +134,13 @@ def transcribe(file, model, language, prompt=None):
         command = ['whisper-cli', '-m', str(model), '-l', language, '-nfa', '-sow', '-ml', '1', '-dtw', dtw, '-sns', '-mc', '0',
                    '-oj', '-ojf', '-np', '-of', str(Path(tmp) / 'out'), '-f', str(wav)]
         if prompt: command += ['--prompt', prompt]
-        subprocess.run(command, check=True, capture_output=True)
+        try:
+            subprocess.run(command, check=True, capture_output=True)
+        except subprocess.CalledProcessError:
+            # whisper-cli aborts (exit 134) on some files when DTW word times
+            # and -mc 0 meet; without the context cut it gets through
+            command.remove('-mc'); command.remove('0')
+            subprocess.run(command, check=True, capture_output=True)
         result = json.load(open(Path(tmp) / 'out.json', errors='replace'))   # whisper's JSON may split a UTF-8 sequence
     part = cached.with_suffix('.part')
     json.dump(result, open(part, 'w'))
@@ -149,7 +155,11 @@ def hear(file, model, text):
     language = guess_language(plain) or 'auto'
     best = None
     for prompt in (None, ' '.join(plain.split())[:600]):
-        words = whisper_words(transcribe(file, model, language, prompt), plain)
+        try:
+            words = whisper_words(transcribe(file, model, language, prompt), plain)
+        except subprocess.CalledProcessError:
+            if prompt is None or best is None: raise
+            break   # whisper-cli aborts on some files once a prompt is given; the plain transcript stands
         aligned = align(lines, words)
         heard = sum(how in ('heard', 'partly') for _, how in aligned) / max(len(lines), 1)
         if best is None or heard > best[1]: best = (aligned, heard)
@@ -310,7 +320,10 @@ def main(argv):
             verdict = handle(file, model, out_dir, dry, check_only, replace)
         except KeyboardInterrupt:
             raise
-        except Exception as error:   # a file ffprobe or whisper cannot read, an odd answer from the database
+        except subprocess.CalledProcessError as error:   # a file ffmpeg or whisper cannot read
+            tail = (error.stderr or b'').decode(errors='replace').strip().splitlines()[-1:] if isinstance(error.stderr, bytes) else []
+            verdict = f'failed: {Path(error.cmd[0]).name} exit {error.returncode}: {" ".join(tail)[:160]}'
+        except Exception as error:   # an odd answer from the database, a file that vanished
             verdict = f'failed: {type(error).__name__}: {str(error).strip()[:120]}'
         print(f'{file.name}: {verdict}')
         counts[verdict.split(' (')[0].split(': ')[0]] = counts.get(verdict.split(' (')[0].split(': ')[0], 0) + 1
