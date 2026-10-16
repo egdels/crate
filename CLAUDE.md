@@ -31,6 +31,9 @@ swift test                     # 92 tests, Swift Testing, needs Xcode (macro plu
 swift run crate-scan <folder>  # tag-reader check against real files, prints gaps
 swift run crate-scan <folder> --lyrics   # counts files with lyrics (USLT/SYLT, ©lyr, FLAC LYRICS, .lrc)
 swift run crate-scan <folder> --loudness # BS.1770 loudness, peak and gain per file, with the speed
+scripts/lyrics.py [--dry-run|--check|--replace] <folder>  # lyrics from lrclib.net, stamps checked/made with whisper.cpp
+                               # (needs ffmpeg, brew's whisper-cpp and ~/.cache/whisper-cpp/ggml-large-v3-turbo.bin;
+                               # about 35 s per file, writes lyrics/<name>.lrc|.txt next to the audio)
 scripts/bundle.sh              # release build -> build/Crate.app (ad-hoc signed)
 scripts/dmg.sh --universal     # -> build/Crate-<version>.dmg, what a release ships
 scripts/icon.sh                # redraw Packaging/AppIcon.icns, the README PNG and the Android icon
@@ -461,6 +464,36 @@ emulator (`/sdcard/Music/Store/Amy/rehab.mp3|.lrc`, sheet follows).
 main.swift gotcha: a top-level `let` is initialised when execution
 reaches its line, so the `--lyrics` branch runs below every
 declaration.
+Lyrics fetching (2026-10-16, `scripts/lyrics.py`, Python stdlib only):
+text from lrclib.net (open database, no key; answers a third of all
+requests with 503 whatever the pace, so retry after 0.7 s, no
+back-off), stamps checked or made with whisper.cpp (brew, Metal) and
+the large-v3-turbo ggml model: the known text is aligned to whisper's
+DTW word times by a global Needleman-Wunsch over the two word
+sequences (difflib's longest-block-first picked the wrong chorus), a
+line's time is its first word's, stepped back at the track's word
+rate when only a later word was heard, lines without heard words are
+interpolated and count as unverified. An lrclib .lrc is "confirmed"
+when 70 % of the checkable lines (at least five) lie within 1 s of the
+aligned time after a constant offset (LRC stamps run 0.1 to 1.7 s
+ahead of the singing by convention); plain text gets whisper's stamps
+when 70 % of the lines were heard. Whisper findings: large-v3 is twice
+as slow as turbo and hallucinates more; its language detection guesses
+from the intro and transcribed a German song as Russian, so the
+language comes from stop words in the lyrics text; `-sns -mc 0`
+(suppress non-speech, no context between 30 s windows) is essential,
+without it a quiet vocal gave a 4-minute "Satsang with Mooji"
+loop and nothing else; a looping phrase, seven words in a second or
+three words on one instant are dropped as hallucinations unless the
+lyrics repeat the phrase themselves (a refrain); the lyrics' opening
+as `--prompt` is the fallback when under 30 % was heard (it hears more
+but invents more). Existing lyrics files are judged the same way:
+`--replace` swaps one that failed (an unrelated song filed under the
+track's title) or a plain .txt for a confirmed .lrc. Verified on two
+albums (9 files: 5 confirmed, 4 generated; 13 files: 9 confirmed, 3
+.txt upgraded, one wrong file replaced); whisper's transcripts
+are cached in ~/.cache/crate-lyrics. The whole collection would
+take about 18 hours of whisper.
 Disc separators (both apps): `Album.discs` groups the sorted tracks
 by `discNumber ?? 1`; the album page shows a "Disc n" line per disc
 only when there is more than one (Mac: List sections with a
