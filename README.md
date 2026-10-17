@@ -31,7 +31,9 @@ see [Android](#android) below.
   tag still plays at an even level, album by album.
 - **Lyrics from your own files.** A timed `.lrc` or a plain `.txt`
   beside the track or in a `lyrics` folder, or the lyrics tags; the line
-  being sung follows the music. Nothing is fetched from the internet.
+  being sung follows the music. The apps fetch nothing from the
+  internet; `scripts/lyrics.py` fills a collection with timed lyrics in
+  one run you start yourself (see [below](#lyrics-for-a-collection)).
 - **No settings.** What can be decided for you is decided: gapless
   playback, album gain when an album plays, resume where you stopped.
 - **Fully offline.** No account, no telemetry, no network permission on
@@ -136,7 +138,35 @@ To see what the tag reader makes of a real folder:
 ```sh
 swift run crate-scan ~/Music/Music/Media.localized        # summary + tracks with gaps
 swift run crate-scan <folder> --all                       # every track
+swift run crate-scan <folder> --lyrics                    # how many files have lyrics, and where from
 ```
+
+### Lyrics for a collection
+
+The apps never go online, so lyrics have to be files next to the music.
+`scripts/lyrics.py` makes them, on the Mac, as a separate step you run
+yourself: for every file without lyrics it asks the open database at
+[lrclib.net](https://lrclib.net), then listens to the track with
+[whisper.cpp](https://github.com/ggml-org/whisper.cpp) and aligns the
+text to what it heard. Time stamps that match the singing are kept,
+plain text gets stamps when enough of it was heard, and anything doubtful
+stays plain text. The result goes to `lyrics/<name>.lrc` or `.txt`
+beside the audio, where both apps find it (copy the folder to the phone
+as it is).
+
+```sh
+scripts/lyrics.py --dry-run <folder>   # everything but writing: see the verdicts first
+scripts/lyrics.py <folder>             # fetch, check and write
+scripts/lyrics.py --check <folder>     # only judge the lyrics files already there
+scripts/lyrics.py --replace <folder>   # also replace lyrics that do not match the audio
+scripts/lyrics.py --time <folder>      # give your own plain .txt lyrics time stamps
+```
+
+It needs Python 3, ffmpeg, whisper.cpp (`brew install whisper-cpp`) and
+the large-v3-turbo model at `~/.cache/whisper-cpp/ggml-large-v3-turbo.bin`.
+Whisper takes about half a minute per song on Apple silicon, so a large
+collection is an overnight run; transcripts are cached, a second run is
+quick.
 
 ## Android
 
