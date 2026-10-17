@@ -383,10 +383,11 @@ private struct TrackContextMenu: ViewModifier {
             Button(model.isFavorite(track) ? "Remove from Favorites" : "Add to Favorites") {
                 model.toggleFavorite(track)
             }
+            Divider()
             if let artist = track.displayArtist {
-                Divider()
                 Button("Show Albums by \(artist)") { model.showAlbums(ofArtist: artist) }
             }
+            Button("Show in Finder") { model.showInFinder(track) }
         }
     }
 }
@@ -404,6 +405,8 @@ private struct AlbumContextMenu: ViewModifier {
             Button(model.isFavorite(album) ? "Remove from Favorites" : "Add to Favorites") {
                 model.setFavorite(!model.isFavorite(album), album: album)
             }
+            Divider()
+            Button("Show in Finder") { model.showInFinder(album: album) }
         }
     }
 }

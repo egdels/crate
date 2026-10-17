@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow takes a
 version's section from this file as the GitHub release notes.
 
+## [Unreleased]
+
+### Added
+
+- Mac: Show in Finder, for the track that is playing (Playback menu,
+  ⇧⌘R) and on the context menus of tracks, albums (their folder) and
+  Up Next entries.
+
 ## [0.10.0] - 2026-10-16
 
 ### Added

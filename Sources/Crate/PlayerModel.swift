@@ -282,6 +282,24 @@ final class PlayerModel: ObservableObject {
         toggleFavorite(current)
     }
 
+    // MARK: - Finder
+
+    /// Reveals the track's file in Finder.
+    func showInFinder(_ track: Track) {
+        NSWorkspace.shared.activateFileViewerSelecting([track.url])
+    }
+
+    /// Reveals the album's folder in Finder.
+    func showInFinder(album: Album) {
+        NSWorkspace.shared.activateFileViewerSelecting([album.folder])
+    }
+
+    /// The Playback menu's item, for the track that is playing.
+    func showCurrentInFinder() {
+        guard let current else { return }
+        showInFinder(current)
+    }
+
     /// Writes the file right away, on the main actor: it is a few
     /// kilobytes in Application Support, and writing it in order is what
     /// matters after two quick taps.

@@ -196,6 +196,9 @@ struct CrateApp: App {
                 }
                 .keyboardShortcut("l")
                 .disabled(model.current == nil)
+                Button("Show in Finder") { model.showCurrentInFinder() }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+                    .disabled(model.current == nil)
                 Divider()
                 Button(model.showsUpNext ? "Hide Up Next" : "Show Up Next") { model.showsUpNext.toggle() }
                     .keyboardShortcut("u")

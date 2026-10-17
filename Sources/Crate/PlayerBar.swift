@@ -127,6 +127,8 @@ struct UpNextView: View {
                             .contextMenu {
                                 Button("Play Now") { model.play(entry: entry) }
                                 Button("Remove") { model.remove(entry: entry) }
+                                Divider()
+                                Button("Show in Finder") { model.showInFinder(entry.track) }
                             }
                     }
                 }

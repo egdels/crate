@@ -68,6 +68,7 @@ struct HelpView: View {
 
                 HelpSection("Finder") {
                     HelpRow("", "Crate > Use Crate for Audio Files makes Crate what a double-click on a music file opens. A file from the library plays with its album queued; any other file plays as it is. A folder dropped on the Dock icon is added to the library.")
+                    HelpRow("⇧⌘R", "Show in Finder: the file of the track that is playing. Right-click a track, an album or an Up Next entry for the same.")
                     HelpRow("", "Closing the window keeps the music playing. The Dock icon brings the window back.")
                 }
 
