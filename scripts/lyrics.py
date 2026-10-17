@@ -8,6 +8,7 @@ made with whisper.cpp.
     scripts/lyrics.py [--dry-run] [--out DIR] [--model FILE] <folder or files>...
     scripts/lyrics.py --check <folder or files>...     # only judge the lyrics files already there
     scripts/lyrics.py --replace <folder or files>...   # fetch anew for files whose own lyrics failed the check
+    scripts/lyrics.py --time <folder or files>...      # give the files' own .txt lyrics whisper's stamps
 
 For every audio file without lyrics (none in its tags, no .lrc/.txt
 beside it or in a lyrics/ subfolder) the script asks lrclib.net. Timed
@@ -306,9 +307,10 @@ def main(argv):
     dry = '--dry-run' in argv
     check_only = '--check' in argv
     replace = '--replace' in argv
+    time_own = '--time' in argv
     out_dir = Path(argv[argv.index('--out') + 1]) if '--out' in argv else None
     model = Path(argv[argv.index('--model') + 1]) if '--model' in argv else DEFAULT_MODEL
-    skip = {'--dry-run', '--out', '--model', '--check', '--replace'}
+    skip = {'--dry-run', '--out', '--model', '--check', '--replace', '--time'}
     paths, i = [], 0
     while i < len(argv):
         if argv[i] in ('--out', '--model'): i += 2; continue
@@ -319,7 +321,7 @@ def main(argv):
     counts = {}
     for file in files:
         try:
-            verdict = handle(file, model, out_dir, dry, check_only, replace)
+            verdict = handle(file, model, out_dir, dry, check_only, replace, time_own)
         except KeyboardInterrupt:
             raise
         except subprocess.CalledProcessError as error:   # a file ffmpeg or whisper cannot read
@@ -333,13 +335,24 @@ def main(argv):
     for k, v in sorted(counts.items(), key=lambda kv: -kv[1]): print(f'{v:5d}  {k}')
     return 0
 
-def handle(file, model, out_dir, dry, check_only, replace):
+def handle(file, model, out_dir, dry, check_only, replace, time_own=False):
     """One file's verdict; writes its lyrics file unless dry or check_only."""
     if True:
         tags, duration = probe(file)
         own = sidecar(file)
         if any('lyrics' in k for k in tags) and not own:
             verdict = 'has lyrics in its tags'
+        elif own and time_own and own[0].suffix == '.txt':
+            # the file's own plain text gets whisper's stamps when enough was heard
+            lines, aligned, heard = hear(file, model, own[1])
+            if heard >= MIN_ANCHORED and all(t is not None for t, _ in aligned):
+                verdict = f'own .txt timed by whisper ({heard:.0%} of the lines heard)'
+                if not dry:
+                    target = own[0].with_suffix('.lrc')
+                    target.write_text(''.join(f'{stamp(t)}{body}\n' for (t, _), (_, body) in zip(aligned, lines)))
+                    own[0].unlink()
+            else:
+                verdict = f'own .txt kept: too little heard for stamps ({heard:.0%})'
         elif own and not replace:
             # the file's own lyrics: judged against the audio, kept either way
             lines, aligned, heard = hear(file, model, own[1])
