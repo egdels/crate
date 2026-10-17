@@ -64,7 +64,7 @@ def lrclib(path, **query):
             with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': USER_AGENT}), timeout=10) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
-            if e.code == 404: return None
+            if e.code in (400, 404): return None   # 400: the database rejects some queries (a 40-minute "full album" file)
             if e.code not in (429, 503): raise
             time.sleep(0.7)   # the database answers a third of all requests with 503 whatever the pace
         except (urllib.error.URLError, TimeoutError):
