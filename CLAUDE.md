@@ -505,7 +505,13 @@ script sorts IPv4 first (90 s per file became 18 s); whisper-cli
 aborts (SIGABRT) on some files with `-dtw` plus `-mc 0`, and on some
 once a `--prompt` is given, so both have fallbacks; a damaged AAC that
 neither ffmpeg nor afconvert decodes just fails. The
-collection now has 952 .lrc and 243 lyrics/*.txt.
+collection now has 952 .lrc and 243 lyrics/*.txt. A second folder got
+the same run on 2026-10-17 (1,202 not in the database, 538 confirmed,
+82 timed by whisper). `--time` was written for an album whose lyrics
+come as scanned PDFs: Vision OCR (a 40-line Swift tool, scratch) read
+them, one song per page, the title line matched the file names, and
+whisper stamped 74 of 76 songs, the dialect ones at 73 to 90 % of the
+lines heard, the rest mostly at 100 %.
 Disc separators (both apps): `Album.discs` groups the sorted tracks
 by `discNumber ?? 1`; the album page shows a "Disc n" line per disc
 only when there is more than one (Mac: List sections with a
