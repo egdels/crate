@@ -120,7 +120,9 @@ def transcribe(file, model, language, prompt=None):
     the first window of a song with a quiet vocal and never left it. A
     prompt with the lyrics' opening primes it for the words, which hears
     more but also invents more; the caller uses it as a fallback."""
-    stamp = f'{file.stat().st_size}:{file.stat().st_mtime}:{file}:{model.name}:{language}:v2:{prompt or ""}'
+    # keyed by name, size and mtime, not the folder, so a transcript
+    # survives the file being moved or copied elsewhere
+    stamp = f'{file.stat().st_size}:{file.stat().st_mtime}:{file.name}:{model.name}:{language}:v3:{prompt or ""}'
     cached = CACHE / f'{hashlib.sha1(stamp.encode()).hexdigest()}.json'
     if cached.exists():
         try: return json.load(open(cached, errors='replace'))
