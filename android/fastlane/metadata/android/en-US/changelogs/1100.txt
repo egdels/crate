@@ -1,0 +1,2 @@
+New in this version:
+- Maintenance release, built together with the Mac version 0.11.0 (Show in Finder). Nothing changes on Android.
