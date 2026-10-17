@@ -12,14 +12,43 @@ straight from the system. There is an Android app with the same idea in
 `android/`, written in Kotlin on top of the platform's own media stack;
 see [Android](#android) below.
 
+## What sets Crate apart
+
+- **Your folders, not a media database.** Crate reads the folder you
+  pick and nothing else. It does not rely on the system's media index,
+  so files that index missed, tags it read wrong or albums it merged
+  never reach Crate. On Android it needs no storage permission: the
+  system's folder picker grants access to that one folder.
+- **Albums as they lie on disk.** An album is a folder plus its title,
+  compared loosely. A compilation without album artist, a title spelt
+  two ways or a stray tag does not split an album; two albums of the
+  same name in different folders do not merge; untagged files are named
+  after their folder.
+- **Even loudness, with or without tags.** ReplayGain and iTunes Sound
+  Check tags are used where they exist. Every other file is measured in
+  the background to EBU R 128 (ITU-R BS.1770, the same numbers as
+  ffmpeg's ebur128 filter), so a collection without a single loudness
+  tag still plays at an even level, album by album.
+- **Lyrics from your own files.** A timed `.lrc` or a plain `.txt`
+  beside the track or in a `lyrics` folder, or the lyrics tags; the line
+  being sung follows the music. Nothing is fetched from the internet.
+- **No settings.** What can be decided for you is decided: gapless
+  playback, album gain when an album plays, resume where you stopped.
+- **Fully offline.** No account, no telemetry, no network permission on
+  Android.
+- **One player, two native apps.** The Mac and the Android app share the
+  album logic, the loudness measurement, lyrics, favorites and history,
+  each built on its own platform's media stack.
+
 ## Status
 
 This repository holds **CrateCore**, the UI-free Swift package, and the
-**Crate** app on top of it. The app works end to end against a real
-collection: pick a folder, browse the album grid with covers, search,
-mark favorites, play with gapless transitions, and control it from the
-media keys and Control Center. Version 0.1.0 is the first release; see `CHANGELOG.md`
-for what is in it.
+**Crate** app on top of it, plus the Android app. Both work end to end
+against a real collection: pick a folder, browse the album grid with
+covers, search, mark favorites, queue tracks in Up Next, read lyrics,
+play gapless at an even loudness, and control playback from the media
+keys, the lock screen or Control Center. See `CHANGELOG.md` for the
+releases.
 
 ## Download
 
@@ -34,7 +63,8 @@ Audio Files so that double-clicking a music file in Finder opens Crate.
 What the package does:
 
 - **Scan** a folder recursively for audio files (`LibraryScanner`)
-- **Read tags** and duration with AVFoundation (`AVFoundationMetadataReader`)
+- **Read tags** and duration with AVFoundation, FLAC with its own parser
+  (`AVFoundationMetadataReader`, `FLACMetadata`)
 - **Keep an index** of folders and tracks, persisted as one JSON file in
   Application Support, with incremental rescans: unchanged files are not
   re-read, removed files are dropped (`Library`, `JSONLibraryStore`)
@@ -49,8 +79,12 @@ What the package does:
 - **Find covers** embedded in the files or lying next to them and cache
   them as thumbnails (`ArtworkReader`, `ArtworkCache`)
 - **Search** titles, artists, albums, composers and genres (`SearchQuery`)
-- **Level loudness** from ReplayGain or iTunes Sound Check tags, limited by
-  the peak, through a gain stage separate from the volume (`ReplayGain`)
+- **Level loudness** from ReplayGain or iTunes Sound Check tags, or from
+  its own BS.1770 measurement of untagged files, limited by the peak,
+  through a gain stage separate from the volume (`ReplayGain`,
+  `LoudnessMeter`, `LoudnessAnalyzer`)
+- **Lyrics** from `.lrc`/`.txt` files beside the track or in a `lyrics`
+  folder, or from the tags, timed or plain (`Lyrics`, `FileLyricsSource`)
 - **Favorites** as a set of track paths in a small file of its own, so
   a tap on a heart never rewrites the index (`Favorites`)
 

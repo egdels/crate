@@ -1,27 +1,34 @@
 Crate is an offline music player for the music you already own. Pick a folder, Crate reads the tags where the files are, and you listen. No account, no cloud, no ads, no subscription, no settings screen. Open it and play.
 
-<b>Made for your own music files</b>
-Crate plays local audio files from your phone, your SD card or any folder a file manager can show: MP3, FLAC, AAC/M4A, M4B audiobooks, WAV, Ogg Vorbis and Opus. Nothing is copied, converted or uploaded. Your music stays where it is.
+<b>Your folders, not a media database</b>
+Crate reads the folder you pick and nothing else. It does not rely on the phone's media index, so files that index missed, tags it read wrong or albums it mixed up never reach Crate. It needs no storage permission either: the system's folder picker grants access to that one folder. MP3, FLAC, AAC/M4A, M4B audiobooks, WAV, Ogg Vorbis and Opus. Nothing is copied, converted or uploaded.
 
-<b>Albums the way your folders are organised</b>
-Crate groups tracks into albums by folder and tags, so a compilation without an album artist, an album title spelt two ways or a stray tag does not split one album into three. Untagged tracks are named after their folder. Covers come from the files (ID3, iTunes, FLAC pictures) or from a cover.jpg or folder.jpg next to them.
+<b>Albums as they lie on disk</b>
+An album is a folder plus its title. A compilation without an album artist, an album title spelt two ways or a stray tag does not split one album into three, and two albums of the same name in different folders stay apart. Untagged tracks are named after their folder. Covers come from the files or from a cover.jpg or folder.jpg next to them. Albums with several discs show where each disc begins.
 
-<b>Fast, even for large collections</b>
-Crate reads MP3, M4A and FLAC tags with its own parsers, a few kilobytes per file. A collection of several thousand tracks is scanned in well under a minute, and a rescan only touches files that changed.
+<b>Even loudness, with or without tags</b>
+Crate uses ReplayGain and iTunes Sound Check tags where your files have them. Every other file is measured in the background to the EBU R 128 loudness standard, so even a collection without a single loudness tag plays at an even level. A whole album keeps its own dynamics: quiet songs stay quiet next to loud ones.
+
+<b>Lyrics from your own files</b>
+Timed .lrc files or plain .txt files beside the track or in a "lyrics" folder, or lyrics stored in the tags. With timed lyrics, the line being sung follows the music. Nothing is looked up online.
 
 <b>Plays like a system player should</b>
 • Gapless playback for live albums and mixes
-• Lock screen and notification controls with the album cover
+• Up Next: queue a track or an album to play next or last
+• Resumes where you stopped, even after a restart
+• Lock screen and notification controls with the album cover and a favorite button
 • Headset and Bluetooth buttons work out of the box
 • Shuffle, repeat, next and previous
-• Keeps playing while the screen is off or you use another app
 • "Open with Crate" from any file manager plays the file
 
 <b>Find what you want to hear</b>
-Search across titles, artists and albums, browse the album grid with covers, or open the full track list. On tablets and in landscape, the album grid and the track list sit side by side.
+Search across titles, artists, albums, composers and genres, tap an artist to see all their albums, or open Favorites, Recently Added, Recently Played or the full track list. On tablets and in landscape, the album grid and the track list sit side by side.
+
+<b>Fast, even for large collections</b>
+Crate reads MP3, M4A and FLAC tags with its own parsers, a few kilobytes per file. Several thousand tracks are scanned in well under a minute, and a rescan only touches files that changed.
 
 <b>Private by design</b>
-Crate has no network permission. There is no analytics, no crash reporting, no telemetry, no advertising. The only things it stores are its library index and cover thumbnails, in its own private storage. Uninstalling removes all of it.
+Crate has no network permission. There is no analytics, no crash reporting, no telemetry, no advertising. It stores its library index, cover thumbnails, favorites, history and loudness measurements in its own private storage. Uninstalling removes all of it.
 
 <b>Free and open source</b>
 Crate is free software under the GPL-3.0 licence. The source code, the issue tracker and a Mac version of the same player are on GitHub: https://github.com/egdels/crate
