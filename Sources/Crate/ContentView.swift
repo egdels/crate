@@ -101,7 +101,9 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity)
                     // only behind the line itself: a plain background reaches
                     // up under the toolbar and reddens the title bar
-                    .background(.red.opacity(0.85), ignoresSafeAreaEdges: [])
+                    // opaque: through a translucent red the column divider
+                    // and whatever lies below showed
+                    .background(Color.red, ignoresSafeAreaEdges: [])
                     .foregroundStyle(.white)
                     .contentShape(Rectangle())
                     .onTapGesture { model.lastError = nil }
