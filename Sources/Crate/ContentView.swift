@@ -86,6 +86,7 @@ struct ContentView: View {
             // appeared above the ScrollView-based grid (macOS 26).
             .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search")
             .modifier(ClearToolbar())
+            .background(TitlebarStyle())
             Divider()
             PlayerBar()
         }
@@ -626,6 +627,23 @@ private struct ClearToolbar: ViewModifier {
                 .toolbarBackground(.visible, for: .windowToolbar)
         } else {
             content
+        }
+    }
+}
+
+/// In full screen AppKit moves the toolbar into a window of its own,
+/// which ignores `toolbarBackground` and drew it grey again; a transparent
+/// title bar over a window background in the content colour keeps it
+/// white there too. Set once the view is in its window.
+private struct TitlebarStyle: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { Probe() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+    final class Probe: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            window.titlebarAppearsTransparent = true
+            window.backgroundColor = .textBackgroundColor
         }
     }
 }

@@ -315,8 +315,15 @@ window capture), a NavigationView artefact NavigationSplitView (macOS
 tinted material; `ClearToolbar` (macOS 13+) paints it opaque in
 `textBackgroundColor` with `.toolbarBackground(.visible)`. Hidden
 instead, the column divider (full window height in NSSplitView, only
-the toolbar covers its top) showed through the title bar. With the
-visible background the window title moves to the centre. Without the grey, the album header needs its
+the toolbar covers its top) showed through the title bar. In full
+screen AppKit puts the toolbar in a window of its own that ignores
+`toolbarBackground` (grey again, from x = 378); `TitlebarStyle` (an
+NSView probe in the background) sets `titlebarAppearsTransparent` and
+a `textBackgroundColor` window background, which keeps it white there.
+Measured on window captures, windowed and full screen (the full-screen
+window is the 1920x1200 one in the window list; toggle it through the
+`AXFullScreen` attribute). macOS 12 has no `toolbarBackground`: there the
+transparent title bar may let the divider through; unchecked. Without the grey, the album header needs its
 Divider above the list. A `.background` reaches under the toolbar unless
 given `ignoresSafeAreaEdges: []` (the red error line reddened the title
 bar). Not checked in the macOS 12 VM.
