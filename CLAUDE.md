@@ -525,8 +525,14 @@ year. Cover Art Archive front-1200, release group as fallback, iTunes
 Search (lookup has track names and lengths, artwork URL scaled to
 1200x1200bb; the artist check also accepts the artist inside the album
 title, "(feat. Artist)") when MusicBrainz has no match or no image.
-Writes cover.jpg/png into the album folder, never over an existing
-one, never for a folder shared by two albums without a cover. Left
+Writes cover.jpg/png into every folder holding the album's tracks
+(the apps look next to the track; an album over CD1/CD2 subfolders once
+got its cover in the folder above, where nothing finds it), never over
+an existing one, never for a folder shared by two albums without a
+cover. A single file as long as the whole release (an episode ripped as
+one track) counts as that release, and a track far longer or shorter
+than its namesake is not paired with it. Audiobooks: iTunes' audiobook
+catalogue as the last resort, title and author only (0.9/0.8). Left
 without a cover in practice: own compilations, bootlegs, broken tags,
 releases with no image anywhere. Covers checked by eye after each run.
 Tag repair (2026-10-18, `scripts/tags.py`): fills what is missing
