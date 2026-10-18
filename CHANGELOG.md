@@ -33,7 +33,8 @@ version's section from this file as the GitHub release notes.
   painted in the same colour instead of a grey tint (macOS 13 and
   later), so the window is one surface with a line between the columns,
   in dark mode too (the track lists and the player bar had a blue-tinted
-  grey there).
+  grey there), and on macOS 12 as well, where the toolbar was grey in
+  full screen and the column line ran through the title bar.
 - Mac (macOS 12): a single-disc album no longer shows an empty row
   under its header.
 - Mac: an error line goes away when clicked or after eight seconds;

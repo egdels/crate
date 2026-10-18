@@ -650,26 +650,111 @@ private struct ClearToolbar: ViewModifier {
 private struct TitlebarStyle: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { Probe() }
     func updateNSView(_ nsView: NSView, context: Context) {}
+
     final class Probe: NSView {
+        private var observers: [NSObjectProtocol] = []
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             guard let window else { return }
             window.titlebarAppearsTransparent = true
             window.backgroundColor = .textBackgroundColor
+            // macOS 12 has no toolbarBackground, and in full screen its
+            // toolbar window draws two material views of its own, grey over
+            // the detail column; hidden, that window's background shows.
+            // The same goes for the window's own title bar, where the column
+            // divider showed through: a fill over it once the toolbar is in
+            // (SwiftUI adds it after this), and again after full screen.
+            if #unavailable(macOS 13), observers.isEmpty {
+                let center = NotificationCenter.default
+                observers.append(center.addObserver(
+                    forName: NSWindow.didEnterFullScreenNotification, object: window, queue: .main
+                ) { _ in
+                    MainActor.assumeIsolated { Probe.clearFullScreenToolbar() }
+                })
+                observers.append(center.addObserver(
+                    forName: NSWindow.didExitFullScreenNotification, object: window, queue: .main
+                ) { [weak window] _ in
+                    MainActor.assumeIsolated { if let window { Probe.fillTitlebar(of: window) } }
+                })
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak window] in
+                    if let window { Probe.fillTitlebar(of: window) }
+                }
+            }
         }
+
+        static func fillTitlebar(of window: NSWindow) {
+            guard let frame = window.contentView?.superview,
+                  let titlebar = descendant(of: frame, named: "NSTitlebarView"),
+                  !titlebar.subviews.contains(where: { $0 is ContentFill }),
+                  let toolbar = titlebar.subviews.first(where: { String(describing: type(of: $0)) == "NSToolbarView" })
+            else { return }
+            let fill = ContentFill(frame: titlebar.bounds)
+            fill.autoresizingMask = [.width, .height]
+            titlebar.addSubview(fill, positioned: .below, relativeTo: toolbar)
+        }
+
+        /// The toolbar window is AppKit's private NSToolbarFullScreenWindow;
+        /// found by class name, so nothing happens where it does not exist.
+        /// Its title bar view paints a grey gradient itself (hiding its
+        /// material views or making the title bar transparent did not stop
+        /// that on 12), so a fill in the content colour goes over it, under
+        /// the toolbar's items.
+        static func clearFullScreenToolbar() {
+            for window in NSApp.windows where String(describing: type(of: window)) == "NSToolbarFullScreenWindow" {
+                fillTitlebar(of: window)
+            }
+        }
+
+        private static func descendant(of view: NSView, named name: String) -> NSView? {
+            if String(describing: type(of: view)) == name { return view }
+            for sub in view.subviews { if let found = descendant(of: sub, named: name) { return found } }
+            return nil
+        }
+    }
+
+    /// An opaque fill in the content colour that follows light and dark mode.
+    final class ContentFill: NSView {
+        override init(frame: NSRect) {
+            super.init(frame: frame)
+            wantsLayer = true
+        }
+        required init?(coder: NSCoder) { nil }
+        override var wantsUpdateLayer: Bool { true }
+        override func updateLayer() { layer?.backgroundColor = NSColor.textBackgroundColor.cgColor }
     }
 }
 
 /// An inset list paints its own background, which in dark mode is a
 /// slightly blue grey beside the neutral content colour of the grid and
-/// the album header; without it the column's background shows. Needs
-/// macOS 13 (scrollContentBackground); on 12 the list keeps its own.
+/// the album header; without it the column's background shows. macOS 13
+/// has scrollContentBackground; on 12 the list's NSTableView is told not
+/// to draw one.
 private struct ContentBackgroundList: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 13, *) {
             content.scrollContentBackground(.hidden)
         } else {
-            content
+            content.background(ClearTableBackground())
+        }
+    }
+}
+
+/// macOS 12: clears the background of the tables in its window. Runs
+/// whenever SwiftUI updates it, since a list may come with a new table.
+private struct ClearTableBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async { [weak nsView] in
+            guard let root = nsView?.window?.contentView else { return }
+            func clear(_ view: NSView) {
+                if let table = view as? NSTableView {
+                    table.backgroundColor = .clear
+                    table.enclosingScrollView?.drawsBackground = false
+                }
+                view.subviews.forEach(clear)
+            }
+            clear(root)
         }
     }
 }

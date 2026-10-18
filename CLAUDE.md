@@ -322,10 +322,22 @@ NSView probe in the background) sets `titlebarAppearsTransparent` and
 a `textBackgroundColor` window background, which keeps it white there.
 Measured on window captures, windowed and full screen (the full-screen
 window is the 1920x1200 one in the window list; toggle it through the
-`AXFullScreen` attribute). macOS 12 has no `toolbarBackground`: there the
-transparent title bar lets the divider through, faintly, in both modes,
-and in dark mode the track list keeps its own wallpaper-tinted
-background (37,27,38 beside 30); checked in the Monterey VM through
+`AXFullScreen` attribute). macOS 12 has neither `toolbarBackground` nor
+`scrollContentBackground`, so `TitlebarStyle` works on AppKit there:
+the title bar view paints its own grey gradient (in full screen inside
+the private NSToolbarFullScreenWindow; hiding its NSVisualEffectViews
+or making that title bar transparent did not stop it), so a
+`ContentFill` (opaque, `textBackgroundColor`, follows the appearance)
+goes into NSTitlebarView below NSToolbarView, found by class name, in
+the window half a second after launch, after leaving full screen and in
+the toolbar window on entering it; that also covers the column divider
+in the title bar. `ClearTableBackground` stops the lists' NSTableViews
+from drawing their wallpaper-tinted dark background. The player bar
+keeps `.bar` on 12: on an opaque background its seek slider did not
+show after a launch in dark mode. Also seen there and older than these
+changes (the commit before them shows it too): after a launch in dark
+mode the volume slider does not show; switching to dark while running
+it does. Checked in the Monterey VM through
 Screen Sharing (its window can be captured with `screencapture -l`;
 over SSH System Events may not be scripted, and `defaults write -g
 AppleInterfaceStyle` does not switch a running session, so the

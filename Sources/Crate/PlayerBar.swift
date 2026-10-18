@@ -91,10 +91,7 @@ struct PlayerBar: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        // The content colour, like the rest of the window: the bar
-        // material is white in light mode but a blue-tinted grey in dark
-        // mode, beside the neutral grid and lists.
-        .background(Color(nsColor: .textBackgroundColor))
+        .modifier(PlayerBarBackground())
     }
 }
 
@@ -174,5 +171,19 @@ private struct UpNextRow: View {
         }
         .padding(.vertical, 2)
         .onHover { hovering = $0 }
+    }
+}
+
+/// The content colour, like the rest of the window: the bar material is
+/// white in light mode but a blue-tinted grey in dark mode, beside the
+/// neutral grid and lists. macOS 12 keeps the material: on an opaque
+/// background there its seek slider did not show in dark mode.
+private struct PlayerBarBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 13, *) {
+            content.background(Color(nsColor: .textBackgroundColor))
+        } else {
+            content.background(.bar)
+        }
     }
 }
