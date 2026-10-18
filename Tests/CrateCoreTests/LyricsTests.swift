@@ -7,9 +7,9 @@ import Testing
 
 @Suite struct LyricsTests {
     @Test func lrcLinesCarryTheirTimes() {
-        let lyrics = Lyrics.parse("[ti:Rehab]\n[ar:Amy]\n\n[00:00.00]They tried\n[00:07.50]Yes I've been\n[00:14:00]I ain't got\n")
+        let lyrics = Lyrics.parse("[ti:Song]\n[ar:Artist]\n\n[00:00.00]First line\n[00:07.50]Second line\n[00:14:00]Third line\n")
         #expect(lyrics.isTimed)
-        #expect(lyrics.lines.map(\.text) == ["They tried", "Yes I've been", "I ain't got"])
+        #expect(lyrics.lines.map(\.text) == ["First line", "Second line", "Third line"])
         #expect(lyrics.lines.map { $0.time! } == [0, 7.5, 14])
     }
 

@@ -12,9 +12,9 @@ import kotlin.test.assertTrue
 class LyricsTest {
     @Test
     fun lrcLinesCarryTheirTimes() {
-        val lyrics = Lyrics.parse("[ti:Rehab]\n[ar:Amy]\n\n[00:00.00]They tried\n[00:07.50]Yes I've been\n[00:14:00]I ain't got\n")
+        val lyrics = Lyrics.parse("[ti:Song]\n[ar:Artist]\n\n[00:00.00]First line\n[00:07.50]Second line\n[00:14:00]Third line\n")
         assertTrue(lyrics.isTimed)
-        assertEquals(listOf("They tried", "Yes I've been", "I ain't got"), lyrics.lines.map { it.text })
+        assertEquals(listOf("First line", "Second line", "Third line"), lyrics.lines.map { it.text })
         assertEquals(listOf(0.0, 7.5, 14.0), lyrics.lines.map { it.time })
     }
 

@@ -56,12 +56,12 @@ import Testing
     }
 
     @Test func anAlbumOfTrackGainsPlaysAtTheirMean() {
-        var intro = makeTrack("Speak to Me", album: "Dark Side", track: 1)
+        var intro = makeTrack("Quiet Intro", album: "Album", track: 1)
         intro.trackGain = 13.9
-        var money = makeTrack("Money", album: "Dark Side", track: 6)
-        money.trackGain = -2.8
-        var untagged = makeTrack("Bonus", album: "Dark Side", track: 11)
-        let album = [intro, money, untagged]
+        var loud = makeTrack("Loud Song", album: "Album", track: 6)
+        loud.trackGain = -2.8
+        var untagged = makeTrack("Bonus", album: "Album", track: 11)
+        let album = [intro, loud, untagged]
         let mean = ReplayGain.albumMean(album)
         #expect(abs(mean! - 5.55) < 0.001, "untagged tracks do not count")
         #expect(ReplayGain.albumMean([untagged]) == nil)
@@ -77,8 +77,8 @@ import Testing
 
         // A real album gain beats the mean; alone it also serves the
         // track outside an album when the track gain is missing.
-        money.albumGain = -7.25
-        #expect(ReplayGain.playbackGain(money, asAlbum: true, albumMean: mean) == -7.25)
+        loud.albumGain = -7.25
+        #expect(ReplayGain.playbackGain(loud, asAlbum: true, albumMean: mean) == -7.25)
         untagged.albumGain = -7.25
         #expect(ReplayGain.playbackGain(untagged, asAlbum: false, albumMean: nil) == -7.25)
         #expect(ReplayGain.playbackGain(intro, asAlbum: true, albumMean: nil) == 13.9, "no mean, no album gain: the track's own")

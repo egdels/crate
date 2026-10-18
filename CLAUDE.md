@@ -123,12 +123,11 @@ limited by the tagged peak (`ReplayGain.limited`); ReplayGain from TXXX
 (Mac: the item's `extraAttributes[.info]` names the frame), iTunes
 freeform atoms and Vorbis comments, iTunes Sound Check (`iTunNORM`, COMM
 frame or freeform atom) as the track gain when there is no ReplayGain.
-The developer's collection has no ReplayGain at all but Sound Check in
-~300 iTunes-ripped files (390 tracks got a gain, -13.9 to +13.9 dB,
-median -1.4). Playback: album gain when `play(album:)` queued the album,
+A real collection may carry no ReplayGain at all but Sound Check in
+part of its files (gains seen from -13.9 to +13.9 dB). Playback: album gain when `play(album:)` queued the album,
 else the mean of the album's track gains (`ReplayGain.albumMean`, for
-Sound Check, which knows no albums: Dark Side of the Moon spans -2.8 to
-+13.9 dB per track), else track gain; Mac through an `AVAudioUnitEQ` (`globalGain`, ±24 dB)
+Sound Check, which knows no albums: one album's tracks spanned -2.8 to
++13.9 dB), else track gain; Mac through an `AVAudioUnitEQ` (`globalGain`, ±24 dB)
 between player node and mixer, switched at the gapless hand-over;
 Android through `GainProcessor` (16-bit PCM AudioProcessor in the sink)
 fed from the media item's extras on each item transition, logged as
@@ -178,20 +177,20 @@ header, ID3v1 tail, duration from Xing/VBRI or bitrate x size) and
 duration, `ilst` items incl. binary trkn/disk/gnre and covr) read through
 `ByteSource` (`ContentByteSource` = pread on the provider's descriptor;
 `FileByteSource` in tests). `MediaMetadataRetriever` is the fallback and
-handles Ogg/Opus/WAV. Why: in the emulator 900 files took 10.3 s through
-the retriever at 4 in flight, 3.6 s with the parsers, 2.6 s at 8 and
-2.2 s at 16 in flight; the Pixel 7a managed only ~30 files/s with the
-retriever. Verified against the retriever's output for the same 900
+handles Ogg/Opus/WAV. Why: in the emulator about 900 files took 10.3 s
+through the retriever at 4 in flight, 3.6 s with the parsers, 2.6 s at 8
+and 2.2 s at 16 in flight; the Pixel 7a managed only ~30 files/s with the
+retriever. Verified against the retriever's output for the same
 files: all durations equal, the only tag differences were the retriever's
 bogus year 1904 for M4As with an invalid date tag. Real-file check: set
 `CRATE_MUSIC_DIRS` (see above); every MP3/M4A/M4B must yield title and
-duration. On the Pixel 7a, 3,600 files: full scan 25.8 s with the
+duration. On the Pixel 7a, a few thousand files: full scan 26 s with the
 parsers at 16 in flight (the retriever path took over two minutes); a
 no-change rescan is the folder walk alone, 8.1 s sequential and 3.4 s
 with 8 folder queries in flight (`SafFileSource.QUERIES_IN_FLIGHT`);
-emulator with 914 files: 610 ms to 277 ms. The developer's MP3 collection
-has 20 zero-byte WAVs in a "(1)" folder (an interrupted copy): they are
-the "20 unreadable" and are failed without a round trip.
+emulator with about 900 files: 610 ms to 277 ms. Zero-byte files (an
+interrupted copy leaves them) count as unreadable and are failed without
+a round trip.
 Android decisions: the track's `path` is built from document display
 names starting at the tree's document id ("primary:Music/Artist/Album/
 01.mp3"), so grouping works for any provider; `uri` is the content URI
@@ -207,25 +206,22 @@ Ogg), grid, detail, playback, auto-advance, media notification with
 cover colour, search, two-pane landscape, "open with" via VIEW intent,
 restart with the saved library, and the R8 release build. On the
 developer's Pixel 7a (Android 17, wireless adb): install, folder pick,
-scan of 3,600 files, rescan, "open with" chooser. Not yet tested:
+scan of the library, rescan, "open with" chooser. Not yet tested:
 output switching, playback on the phone by ear.
 
 ## Test material
 
-- `~/Music/Music/Media.localized`: 40 M4A + 2 MP3 from the Music app,
-  tags verified correct.
+- The Music app's media folder: a few M4A and MP3 files, tags verified
+  correct.
 - The developer's collection on a NAS (SMB share) and a copy of it on an
-  external SSD; host name, mount points and folder names are in a notes
-  file next to the test VM, not here. One folder is MP3 (2,020 files),
-  one is FLAC (1,984 files, one album of 36 FLAC used for tag checks).
-  Measured over SMB: the directory walk alone takes 6-8 s for 2,000 files,
-  a cold tag read 20-120 ms per file; a full scan of the MP3 folder took
-  67 s cold and 32 s warm with 4 reads in flight, 21 s with 16, 27 s with
-  32 (`swift run crate-scan <folder> --concurrency N`). 60 of the 226
-  albums in the FLAC folder have no cover anywhere, verified down to the
-  file bytes: no APIC/covr/PICTURE and no image in the folder. One MP3
-  there is an MP4 with an ID3 tag glued in front and fails to read; that
-  is the "1 unreadable".
+  external SSD; everything about it (hosts, paths, folders, contents) is
+  in a notes file next to the test VM, not here. Measured over SMB with
+  about 2,000 files: the directory walk alone takes 6-8 s, a cold tag
+  read 20-120 ms per file; a full scan took 67 s cold and 32 s warm with
+  4 reads in flight, 21 s with 16, 27 s with 32 (`swift run crate-scan
+  <folder> --concurrency N`). Albums without any cover exist, verified
+  down to the file bytes (no APIC/covr/PICTURE, no image in the folder).
+  An MP4 with an ID3 tag glued in front and named .mp3 fails to read.
 - Tag reading is verified for MP3, M4A and FLAC against those files. Known
   AVFoundation quirks are documented in `AVFoundationMetadataReader.swift`
   (TDAT read as a year; iTunes binary genre atom). FLAC does not go through
@@ -371,12 +367,12 @@ differs where ffmpeg's decoder exceeds full scale (AVFoundation clips
 at 0 dBFS). `LoudnessAnalyzer` measures what `Loudness.needsMeasuring`
 (no ReplayGain tags) and is not fresh (file modified since), two in
 flight at utility priority, saves every ten files, cancellable;
-`loudness.json` costs about 1 KB per file (49 bins on average over the
-audio plays, fewer for music). Mac: `PlayerModel.startAnalysis` after
+`loudness.json` costs about 1 KB per file (about 49 bins on average,
+fewer for music than for speech). Mac: `PlayerModel.startAnalysis` after
 load and after every scan, cancelled by scans and folder removal,
 footer "Measuring loudness… x of y"; about six files a second with two
-in flight (125x realtime per thread), 150% CPU, so the developer's
-18,000 files take about an hour; `gain(for:)` prefers tags, then the
+in flight (125x realtime per thread), 150% CPU, so a large collection
+takes about an hour; `gain(for:)` prefers tags, then the
 measurement (album gain only when the whole queued album is measured),
 then Sound Check. Android: `MediaCodecLoudness` (MediaExtractor +
 MediaCodec, 16-bit or float PCM to planar floats), the analyzer and
@@ -397,8 +393,8 @@ only: "Large Frame audioconfig works only with async mode"), which
 `decodeBatched` uses on a `HandlerThread`, 250x realtime, a four-minute
 MP3 in under a second; older devices get the synchronous loop. The
 Kotlin analyzer takes results as they finish (a Channel), not in
-library order, which once kept the Pixel 7a's footer at "0 of 4497"
-for minutes, and gives up a file that takes longer than it plays
+library order, which once kept the Pixel 7a's footer at "0 of n" for
+minutes, and gives up a file that takes longer than it plays
 (`minTimeoutMillis` floor two minutes); half the cores, two to four,
 run at once. Each file logs one line under the tag `Loudness`.
 Measured on the Pixel 7a (2026-10-15, release build compiled with
@@ -417,8 +413,8 @@ slower than the release build even when compiled. A second instance for
 such experiments goes on the phone with a temporary `applicationId`
 (`de.schliweb.crate.probe`, pick the folder again in the picker, uninstall
 after); the user's install and its data stay untouched. Verified: the
-Rehab MP3 measures -16.4 LUFS, peak -6.5 dBFS on both the Mac and the
-emulator, batched and frame by frame alike.
+same MP3 measures the same LUFS and peak on the Mac and the emulator,
+batched and frame by frame alike.
 Recent tiles (both apps): Recently Added is `Track.recentlyAdded` /
 `recentlyAdded()` over the album-ordered tracks (newest modification
 day first, album order within a day, capped at 200), computed with
@@ -456,17 +452,15 @@ document id and opening it (`buildDocumentUriUsingTree` with the
 track's own URI as the tree); on the storage provider the ids are
 paths. UI: Mac pane beside the detail (`LyricsView`, `showsLyrics`,
 ⌥⌘L), Android `LyricsSheet`; the button exists only while
-`lyrics != nil`. Counted first (`crate-scan --lyrics`, 2026-10-14): 55
-of the 1,985 music files have lyrics (3 USLT, 11 FLAC LYRICS, 41
-timed `.lrc`, 39 of those in `lyrics/`), the audio plays none; 49
-more have a plain `.txt` beside them (14 albums), hence the `.txt`
-fallback. Whisper was tried for the rest and rejected: 23 to 55 %
-word error rate on sung vocals even with the medium model and
-non-speech suppression, no verse-line timing, while two minutes of
-a German audio play came out nearly perfect; the notes are in the
-session, not in the repo. Verified
-with the Rehab `.lrc` on the Mac (pane, bold line moves) and on the
-emulator (`/sdcard/Music/Store/Amy/rehab.mp3|.lrc`, sheet follows).
+`lyrics != nil`. Counted first (`crate-scan --lyrics`, 2026-10-14):
+few files had lyrics, of every kind (USLT, FLAC LYRICS, timed `.lrc`,
+mostly in `lyrics/`), and some albums came with a plain `.txt` per
+track, hence the `.txt` fallback. Whisper was first tried as the only
+source and rejected: 23 to 55 % word error rate on sung vocals even
+with the medium model and non-speech suppression, no verse-line
+timing, while spoken word came out nearly perfect. Verified with a
+timed `.lrc` on the Mac (pane, bold line moves) and on the emulator
+(an MP3 and its `.lrc` under `/sdcard/Music`, sheet follows).
 main.swift gotcha: a top-level `let` is initialised when execution
 reaches its line, so the `--lyrics` branch runs below every
 declaration.
@@ -488,36 +482,31 @@ as slow as turbo and hallucinates more; its language detection guesses
 from the intro and transcribed a German song as Russian, so the
 language comes from stop words in the lyrics text; `-sns -mc 0`
 (suppress non-speech, no context between 30 s windows) is essential,
-without it a quiet vocal gave a 4-minute "Satsang with Mooji"
-loop and nothing else; a looping phrase, seven words in a second or
+without it a quiet vocal gave a 4-minute loop of an invented caption
+and nothing else; a looping phrase, seven words in a second or
 three words on one instant are dropped as hallucinations unless the
 lyrics repeat the phrase themselves (a refrain); the lyrics' opening
 as `--prompt` is the fallback when under 30 % was heard (it hears more
 but invents more). Existing lyrics files are judged the same way:
 `--replace` swaps one that failed (an unrelated song filed under the
 track's title) or a plain .txt for a confirmed .lrc. Verified on two
-albums (9 files: 5 confirmed, 4 generated; 13 files: 9 confirmed, 3
-.txt upgraded, one wrong file replaced); whisper's transcripts
-are cached in ~/.cache/crate-lyrics. The full `--replace` run over
-the collection (1,985 files, 2026-10-16/17) took 5.5 hours under
-`caffeinate -i`: 730 not in the database, 700 timed and confirmed, 173
-timed by whisper from plain text, 121 doubtful stamps kept as text, 55
-instrumental, 49 too little heard, 18 own files replaced (7 of them
-jazz standards whose old .lrc matched under 30 % of the
-audio while the new one matched nearly all of it), 2 failed. Traps
+albums (confirmed and generated stamps, .txt upgraded, one wrong file
+replaced); whisper's transcripts are cached in ~/.cache/crate-lyrics.
+A full `--replace` run over a collection of about 2,000 files
+(2026-10-16/17) took 5.5 hours under `caffeinate -i`; about a third
+was not in the database, most found lyrics were confirmed, and some
+existing files were replaced because the old .lrc matched under 30 %
+of the audio while the new one matched nearly all of it. Traps
 met on the way: urllib tries IPv6 first and waits the full timeout
 when that route swallows SYNs (it did here, to Cloudflare), so the
 script sorts IPv4 first (90 s per file became 18 s); whisper-cli
 aborts (SIGABRT) on some files with `-dtw` plus `-mc 0`, and on some
 once a `--prompt` is given, so both have fallbacks; a damaged AAC that
-neither ffmpeg nor afconvert decodes just fails. The
-collection now has 952 .lrc and 243 lyrics/*.txt. A second folder got
-the same run on 2026-10-17 (1,202 not in the database, 538 confirmed,
-82 timed by whisper). `--time` was written for an album whose lyrics
-come as scanned PDFs: Vision OCR (a 40-line Swift tool, scratch) read
-them, one song per page, the title line matched the file names, and
-whisper stamped 74 of 76 songs, the dialect ones at 73 to 90 % of the
-lines heard, the rest mostly at 100 %.
+neither ffmpeg nor afconvert decodes just fails. `--time` was written
+for lyrics that came as scanned PDFs: Vision OCR (a 40-line Swift tool,
+scratch) read them, one song per page, the title line matched the file
+names, and whisper stamped nearly all songs, dialect at 73 to 90 % of
+the lines heard, the rest mostly at 100 %.
 Cover fetching (2026-10-18, `scripts/covers.py`, Python stdlib only):
 `crate-scan --covers` lists the albums the app shows without a cover
 (ArtworkCache's rule: first three tracks' pictures, then the folder's
@@ -568,9 +557,8 @@ Disc separators (both apps): `Album.discs` groups the sorted tracks
 by `discNumber ?? 1`; the album page shows a "Disc n" line per disc
 only when there is more than one (Mac: List sections with a
 conditional header; Android: a header item per disc). Verified with a
-two-disc audio play on both. The emulator's Store library has that
-album under `/sdcard/Music/Store/DDF/Papagei/CD1|CD2` (not in the
-repo); `adb shell mkdir` does not quote, so paths there have no
+two-disc album on both (CD1/CD2 folders under `/sdcard/Music` on the
+emulator); `adb shell mkdir` does not quote, so paths there have no
 spaces.
 Resume on launch (both apps): `PlaybackState` (track ids in queue
 order, asAlbum, cursor, position, shuffle, repeat) in two files next to
