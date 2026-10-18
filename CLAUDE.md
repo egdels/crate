@@ -299,6 +299,14 @@ build/Crate.app does not reach the double-click until scripts/install.sh
 copies it over. Rebinding a type *away* from Crate by script fails with
 userCanceledErr on macOS 26 (no dialog appears); testing the "not yet
 default" path needs Get Info > Change All by hand.
+Menus: `MenuCommands.swift`. The App holds the model in `@State`
+without observing it, and the menus observe only `model.menu`, a
+`MenuSnapshot` republished when what the menus show changes: observing
+the whole model rebuilt the menu bar on every analysis progress step
+and clock tick, and an open submenu was replaced under the pointer, so
+real clicks in Remove Folder or Repeat did nothing (AXPress still
+worked, so check menus with real mouse events; a closed SwiftUI menu
+shows stale marks to Accessibility until it is opened).
 Help: `HelpWindow.swift` replaces SwiftUI's default "Crate Help" item
 (which otherwise shows "Help isn't available") with a plain NSWindow
 holding one page of SwiftUI text, kept in a static and reused; no Apple

@@ -104,6 +104,8 @@ final class PlayerModel: ObservableObject {
     private var searchTask: Task<Void, Never>?
     /// Set by `live()`; nil in tests and previews.
     var nowPlaying: NowPlaying?
+    /// What the menu bar shows, published only when that changes.
+    let menu = MenuState()
 
     init(
         library: Library, player: any AudioPlayer, artwork: ArtworkCache, favorites: any FavoritesStore,
@@ -119,6 +121,7 @@ final class PlayerModel: ObservableObject {
         self.playbackStore = playback
         self.lyricsSource = lyrics
         player.onFinished = { [weak self] in self?.trackFinished() }
+        menu.follow(self)
     }
 
     /// The real thing: JSON index in Application Support, AVFoundation

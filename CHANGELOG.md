@@ -18,6 +18,15 @@ version's section from this file as the GitHub release notes.
   it confirms by their track list, missing years, album artists, track
   numbers and real titles for placeholders; with a journal to undo it.
   `crate-scan --json` prints every album with its tags.
+- `scripts/sync.py` compares two copies of a collection (a local disk
+  and a network share) with Unicode-normalised names and copies what is
+  new or changed, without deleting anything.
+
+### Fixed
+
+- Mac: the menus' lists (Remove Folder, Repeat) did not respond while
+  the loudness analysis or playback was running; the menus were rebuilt
+  on every progress step and every tick of the clock.
 
 ## [0.11.0] - 2026-10-17
 

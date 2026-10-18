@@ -103,7 +103,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct CrateApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @StateObject private var model = PlayerModel.live()
+    // Held, not observed: an App that observes the model re-evaluates its
+    // scenes, menus included, on every change of it. The views observe it
+    // through the environment, the menus through `model.menu`.
+    @State private var model = PlayerModel.live()
 
     init() {
         // `swift run` starts a bare executable with no bundle; without this
@@ -133,80 +136,6 @@ struct CrateApp: App {
         // No handlesExternalEvents(matching:) on the scene: on macOS 12 a
         // group marked that way opens only for matching events, not at
         // launch, and the app came up without a window.
-        .commands {
-            // In the app menu, under About: a one-time command, not a
-            // setting. Greyed out once it is done.
-            CommandGroup(after: .appInfo) {
-                Divider()
-                Button("Use Crate for Audio Files") { Task { await model.makeDefaultForAudioFiles() } }
-                    .disabled(model.opensAudioFiles)
-            }
-            CommandGroup(replacing: .newItem) {
-                Button("Open Folder…") { model.chooseFolder() }
-                    .keyboardShortcut("o")
-                Button("Rescan Library") { Task { await model.rescan() } }
-                    .keyboardShortcut("r")
-                    .disabled(model.folders.isEmpty || model.isScanning)
-                // One entry per watched folder; no confirmation, because
-                // nothing on disk changes and Open Folder brings it back.
-                Menu("Remove Folder") {
-                    ForEach(model.folders, id: \.self) { folder in
-                        Button(folder.path) { Task { await model.removeFolder(folder) } }
-                    }
-                }
-                .disabled(model.folders.isEmpty || model.isScanning)
-                Divider()
-                Button(model.unreadableFiles.count > 1
-                       ? "Show \(model.unreadableFiles.count) Unreadable Files in Finder"
-                       : "Show Unreadable File in Finder") {
-                    model.showUnreadableFilesInFinder()
-                }
-                .disabled(model.unreadableFiles.isEmpty)
-            }
-            // SwiftUI adds "Crate Help" to the Help menu whether or not the
-            // app has one; left alone it opens a "Help isn't available"
-            // alert. HelpWindow.swift is what it opens instead.
-            CommandGroup(replacing: .help) {
-                Button("Crate Help") { Help.show() }
-                    .keyboardShortcut("?", modifiers: .command)
-                Divider()
-                Button("Crate on GitHub") { Help.openRepository() }
-            }
-            CommandMenu("Playback") {
-                Button(model.isPlaying ? "Pause" : "Play") { model.togglePlayPause() }
-                    .keyboardShortcut(.space, modifiers: [])
-                    .disabled(model.current == nil)
-                Button("Next") { model.next() }
-                    .keyboardShortcut(.rightArrow, modifiers: .command)
-                    .disabled(!model.queue.hasNext)
-                Button("Previous") { model.previous() }
-                    .keyboardShortcut(.leftArrow, modifiers: .command)
-                    .disabled(model.current == nil)
-                Divider()
-                Toggle("Shuffle", isOn: Binding(get: { model.queue.isShuffled }, set: { model.setShuffle($0) }))
-                    .keyboardShortcut("s", modifiers: [.command, .shift])
-                Picker("Repeat", selection: Binding(get: { model.queue.repeatMode }, set: { model.setRepeat($0) })) {
-                    Text("Off").tag(PlayQueueRepeat.off)
-                    Text("All").tag(PlayQueueRepeat.all)
-                    Text("One").tag(PlayQueueRepeat.one)
-                }
-                Divider()
-                Button(model.current.map(model.isFavorite) == true ? "Remove from Favorites" : "Add to Favorites") {
-                    model.toggleCurrentFavorite()
-                }
-                .keyboardShortcut("l")
-                .disabled(model.current == nil)
-                Button("Show in Finder") { model.showCurrentInFinder() }
-                    .keyboardShortcut("r", modifiers: [.command, .shift])
-                    .disabled(model.current == nil)
-                Divider()
-                Button(model.showsUpNext ? "Hide Up Next" : "Show Up Next") { model.showsUpNext.toggle() }
-                    .keyboardShortcut("u")
-                    .disabled(model.queue.isEmpty)
-                Button(model.showsLyrics ? "Hide Lyrics" : "Show Lyrics") { model.showsLyrics.toggle() }
-                    .keyboardShortcut("l", modifiers: [.command, .option])
-                    .disabled(model.lyrics == nil)
-            }
-        }
+        .commands { CrateCommands(model: model, menu: model.menu) }
     }
 }
