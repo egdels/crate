@@ -34,6 +34,12 @@ swift run crate-scan <folder> --loudness # BS.1770 loudness, peak and gain per f
 scripts/lyrics.py [--dry-run|--check|--replace] <folder>  # lyrics from lrclib.net, stamps checked/made with whisper.cpp
                                # (needs ffmpeg, brew's whisper-cpp and ~/.cache/whisper-cpp/ggml-large-v3-turbo.bin;
                                # about 35 s per file, writes lyrics/<name>.lrc|.txt next to the audio)
+scripts/covers.py [--dry-run|--accept|--no-itunes] <folder>  # covers from MusicBrainz/Cover Art Archive, iTunes as
+                               # fallback, checked against the track list; writes cover.jpg into the album folder
+swift run crate-scan <folder> --covers   # JSON of the albums the app shows without a cover (covers.py reads it)
+scripts/tags.py [--dry-run|--local|--no-itunes|--undo <journal>] <folder>  # tag gaps and broken values filled
+                               # locally and from MusicBrainz/iTunes, journal in ~/.cache/crate-tags; mutagen in a venv there
+swift run crate-scan <folder> --json     # every album with its tracks' tags as JSON (tags.py reads it)
 scripts/bundle.sh              # release build -> build/Crate.app (ad-hoc signed)
 scripts/dmg.sh --universal     # -> build/Crate-<version>.dmg, what a release ships
 scripts/icon.sh                # redraw Packaging/AppIcon.icns, the README PNG and the Android icon
@@ -512,6 +518,52 @@ come as scanned PDFs: Vision OCR (a 40-line Swift tool, scratch) read
 them, one song per page, the title line matched the file names, and
 whisper stamped 74 of 76 songs, the dialect ones at 73 to 90 % of the
 lines heard, the rest mostly at 100 %.
+Cover fetching (2026-10-18, `scripts/covers.py`, Python stdlib only):
+`crate-scan --covers` lists the albums the app shows without a cover
+(ArtworkCache's rule: first three tracks' pictures, then the folder's
+images) as JSON; the script searches MusicBrainz (1 request/s), fetches
+up to six candidates' track lists and confirms one when 80 % of the
+folder's tracks are found on it and at least half of the comparable
+lengths agree within 5 s, or 70 % when at least eight tracks were found
+and all their lengths agree (bonus tracks); releases with down to 70 %
+of the folder's track count are candidates. Tracks pair by title, or by
+position and length for "Track-01" placeholders and files without a
+title tag (position from the track number, else the number in front of
+the file name). The album title must reach 0.7 similarity (a short
+title inside a long one counts only 0.7: a two-word title once matched
+a podcast episode); a folder-name title loses "04_" and a trailing
+year. Cover Art Archive front-1200, release group as fallback, iTunes
+Search (lookup has track names and lengths, artwork URL scaled to
+1200x1200bb; the artist check also accepts the artist inside the album
+title, "(feat. Artist)") when MusicBrainz has no match or no image.
+Writes cover.jpg/png into the album folder, never over an existing
+one, never for a folder shared by two albums without a cover. Left
+without a cover in practice: own compilations, bootlegs, broken tags,
+releases with no image anywhere. Covers checked by eye after each run.
+Tag repair (2026-10-18, `scripts/tags.py`): fills what is missing
+and fixes what is provably broken, never restyles a good value.
+Local: artist spellings unified (properly cased, small words lower
+case inside, then the most common), "01 - " / "Artist - " in front of
+titles removed, album artist where every track's artist tag agrees.
+From the release confirmed as in covers.py (MusicBrainz, iTunes only
+when MusicBrainz confirms nothing; `covers.pair` gives the track
+pairing): year (MusicBrainz: the release group's first release),
+album artist (iTunes: only when it is the album's artist), track/disc
+numbers, missing album/artist, titles for placeholders, missing title
+tags and values cut at 30 characters (28-30 chars and the release's
+value begins with them). Track numbers come from a release only when
+every track of the folder is on it and the number in front of the file
+name does not disagree: a folder with bonus tracks has its own order.
+Typographic quotes from MusicBrainz and iTunes' "(feat. ...)" become
+plain: the apps' search folds case and accents, not ’. mutagen (in a
+venv under ~/.cache/crate-tags, made on the first run, since
+Homebrew's Python refuses global packages) writes in place; ID3 v2.3
+stays v2.3 (the easy interface hides the version, so it is read from
+the file); audio verified bit-identical by ffmpeg MD5 on MP3 and FLAC.
+WAVs and MP4s named .mp3 (the apps go by the name and read no MP4
+atoms there) are left alone. Spelling unification needs a second pass
+after the first write (variants appear once MusicBrainz's spellings are
+in); run until a dry run finds nothing.
 Disc separators (both apps): `Album.discs` groups the sorted tracks
 by `discNumber ?? 1`; the album page shows a "Disc n" line per disc
 only when there is more than one (Mac: List sections with a

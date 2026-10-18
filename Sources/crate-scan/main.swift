@@ -8,6 +8,8 @@
 //   swift run crate-scan <folder> [--all] [--albums] [--concurrency N]
 //   swift run crate-scan <folder> --lyrics [--concurrency N]
 //   swift run crate-scan <folder> --loudness [--concurrency N]
+//   swift run crate-scan <folder> --covers [--concurrency N]
+//   swift run crate-scan <folder> --json [--concurrency N]
 //
 // Prints a summary and every track that is missing a field; --all prints
 // every track, --albums the albums the grouping makes of them. --concurrency overrides how many files are read at once,
@@ -17,7 +19,11 @@
 // name, or in a "lyrics" subfolder); groundwork for showing them.
 // --loudness measures every file with the BS.1770 meter and prints
 // loudness, peak and ReplayGain, to compare with `ffmpeg -af ebur128`
-// and to time the decoding.
+// and to time the decoding. --covers prints, as JSON, the albums the app
+// would show without a cover (no embedded picture in their first tracks,
+// no image in the folder), with their tracks; scripts/covers.py reads it.
+// --json prints every album that way, with all tags; scripts/tags.py
+// reads it.
 
 import AVFoundation
 import CrateCore
@@ -204,10 +210,55 @@ func measureLoudness(in folder: URL, concurrency: Int) async throws {
                  files.count, seconds / 60, elapsed, seconds / max(elapsed, 0.001), concurrency))
 }
 
+/// Albums as JSON, with their tracks' tags. With `missingCoversOnly`,
+/// only the albums without a cover, judged as `ArtworkCache` does: the
+/// first three tracks' embedded pictures, then the folder's images.
+func printAlbumsJSON(in folder: URL, concurrency: Int, missingCoversOnly: Bool) async throws {
+    let library = Library(store: NullStore(), metadataReader: AVFoundationMetadataReader(), concurrency: concurrency)
+    _ = try await library.addFolder(folder)
+    let albums = Album.group(await library.tracks, roots: [folder])
+    let reader = AVFoundationArtworkReader()
+    var printed: [[String: Any]] = []
+    for album in albums {
+        if missingCoversOnly {
+            var found = false
+            for track in album.tracks.prefix(3) where (try? await reader.artwork(for: track.url)) != nil {
+                found = true
+                break
+            }
+            if found { continue }
+        }
+        printed.append([
+            "folder": album.folder.path,
+            "artist": album.artist,
+            "title": album.title,
+            "year": album.year as Any,
+            "tracks": album.tracks.map { track -> [String: Any] in
+                [
+                    "file": track.url.path, "title": track.title, "artist": track.artist as Any,
+                    "album": track.album as Any, "albumArtist": track.albumArtist as Any,
+                    "track": track.trackNumber as Any, "trackTotal": track.trackTotal as Any,
+                    "disc": track.discNumber as Any, "discTotal": track.discTotal as Any,
+                    "year": track.year as Any, "genre": track.genre as Any, "compilation": track.compilation,
+                    "duration": track.duration,
+                ]
+            },
+        ])
+    }
+    let json = try JSONSerialization.data(withJSONObject: printed, options: [.prettyPrinted, .sortedKeys])
+    FileHandle.standardOutput.write(json)
+    let what = missingCoversOnly ? "albums without a cover" : "albums"
+    FileHandle.standardError.write(Data("\(printed.count) of \(albums.count) \(what)\n".utf8))
+}
+
 // Below every declaration: a top-level constant such as `timeStamp` is
 // initialised when the code reaches its line.
 if arguments.contains("--loudness") {
     try await measureLoudness(in: folder, concurrency: concurrency)
+    exit(0)
+}
+if arguments.contains("--covers") || arguments.contains("--json") {
+    try await printAlbumsJSON(in: folder, concurrency: concurrency, missingCoversOnly: arguments.contains("--covers"))
     exit(0)
 }
 if arguments.contains("--lyrics") {

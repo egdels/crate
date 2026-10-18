@@ -139,6 +139,8 @@ To see what the tag reader makes of a real folder:
 swift run crate-scan ~/Music/Music/Media.localized        # summary + tracks with gaps
 swift run crate-scan <folder> --all                       # every track
 swift run crate-scan <folder> --lyrics                    # how many files have lyrics, and where from
+swift run crate-scan <folder> --covers                    # the albums without a cover, as JSON
+swift run crate-scan <folder> --json                      # every album with its tags, as JSON
 ```
 
 ### Lyrics for a collection
@@ -167,6 +169,53 @@ the large-v3-turbo model at `~/.cache/whisper-cpp/ggml-large-v3-turbo.bin`.
 Whisper takes about half a minute per song on Apple silicon, so a large
 collection is an overnight run; transcripts are cached, a second run is
 quick.
+
+### Covers for a collection
+
+Both apps show an album's embedded cover or an image in its folder
+(`cover.jpg`, `folder.jpg` and the like). `scripts/covers.py` fills the
+gaps the same way, as a step you run yourself: for every album without
+a cover it searches [MusicBrainz](https://musicbrainz.org), compares
+the releases' track lists with your files (titles and lengths), and
+takes the front cover of the best match from the
+[Cover Art Archive](https://coverartarchive.org); albums MusicBrainz
+does not know go to Apple's iTunes Search, checked the same way. Only
+confirmed matches are written, as `cover.jpg` in the album's folder;
+your audio files stay untouched. The apps pick the covers up on the
+next rescan.
+
+```sh
+scripts/covers.py --dry-run <folder>   # see the matches first
+scripts/covers.py <folder>             # fetch, check and write
+scripts/covers.py --accept <folder>    # also write doubtful matches
+scripts/covers.py --no-itunes <folder> # MusicBrainz only
+```
+
+It needs Python 3 and Xcode (it runs `crate-scan --covers` to find the
+albums without a cover). MusicBrainz allows one request a second, so
+it takes a few seconds per album; answers are cached.
+
+### Repairing tags
+
+`scripts/tags.py` fills gaps in a collection's tags and fixes values
+that are provably broken, without restyling anything that is fine:
+artists written several ways get one spelling, track numbers or
+artists in front of a title go, and albums that MusicBrainz (or, failing
+that, iTunes) confirms by their track list, as for the covers, get what
+they lack from it: year,
+album artist, track and disc numbers, real titles for "Track 01"
+placeholders, values cut at ID3v1's 30 characters. It writes the tags
+in place with [mutagen](https://mutagen.readthedocs.io) (installed into
+its own venv on the first run), never the audio, and keeps a journal so
+every change can be undone.
+
+```sh
+scripts/tags.py --dry-run <folder>       # the report: every change, old -> new
+scripts/tags.py <folder>                 # write
+scripts/tags.py --local <folder>         # only the repairs that need no internet
+scripts/tags.py --no-itunes <folder>     # MusicBrainz only
+scripts/tags.py --undo <journal.json>    # put every old value back
+```
 
 ## Android
 

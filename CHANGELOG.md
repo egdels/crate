@@ -5,6 +5,20 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow takes a
 version's section from this file as the GitHub release notes.
 
+## [Unreleased]
+
+### Added
+
+- `scripts/covers.py` fetches missing album covers from MusicBrainz and
+  the Cover Art Archive (iTunes Search as the fallback), checked against
+  the album's track list, and writes them as `cover.jpg` into the album
+  folder. `crate-scan --covers` lists the albums without a cover.
+- `scripts/tags.py` repairs a collection's tags: one spelling per
+  artist, no track numbers in titles, and from MusicBrainz or iTunes, for albums
+  it confirms by their track list, missing years, album artists, track
+  numbers and real titles for placeholders; with a journal to undo it.
+  `crate-scan --json` prints every album with its tags.
+
 ## [0.11.0] - 2026-10-17
 
 ### Added
