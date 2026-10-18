@@ -20,8 +20,10 @@ to the iTunes Search API, checked the same way against its track list.
 The result is cover.jpg (or .png) in the album's folder, scaled down to
 1200 px with sips, which is where both apps look; audio files are never
 touched. A doubtful match is only reported, --accept writes it too.
-Albums that share their folder with another album without a cover are
-skipped, since one folder image would show for all of them. The app
+The image goes into every folder that holds tracks of the album (CD1,
+CD2... each), since the apps look next to the track. Albums that share
+a folder with another album without a cover are skipped, since one
+folder image would show for all of them. The app
 picks the new covers up on its next rescan.
 
 The JSON answers are cached in ~/.cache/crate-covers, so a second run
@@ -360,19 +362,30 @@ def missing_covers(folder):
     sys.stderr.write(out.stderr)
     return json.loads(out.stdout)
 
-def save(image, folder):
-    """cover.jpg or cover.png in the folder, no bigger than MAX_PIXELS."""
+def track_folders(album):
+    """The folders that hold the album's tracks: the apps look for a
+    folder image next to the track, so an album spread over CD1, CD2...
+    needs the image in each of them, not in the folder above."""
+    return sorted({str(Path(t['file']).parent) for t in album['tracks']})
+
+def save(image, folders):
+    """cover.jpg or cover.png, no bigger than MAX_PIXELS, in each folder
+    that has none yet; the paths written."""
     ext = '.png' if image[:8] == b'\x89PNG\r\n\x1a\n' else '.jpg'
     if ext == '.jpg' and image[:3] != b'\xff\xd8\xff': raise ValueError('neither JPEG nor PNG')
-    target = Path(folder) / ('cover' + ext)
-    if target.exists(): raise ValueError(f'{target.name} is already there')
+    written = []
     with tempfile.TemporaryDirectory() as tmp:
         part = Path(tmp) / ('cover' + ext)
         part.write_bytes(image)
         subprocess.run(['sips', '-Z', str(MAX_PIXELS), str(part)], check=True, capture_output=True)
         # sips grows nothing: -Z only scales an image down to the bound
-        target.write_bytes(part.read_bytes())
-    return target
+        for folder in folders:
+            target = Path(folder) / ('cover' + ext)
+            if any((Path(folder) / ('cover' + e)).exists() for e in ('.jpg', '.png')): continue
+            target.write_bytes(part.read_bytes())
+            written.append(target)
+    if not written: raise ValueError('a cover is already there')
+    return written
 
 def download(urls):
     for url in urls:
@@ -396,10 +409,11 @@ def main():
     for root in folders:
         albums = missing_covers(root)
         per_folder = {}
-        for album in albums: per_folder[album['folder']] = per_folder.get(album['folder'], 0) + 1
+        for album in albums:
+            for folder in track_folders(album): per_folder[folder] = per_folder.get(folder, 0) + 1
         for n, album in enumerate(albums, 1):
             name = f'[{n}/{len(albums)}] {album["artist"]} — {album["title"]} ({len(album["tracks"])} tracks)'
-            if per_folder[album['folder']] > 1:
+            if any(per_folder[folder] > 1 for folder in track_folders(album)):
                 print(f'{name}: shares its folder with another album without a cover, skipped')
                 tally('shared folder')
                 continue
@@ -436,12 +450,13 @@ def main():
                 tally('download failed')
                 continue
             try:
-                target = save(image, album['folder'])
+                targets = save(image, track_folders(album))
             except (ValueError, OSError, subprocess.CalledProcessError) as e:
                 print(f'{name}: could not save the image ({e})')
                 tally('save failed')
                 continue
-            print(f'{name}: {target.name} written, {"confirmed" if confirmed else "doubtful, accepted"}: {what}')
+            where = targets[0].name if len(targets) == 1 else f'{targets[0].name} in {len(targets)} folders'
+            print(f'{name}: {where} written, {"confirmed" if confirmed else "doubtful, accepted"}: {what}')
             tally('confirmed' if confirmed else 'accepted')
     print()
     print(', '.join(f'{v} {k}' for k, v in sorted(counts.items(), key=lambda kv: -kv[1])) + (' (dry run)' if dry else ''))
