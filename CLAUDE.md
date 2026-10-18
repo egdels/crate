@@ -323,7 +323,16 @@ a `textBackgroundColor` window background, which keeps it white there.
 Measured on window captures, windowed and full screen (the full-screen
 window is the 1920x1200 one in the window list; toggle it through the
 `AXFullScreen` attribute). macOS 12 has no `toolbarBackground`: there the
-transparent title bar may let the divider through; unchecked. Without the grey, the album header needs its
+transparent title bar lets the divider through, faintly, in both modes,
+and in dark mode the track list keeps its own wallpaper-tinted
+background (37,27,38 beside 30); checked in the Monterey VM through
+Screen Sharing (its window can be captured with `screencapture -l`;
+over SSH System Events may not be scripted, and `defaults write -g
+AppleInterfaceStyle` does not switch a running session, so the
+appearance is switched by clicking in System Preferences > General
+through the Screen Sharing window). The VM also showed an empty
+section header (a blank row with a line) under the album header for
+single-disc albums: the list uses sections only for several discs. Without the grey, the album header needs its
 Divider above the list. A `.background` reaches under the toolbar unless
 given `ignoresSafeAreaEdges: []` (the red error line reddened the title
 bar). Not checked in the macOS 12 VM.

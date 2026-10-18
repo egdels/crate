@@ -34,6 +34,8 @@ version's section from this file as the GitHub release notes.
   later), so the window is one surface with a line between the columns,
   in dark mode too (the track lists and the player bar had a blue-tinted
   grey there).
+- Mac (macOS 12): a single-disc album no longer shows an empty row
+  under its header.
 - Mac: an error line goes away when clicked or after eight seconds;
   some stayed until the app was restarted. It no longer reddens the
   title bar.

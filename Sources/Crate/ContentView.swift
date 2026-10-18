@@ -551,21 +551,18 @@ struct TrackList: View {
                 // album has more than one.
                 let discs = album.discs
                 List {
-                    ForEach(discs, id: \.number) { disc in
-                        Section {
-                            ForEach(disc.tracks, id: \.id) { track in
-                                TrackRow(track: track, playing: track.id == model.current?.id)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture(count: 2) {
-                                        model.play(album: album, startingAt: album.tracks.firstIndex { $0.id == track.id } ?? 0)
-                                    }
-                                    .trackContextMenu(track)
-                            }
-                        } header: {
-                            if discs.count > 1 {
+                    // Sections only for more than one disc: macOS 12 draws
+                    // an empty section header as a blank row with a line.
+                    if discs.count > 1 {
+                        ForEach(discs, id: \.number) { disc in
+                            Section {
+                                rows(disc.tracks, of: album)
+                            } header: {
                                 Text("Disc \(disc.number)")
                             }
                         }
+                    } else {
+                        rows(album.tracks, of: album)
                     }
                 }
                 .listStyle(.inset)
@@ -575,6 +572,17 @@ struct TrackList: View {
             Text("Select an album")
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func rows(_ tracks: [Track], of album: Album) -> some View {
+        ForEach(tracks, id: \.id) { track in
+            TrackRow(track: track, playing: track.id == model.current?.id)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
+                    model.play(album: album, startingAt: album.tracks.firstIndex { $0.id == track.id } ?? 0)
+                }
+                .trackContextMenu(track)
         }
     }
 
