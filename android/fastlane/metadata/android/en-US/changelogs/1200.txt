@@ -1,0 +1,2 @@
+New in this version:
+- Maintenance release, built together with the Mac version 0.12.0 (menus, window look and error messages). Nothing changes on Android.

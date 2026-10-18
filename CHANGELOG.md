@@ -7,6 +7,8 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-18
+
 ### Added
 
 - `scripts/covers.py` fetches missing album covers from MusicBrainz and
