@@ -613,12 +613,17 @@ struct TrackRow: View {
 }
 
 /// The toolbar over the detail column is drawn with a tinted material of
-/// its own, grey next to the white grid; hidden, it shows the content
-/// background like the grid's half does. Needs macOS 13; on 12 it stays.
+/// its own, grey next to the white grid. Painted in the content colour
+/// instead, it matches the grid's half; it must stay opaque, because the
+/// column divider runs the window's full height and only the toolbar
+/// covers its top (hidden, the line showed through the title bar). Needs
+/// macOS 13; on 12 it stays tinted.
 private struct ClearToolbar: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 13, *) {
-            content.toolbarBackground(.hidden, for: .windowToolbar)
+            content
+                .toolbarBackground(Color(nsColor: .textBackgroundColor), for: .windowToolbar)
+                .toolbarBackground(.visible, for: .windowToolbar)
         } else {
             content
         }

@@ -312,10 +312,11 @@ the first column's default sidebar material ended 2 pt short of the
 column under the toolbar (378 vs the divider at 380, measured on a
 window capture), a NavigationView artefact NavigationSplitView (macOS
 13) would not have. The toolbar over the detail column has its own
-tinted material: `toolbarBackground(.hidden, for: .windowToolbar)`
-(macOS 13+, `ClearToolbar`) lets the white through, and the column line
-then runs up to the top; neither column scrolls under the toolbar, so
-nothing shows through it. Without the grey, the album header needs its
+tinted material; `ClearToolbar` (macOS 13+) paints it opaque in
+`textBackgroundColor` with `.toolbarBackground(.visible)`. Hidden
+instead, the column divider (full window height in NSSplitView, only
+the toolbar covers its top) showed through the title bar. With the
+visible background the window title moves to the centre. Without the grey, the album header needs its
 Divider above the list. A `.background` reaches under the toolbar unless
 given `ignoresSafeAreaEdges: []` (the red error line reddened the title
 bar). Not checked in the macOS 12 VM.
