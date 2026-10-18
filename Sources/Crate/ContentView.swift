@@ -28,6 +28,12 @@ struct ContentView: View {
                     }
                 }
                 .frame(minWidth: 380, idealWidth: 420)
+                // The grid is the app's main view, not a sidebar list: the
+                // same background as the track list, instead of the grey
+                // sidebar material NavigationView gives its first column
+                // (which also ended a few points short of the column under
+                // the toolbar).
+                .background(Color(nsColor: .textBackgroundColor))
                 HStack(spacing: 0) {
                     Group {
                         if !model.isLoaded {
@@ -66,6 +72,7 @@ struct ContentView: View {
                             .frame(width: 320)
                     }
                 }
+                .background(Color(nsColor: .textBackgroundColor))
             }
             // Toolbar items live on the navigation view, not on the
             // columns: items a column registers while its content is still
@@ -81,6 +88,9 @@ struct ContentView: View {
             Divider()
             PlayerBar()
         }
+        // A failure shows as a red line over the window's top until it is
+        // clicked away or eight seconds pass; some failures have no later
+        // success that would clear them, and the line covers the toolbar.
         .overlay(alignment: .top) {
             if let error = model.lastError {
                 Text(error)
@@ -89,6 +99,13 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity)
                     .background(.red.opacity(0.85))
                     .foregroundStyle(.white)
+                    .contentShape(Rectangle())
+                    .onTapGesture { model.lastError = nil }
+                    .help("Click to dismiss")
+                    .task(id: error) {
+                        try? await Task.sleep(nanoseconds: 8_000_000_000)
+                        if model.lastError == error { model.lastError = nil }
+                    }
             }
         }
     }

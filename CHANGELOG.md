@@ -27,6 +27,11 @@ version's section from this file as the GitHub release notes.
 - Mac: the menus' lists (Remove Folder, Repeat) did not respond while
   the loudness analysis or playback was running; the menus were rebuilt
   on every progress step and every tick of the clock.
+- Mac: the album grid has the same background as the track list instead
+  of the grey sidebar material, which also ended a few points short of
+  its column under the toolbar.
+- Mac: an error line goes away when clicked or after eight seconds;
+  some stayed until the app was restarted.
 
 ## [0.11.0] - 2026-10-17
 

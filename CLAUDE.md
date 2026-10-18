@@ -307,6 +307,16 @@ and clock tick, and an open submenu was replaced under the pointer, so
 real clicks in Remove Folder or Repeat did nothing (AXPress still
 worked, so check menus with real mouse events; a closed SwiftUI menu
 shows stale marks to Accessibility until it is opened).
+Window look: both NavigationView columns carry `textBackgroundColor`;
+the first column's default sidebar material ended 2 pt short of the
+column under the toolbar (378 vs the divider at 380, measured on a
+window capture), a NavigationView artefact NavigationSplitView (macOS
+13) would not have; with both columns white the toolbar is uniform.
+`AppleInterfaceStyle` per app (argument or defaults) is ignored on
+macOS 26: dark mode can only be checked by switching the system.
+Errors: the red line (`lastError`) is dismissed by a click or after
+eight seconds (`task(id:)`), since some failures have no later success
+that would clear them.
 Help: `HelpWindow.swift` replaces SwiftUI's default "Crate Help" item
 (which otherwise shows "Help isn't available") with a plain NSWindow
 holding one page of SwiftUI text, kept in a static and reused; no Apple
