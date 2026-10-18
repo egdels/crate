@@ -333,18 +333,26 @@ def itunes_cover(album):
 
 def itunes_audiobook_cover(album):
     """An audiobook from iTunes' audiobook catalogue. It lists no chapters,
-    so the check is the title and the author alone, both strictly."""
+    so the check is the title and the author alone, both strictly, and
+    only when exactly one audiobook fits: a series of volumes ("Title -
+    Travelling", "Title - Small Talk"...) is no match for "Title Vol.2"."""
     if album['artist'] in ('Unknown Artist', 'Various Artists'): return None
     term = album['artist'] + ' ' + clean_album(album['title'])
     for country in ('DE', 'US'):
         found = (itunes('search', term=term, media='audiobook', entity='audiobook', limit=10, country=country) or {}).get('results') or []
+        fits = {}
         for result in found:
             if not result.get('artworkUrl100'): continue
-            name = clean_album(result.get('collectionName', ''))
-            # "Title - Series, Band 1": the title alone counts too
-            if max(album_similarity(album['title'], name), album_similarity(album['title'], name.split(' - ')[0])) < MIN_BOOK_TITLE:
-                continue
             if similar(album['artist'], result.get('artistName', '')) < MIN_BOOK_AUTHOR: continue
+            name = clean_album(result.get('collectionName', ''))
+            # "Title - Series, Band 1": the title alone counts, but only when it is the whole local title
+            if album_similarity(album['title'], name) < MIN_BOOK_TITLE and \
+                    fold(name.split(' - ')[0]) != fold(clean_album(album['title'])):
+                continue
+            fits.setdefault(fold(name), result)
+        if len(fits) > 1: return None
+        if fits:
+            result = next(iter(fits.values()))
             art = result['artworkUrl100']
             urls = [art.replace('100x100bb', f'{MAX_PIXELS}x{MAX_PIXELS}bb'), art.replace('100x100bb', '600x600bb')]
             what = f'iTunes audiobook {result["collectionId"]} "{result.get("collectionName")}" by {result.get("artistName")} ' \

@@ -40,6 +40,8 @@ swift run crate-scan <folder> --covers   # JSON of the albums the app shows with
 scripts/tags.py [--dry-run|--local|--no-itunes|--undo <journal>] <folder>  # tag gaps and broken values filled
                                # locally and from MusicBrainz/iTunes, journal in ~/.cache/crate-tags; mutagen in a venv there
 swift run crate-scan <folder> --json     # every album with its tracks' tags as JSON (tags.py reads it)
+scripts/sync.py [--copy] <source> <target>  # compare two copies of a collection (names Unicode-normalised:
+                               # openrsync would duplicate folders with umlauts on SMB); --copy never deletes
 scripts/bundle.sh              # release build -> build/Crate.app (ad-hoc signed)
 scripts/dmg.sh --universal     # -> build/Crate-<version>.dmg, what a release ships
 scripts/icon.sh                # redraw Packaging/AppIcon.icns, the README PNG and the Android icon
@@ -631,9 +633,9 @@ relaunch at 1:15 of a track; Android force-stop at 0:15 came back at
    `scripts/store-screenshot.swift`). `android/fastlane/metadata/README.md`
    has the capture recipe (status bar demo mode, lock screen) and the
    answers for the Play Console forms. The screenshots were taken on the
-   Pixel_9a, MoveAPiece_Tablet7 and MoveAPiece_Tablet10 AVDs with ~20
-   albums with covers copied from the developer's collection to
-   `/sdcard/Music/Store` (not in the repo). `PRIVACY.md` is written for
+   Pixel_9a, MoveAPiece_Tablet7 and MoveAPiece_Tablet10 AVDs with a
+   test library of albums with covers under `/sdcard/Music` (not in
+   the repo). `PRIVACY.md` is written for
    Play's User Data policy (publisher, contact route, every permission
    explained, no third parties), and the Android overflow menu shows it
    in a dialog (Play wants the policy in the app too, as link or text,
