@@ -29,9 +29,12 @@ version's section from this file as the GitHub release notes.
   on every progress step and every tick of the clock.
 - Mac: the album grid has the same background as the track list instead
   of the grey sidebar material, which also ended a few points short of
-  its column under the toolbar.
+  its column under the toolbar; the toolbar is no longer tinted over the
+  track list (macOS 13 and later), so the window is one surface with a
+  line between the columns.
 - Mac: an error line goes away when clicked or after eight seconds;
-  some stayed until the app was restarted.
+  some stayed until the app was restarted. It no longer reddens the
+  title bar.
 
 ## [0.11.0] - 2026-10-17
 

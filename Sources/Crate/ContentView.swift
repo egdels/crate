@@ -85,6 +85,7 @@ struct ContentView: View {
             // Toolbar, not sidebar: with `.sidebar` placement the field never
             // appeared above the ScrollView-based grid (macOS 26).
             .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search")
+            .modifier(ClearToolbar())
             Divider()
             PlayerBar()
         }
@@ -97,7 +98,9 @@ struct ContentView: View {
                     .font(.callout)
                     .padding(8)
                     .frame(maxWidth: .infinity)
-                    .background(.red.opacity(0.85))
+                    // only behind the line itself: a plain background reaches
+                    // up under the toolbar and reddens the title bar
+                    .background(.red.opacity(0.85), ignoresSafeAreaEdges: [])
                     .foregroundStyle(.white)
                     .contentShape(Rectangle())
                     .onTapGesture { model.lastError = nil }
@@ -537,6 +540,9 @@ struct TrackList: View {
                     .font(.title2)
                 }
                 .padding(16)
+                // The header and the list share one background; the line
+                // keeps rows that scroll up from running into the header.
+                Divider()
                 // One section per disc; the headers only appear when the
                 // album has more than one.
                 let discs = album.discs
@@ -603,5 +609,18 @@ struct TrackRow: View {
         }
         .padding(.vertical, 2)
         .onHover { hovering = $0 }
+    }
+}
+
+/// The toolbar over the detail column is drawn with a tinted material of
+/// its own, grey next to the white grid; hidden, it shows the content
+/// background like the grid's half does. Needs macOS 13; on 12 it stays.
+private struct ClearToolbar: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 13, *) {
+            content.toolbarBackground(.hidden, for: .windowToolbar)
+        } else {
+            content
+        }
     }
 }
