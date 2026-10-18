@@ -54,13 +54,25 @@ CANDIDATES = 6         # releases per album whose track lists are fetched
 # --- web ------------------------------------------------------------------
 
 _last_request = {}
+EMPTY_FOR = 7 * 24 * 3600
+
+def empty(result):
+    """No resource, or a search that found nothing."""
+    return result is None or (isinstance(result, dict) and
+                              not any(result.get(k) for k in ('releases', 'results', 'artists')) and
+                              any(k in result for k in ('releases', 'results', 'artists', 'count', 'resultCount')))
 
 def fetch(url, pace=0.0, binary=False, cache=True):
     """GET with retries on 503/429; JSON answers are cached by URL, a
     missing resource is cached as None."""
     key = CACHE / (hashlib.sha1(url.encode()).hexdigest() + '.json')
     if cache and not binary and key.exists():
-        try: return json.load(open(key))
+        try:
+            result = json.load(open(key))
+            # an empty answer is asked again after a week: an album the
+            # databases did not know yet may have been added since
+            if not empty(result) or time.time() - key.stat().st_mtime < EMPTY_FOR:
+                return result
         except ValueError: key.unlink()
     host = urllib.parse.urlparse(url).netloc
     for attempt in range(8):
