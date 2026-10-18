@@ -176,8 +176,10 @@ private struct UpNextRow: View {
 
 /// The content colour, like the rest of the window: the bar material is
 /// white in light mode but a blue-tinted grey in dark mode, beside the
-/// neutral grid and lists. macOS 12 keeps the material: on an opaque
-/// background there its seek slider did not show in dark mode.
+/// neutral grid and lists. macOS 12 keeps the material: in the test VM an
+/// opaque background let the seek slider vanish in dark mode, which is
+/// most likely the VM's slider rendering (see CLAUDE.md), but real
+/// hardware with 12 has not been checked.
 private struct PlayerBarBackground: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 13, *) {

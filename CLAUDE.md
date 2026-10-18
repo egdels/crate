@@ -333,11 +333,14 @@ the window half a second after launch, after leaving full screen and in
 the toolbar window on entering it; that also covers the column divider
 in the title bar. `ClearTableBackground` stops the lists' NSTableViews
 from drawing their wallpaper-tinted dark background. The player bar
-keeps `.bar` on 12: on an opaque background its seek slider did not
-show after a launch in dark mode. Also seen there and older than these
-changes (the commit before them shows it too): after a launch in dark
-mode the volume slider does not show; switching to dark while running
-it does. Checked in the Monterey VM through
+keeps `.bar` on 12, to be safe. VM artefact, not a Crate bug: after a
+launch in dark mode the Monterey VM measures every slider knob as zero
+(NSSliderCell.knobRect 0 x 0, so no knob and a zero intrinsic height;
+SwiftUI then lays the slider out 0 pt high and it vanishes, or draws a
+bare bar at the top of its frame). System Preferences' own sliders
+(Sound) show the same in that VM, and a fresh NSSliderCell does too, so
+do not "fix" sliders for it (an NSSlider replacement was tried and
+dropped). Unchecked on real hardware with 12. Checked in the Monterey VM through
 Screen Sharing (its window can be captured with `screencapture -l`;
 over SSH System Events may not be scripted, and `defaults write -g
 AppleInterfaceStyle` does not switch a running session, so the
