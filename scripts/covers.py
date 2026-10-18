@@ -47,6 +47,8 @@ MIN_MATCHED = 0.8      # share of the folder's tracks found on a release: confir
 MIN_DOUBTFUL = 0.5     # below this a candidate is not even reported
 MIN_TITLE = 0.7        # album title similarity a candidate needs at all
 MIN_TIMED = 0.5        # share of comparable lengths that must agree for a confirmation
+MIN_BOOK_TITLE = 0.9   # an audiobook without a chapter list: title similarity needed
+MIN_BOOK_AUTHOR = 0.8  # and author similarity
 MIN_BONUS = 0.7        # share found that confirms when eight or more lengths all agree
 CANDIDATES = 6         # releases per album whose track lists are fetched
 
@@ -111,7 +113,8 @@ def itunes(path, **query):
 
 # --- comparing ------------------------------------------------------------
 
-NOISE = re.compile(r'\s*[\(\[][^)\]]*\b(disc|disk|dis|cd|retail|bonus|remaster(ed)?|explicit|edition|version)\b[^)\]]*([\)\]]|$)', re.I)
+NOISE = re.compile(r'\s*[\(\[][^)\]]*\b(disc|disk|dis|cd|retail|bonus|remaster(ed)?|explicit|edition|version|'
+                   r'feat|narrator|ungekürzt|gekürzt|unabridged|abridged)\b[^)\]]*([\)\]]|$)', re.I)
 DISC = re.compile(r'\s*[-,:]?\s*\b(cd|disc|disk)\s*#?\s*\d+\b.*$', re.I)
 
 def clean_album(title):
@@ -178,6 +181,10 @@ def pair(local_tracks, remote_tracks):
         best, best_score = None, 0.0
         for i, (title, length, disc, number) in enumerate(remote_tracks):
             if i in used: continue
+            # a far longer or shorter track is another piece whatever its title:
+            # a whole episode in one file is not the release's "Part 1"
+            if length and track['duration'] and \
+                    abs(length - track['duration']) > max(30, 0.2 * max(length, track['duration'])): continue
             close = length and track['duration'] and abs(length - track['duration']) <= 5
             same_place = place is not None and number == place and disc == (track.get('disc') or 1) \
                 and length and track['duration'] and abs(length - track['duration']) <= 3
@@ -196,7 +203,12 @@ def pair(local_tracks, remote_tracks):
 def match(local_tracks, remote_tracks):
     """Share of the folder's tracks found on the release, the number of
     matched tracks whose lengths agree within 5 s, the number of matched
-    tracks with a length on both sides, and the release's track count."""
+    tracks with a length on both sides, and the release's track count.
+    A folder of one file that lasts as long as the whole release (an
+    audio play ripped as a single track) counts as found."""
+    if len(local_tracks) == 1 and len(remote_tracks) > 1 and all(r[1] for r in remote_tracks):
+        total, length = sum(r[1] for r in remote_tracks), local_tracks[0]['duration']
+        if length and abs(total - length) <= max(10, total * 0.01): return 1.0, 1, 1, len(remote_tracks)
     found, timed, comparable = 0, 0, 0
     for track, best in zip(local_tracks, pair(local_tracks, remote_tracks)):
         if best is None: continue
@@ -317,6 +329,28 @@ def itunes_cover(album):
     return (best[1], best[2], best[3]) if best else None
 
 
+def itunes_audiobook_cover(album):
+    """An audiobook from iTunes' audiobook catalogue. It lists no chapters,
+    so the check is the title and the author alone, both strictly."""
+    if album['artist'] in ('Unknown Artist', 'Various Artists'): return None
+    term = album['artist'] + ' ' + clean_album(album['title'])
+    for country in ('DE', 'US'):
+        found = (itunes('search', term=term, media='audiobook', entity='audiobook', limit=10, country=country) or {}).get('results') or []
+        for result in found:
+            if not result.get('artworkUrl100'): continue
+            name = clean_album(result.get('collectionName', ''))
+            # "Title - Series, Band 1": the title alone counts too
+            if max(album_similarity(album['title'], name), album_similarity(album['title'], name.split(' - ')[0])) < MIN_BOOK_TITLE:
+                continue
+            if similar(album['artist'], result.get('artistName', '')) < MIN_BOOK_AUTHOR: continue
+            art = result['artworkUrl100']
+            urls = [art.replace('100x100bb', f'{MAX_PIXELS}x{MAX_PIXELS}bb'), art.replace('100x100bb', '600x600bb')]
+            what = f'iTunes audiobook {result["collectionId"]} "{result.get("collectionName")}" by {result.get("artistName")} ' \
+                   f'(title and author only)'
+            return 1.0, what, urls
+    return None
+
+
 # --- files ----------------------------------------------------------------
 
 def missing_covers(folder):
@@ -373,6 +407,8 @@ def main():
             if use_itunes and (not found or found[0] < MIN_MATCHED or not found[2]):
                 other = itunes_cover(album)
                 if other and (not found or other[0] > found[0] or not found[2]): found = other
+            if use_itunes and (not found or found[0] < MIN_DOUBTFUL or not found[2]):
+                found = itunes_audiobook_cover(album) or found
             if not found or found[0] < MIN_DOUBTFUL or not found[2]:
                 print(f'{name}: not found' + (f' (best: {found[1]})' if found else ''))
                 tally('not found')
