@@ -328,7 +328,16 @@ Divider above the list. A `.background` reaches under the toolbar unless
 given `ignoresSafeAreaEdges: []` (the red error line reddened the title
 bar). Not checked in the macOS 12 VM.
 `AppleInterfaceStyle` per app (argument or defaults) is ignored on
-macOS 26: dark mode can only be checked by switching the system.
+macOS 26: dark mode is checked by switching the system (System Events,
+appearance preferences, then back). In dark mode the inset lists' own
+background and the `.bar` material are a blue-tinted grey (30,34,43)
+beside the neutral content colour (28); the lists hide theirs
+(`scrollContentBackground`, macOS 13+) and the player bar uses the
+content colour. Window captures in this session: both modes, windowed
+and full screen, error line included.
+Testing gotcha: `tell application id "de.schliweb.crate" to activate`
+launches /Applications/Crate.app when the build copy is not running
+yet; bring a build copy forward through System Events' process.
 Errors: the red line (`lastError`) is dismissed by a click or after
 eight seconds (`task(id:)`), since some failures have no later success
 that would clear them.

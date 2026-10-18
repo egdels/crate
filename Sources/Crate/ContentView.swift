@@ -328,6 +328,7 @@ struct FlatTrackList: View {
                     }
                 }
                 .listStyle(.inset)
+                .modifier(ContentBackgroundList())
             }
         }
         .navigationTitle(title)
@@ -568,6 +569,7 @@ struct TrackList: View {
                     }
                 }
                 .listStyle(.inset)
+                .modifier(ContentBackgroundList())
             }
         } else {
             Text("Select an album")
@@ -646,6 +648,20 @@ private struct TitlebarStyle: NSViewRepresentable {
             guard let window else { return }
             window.titlebarAppearsTransparent = true
             window.backgroundColor = .textBackgroundColor
+        }
+    }
+}
+
+/// An inset list paints its own background, which in dark mode is a
+/// slightly blue grey beside the neutral content colour of the grid and
+/// the album header; without it the column's background shows. Needs
+/// macOS 13 (scrollContentBackground); on 12 the list keeps its own.
+private struct ContentBackgroundList: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 13, *) {
+            content.scrollContentBackground(.hidden)
+        } else {
+            content
         }
     }
 }

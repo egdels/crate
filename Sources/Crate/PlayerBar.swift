@@ -91,7 +91,10 @@ struct PlayerBar: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.bar)
+        // The content colour, like the rest of the window: the bar
+        // material is white in light mode but a blue-tinted grey in dark
+        // mode, beside the neutral grid and lists.
+        .background(Color(nsColor: .textBackgroundColor))
     }
 }
 

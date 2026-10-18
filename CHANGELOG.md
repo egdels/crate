@@ -31,7 +31,9 @@ version's section from this file as the GitHub release notes.
   of the grey sidebar material, which also ended a few points short of
   its column under the toolbar; the toolbar over the track list is
   painted in the same colour instead of a grey tint (macOS 13 and
-  later), so the window is one surface with a line between the columns.
+  later), so the window is one surface with a line between the columns,
+  in dark mode too (the track lists and the player bar had a blue-tinted
+  grey there).
 - Mac: an error line goes away when clicked or after eight seconds;
   some stayed until the app was restarted. It no longer reddens the
   title bar.
