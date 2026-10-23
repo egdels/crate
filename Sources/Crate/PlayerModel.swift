@@ -78,6 +78,19 @@ final class PlayerModel: ObservableObject {
     /// while the track has lyrics.
     @Published var showsLyrics = false
 
+    /// How the current track is practised: tempo, key, tuning, loop.
+    @Published private(set) var practice = PracticeSettings.neutral
+    /// Where the next loop starts, between "Set Loop Start" and "Set Loop
+    /// End" while there is no loop yet.
+    @Published private(set) var loopStartMark: TimeInterval?
+    /// The current track's outline; nil while it is read.
+    @Published private(set) var waveform: Waveform?
+    /// Whether the practice panel sits above the player bar. Closed until
+    /// the sliders button opens it; the window keeps it across launches.
+    /// The Practice menu works either way.
+    @Published var showsPractice = UserDefaults.standard.bool(forKey: "showsPractice") {
+        didSet { UserDefaults.standard.set(showsPractice, forKey: "showsPractice") }
+    }
     @Published var volume: Float = 1 {
         didSet { player.volume = volume }
     }
@@ -97,6 +110,10 @@ final class PlayerModel: ObservableObject {
     /// runs; nil otherwise.
     @Published private(set) var analysisProgress: LoudnessAnalyzer.Progress?
     private let lyricsSource: any LyricsSource
+    private let practiceStore: any PracticeStore
+    private var practiceBook = PracticeBook()
+    private var practiceSaveTask: Task<Void, Never>?
+    private var waveformTask: Task<Void, Never>?
     private var ticker: Timer?
     private var artworkTask: Task<Void, Never>?
     private var lyricsTask: Task<Void, Never>?
@@ -110,8 +127,9 @@ final class PlayerModel: ObservableObject {
     init(
         library: Library, player: any AudioPlayer, artwork: ArtworkCache, favorites: any FavoritesStore,
         playback: any PlaybackStateStore, history: any HistoryStore, loudness: any LoudnessStore,
-        lyrics: any LyricsSource = FileLyricsSource()
+        practice: any PracticeStore, lyrics: any LyricsSource = FileLyricsSource()
     ) {
+        self.practiceStore = practice
         self.library = library
         self.player = player
         self.artworkCache = artwork
@@ -141,12 +159,15 @@ final class PlayerModel: ObservableObject {
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("crate-history.json")
         let loudnessURL = (try? JSONLoudnessStore.defaultFileURL(appName: "Crate"))
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("crate-loudness.json")
+        let practiceURL = (try? JSONPracticeStore.defaultFileURL(appName: "Crate"))
+            ?? FileManager.default.temporaryDirectory.appendingPathComponent("crate-practice.json")
         let model = PlayerModel(
             library: library, player: AVAudioEngineBackend(), artwork: artwork,
             favorites: JSONFavoritesStore(fileURL: favoritesURL),
             playback: JSONPlaybackStateStore(directory: playbackDirectory),
             history: JSONHistoryStore(fileURL: historyURL),
-            loudness: JSONLoudnessStore(fileURL: loudnessURL))
+            loudness: JSONLoudnessStore(fileURL: loudnessURL),
+            practice: JSONPracticeStore(fileURL: practiceURL))
         model.nowPlaying = NowPlaying(model: model)
         return model
     }
@@ -327,6 +348,7 @@ final class PlayerModel: ObservableObject {
                     try await library.load()
                     favorites = try favoritesStore.load() ?? Favorites()
                     history = try historyStore.load() ?? History()
+                    practiceBook = try practiceStore.load() ?? PracticeBook()
                     await refresh()
                 } catch {
                     lastError = "Could not load the library: \(error.localizedDescription)"
@@ -435,6 +457,8 @@ final class PlayerModel: ObservableObject {
         favoritesChanged()
         history.removeAll(under: url)
         try? historyStore.save(history)
+        practiceBook.removeAll(under: url)
+        try? practiceStore.save(practiceBook)
         analysisTask?.cancel()
         await loudnessAnalyzer.removeAll(under: url)
         loudness = await loudnessAnalyzer.load()
@@ -691,7 +715,7 @@ final class PlayerModel: ObservableObject {
 
     func seek(to time: TimeInterval) {
         player.seek(to: time)
-        currentTime = time
+        currentTime = player.currentTime
         syncNowPlaying()
         savePlayback()
     }
@@ -722,6 +746,7 @@ final class PlayerModel: ObservableObject {
             try player.load(track.url, gain: gain(for: track))
             currentTime = 0
             lastError = nil
+            applyPractice(for: track)
             loadArtwork(for: track)
             loadLyrics(for: track)
             if autoplay {
@@ -778,7 +803,10 @@ final class PlayerModel: ObservableObject {
         if queue.advance() != nil {
             loadCurrent(autoplay: true)
         } else {
-            stop()
+            // The end of the queue: back to the top of the last track,
+            // paused, with its settings and outline, so Play goes again.
+            isPlaying = false
+            loadCurrent(autoplay: false)
         }
     }
 
@@ -789,6 +817,10 @@ final class PlayerModel: ObservableObject {
         currentArtwork = nil
         lyricsTask?.cancel()
         lyrics = nil
+        waveformTask?.cancel()
+        waveform = nil
+        practice = .neutral
+        loopStartMark = nil
         ticker?.invalidate()
         ticker = nil
         syncNowPlaying()
@@ -797,7 +829,8 @@ final class PlayerModel: ObservableObject {
 
     private func syncNowPlaying() {
         nowPlaying?.update(
-            track: current, artwork: currentArtwork, duration: duration, position: currentTime, isPlaying: isPlaying)
+            track: current, artwork: currentArtwork, duration: duration, position: currentTime, isPlaying: isPlaying,
+            tempo: practice.tempo)
     }
 
     private func startTicking() {
@@ -813,6 +846,136 @@ final class PlayerModel: ObservableObject {
         if Date().timeIntervalSince(lastSave) >= 10 {
             savePlayback()
         }
+    }
+
+    // MARK: - Practice
+
+    /// Puts the track's saved settings into effect, after `player.load`.
+    private func applyPractice(for track: Track) {
+        var settings = practiceBook[track.id]
+        settings.loop = settings.loop?.clamped(to: track.duration > 0 ? track.duration : player.duration)
+        practice = settings
+        loopStartMark = nil
+        player.setTempo(settings.tempo, pitch: settings.pitchCents)
+        player.setLoop(settings.activeLoop)
+        loadWaveform(for: track)
+    }
+
+    private func loadWaveform(for track: Track) {
+        waveformTask?.cancel()
+        waveform = nil
+        waveformTask = Task { [weak self] in
+            let read = try? await Task.detached(priority: .userInitiated) { try Waveform.read(track.url) }.value
+            guard let self, !Task.isCancelled, current?.id == track.id else { return }
+            waveform = read
+        }
+    }
+
+    /// The one way the settings change: into effect, onto the screen and,
+    /// a moment later, into the file (a dragged slider sends dozens).
+    private func updatePractice(_ change: (inout PracticeSettings) -> Void) {
+        guard let track = current else { return }
+        var settings = practice
+        change(&settings)
+        guard settings != practice else { return }
+        let old = practice
+        practice = settings
+        practiceBook[track.id] = settings
+        if settings.tempo != old.tempo || settings.pitchCents != old.pitchCents {
+            player.setTempo(settings.tempo, pitch: settings.pitchCents)
+        }
+        if settings.activeLoop != old.activeLoop {
+            player.setLoop(settings.activeLoop)
+            currentTime = player.currentTime
+        }
+        syncNowPlaying()
+        practiceSaveTask?.cancel()
+        practiceSaveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard let self, !Task.isCancelled else { return }
+            savePractice()
+        }
+    }
+
+    /// Also called on quit, so a change in the last half second stays.
+    func savePractice() {
+        practiceSaveTask?.cancel()
+        do {
+            try practiceStore.save(practiceBook)
+        } catch {
+            lastError = "Could not save the practice settings: \(error.localizedDescription)"
+        }
+    }
+
+    func setTempo(_ tempo: Double) {
+        // Whole percents: a slider drag lands on 0.7300000001 otherwise.
+        let rounded = (tempo * 100).rounded() / 100
+        updatePractice { $0 = PracticeSettings(
+            tempo: rounded, semitones: $0.semitones, cents: $0.cents, loop: $0.loop, loopOff: $0.loopOff) }
+    }
+
+    func changeTempo(by steps: Int) {
+        setTempo(practice.tempo + Double(steps) * PracticeSettings.tempoStep)
+    }
+
+    func transpose(by semitones: Int) {
+        updatePractice {
+            $0 = PracticeSettings(
+                tempo: $0.tempo, semitones: $0.semitones + semitones, cents: $0.cents, loop: $0.loop, loopOff: $0.loopOff)
+        }
+    }
+
+    func setCents(_ cents: Int) {
+        updatePractice {
+            $0 = PracticeSettings(tempo: $0.tempo, semitones: $0.semitones, cents: cents, loop: $0.loop, loopOff: $0.loopOff)
+        }
+    }
+
+    func tune(by cents: Int) { setCents(practice.cents + cents) }
+
+    /// Tempo, key and tuning back to the recording; the loop stays.
+    func resetSound() {
+        updatePractice { $0.resetSound() }
+    }
+
+    /// "A": with a loop, moves its start here; without one, marks where
+    /// the next one starts.
+    func setLoopStart() {
+        let now = player.currentTime
+        if let loop = practice.loop, let moved = PracticeLoop(start: now, end: loop.end) {
+            setLoop(moved)
+        } else {
+            loopStartMark = now
+        }
+    }
+
+    /// "B": closes the loop from the mark (or the loop's start, or the
+    /// top of the file) to here, and playback jumps back to its start.
+    func setLoopEnd() {
+        let now = player.currentTime
+        let start = loopStartMark ?? practice.loop?.start ?? 0
+        guard let loop = PracticeLoop(start: start, end: now) else { return }
+        setLoop(loop)
+    }
+
+    /// A new or moved loop is always on.
+    func setLoop(_ loop: PracticeLoop?) {
+        loopStartMark = nil
+        updatePractice {
+            $0.loop = loop
+            $0.loopOff = false
+        }
+    }
+
+    /// Switches the loop off and on again, keeping A and B.
+    func toggleLoop() {
+        guard practice.loop != nil else { return }
+        updatePractice { $0.loopOff.toggle() }
+    }
+
+    func clearLoop() {
+        loopStartMark = nil
+        updatePractice { $0.loop = nil }
     }
 
     // MARK: - Resume
@@ -866,11 +1029,12 @@ final class PlayerModel: ObservableObject {
             queue.clear()
             return
         }
+        applyPractice(for: currentTrack)
         let position = min(state.position, currentTrack.duration)
         if position > 0 {
             player.seek(to: position)
         }
-        currentTime = position
+        currentTime = player.currentTime
         loadArtwork(for: currentTrack)
         loadLyrics(for: currentTrack)
         syncNowPlaying()

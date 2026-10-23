@@ -18,6 +18,8 @@ import android.util.Log
 import de.schliweb.crate.core.LoudnessMeter
 import de.schliweb.crate.core.Track
 import de.schliweb.crate.core.TrackLoudness
+import de.schliweb.crate.core.Waveform
+import de.schliweb.crate.core.WaveformBuilder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.TimeoutCancellationException
@@ -27,20 +29,60 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Decodes a whole file with the platform's codecs and runs it through
- * the loudness meter; null when the file is silent or cannot be decoded.
- * In batches with callbacks where the decoder allows it, else buffer by
- * buffer on the calling worker thread; cancellable either way. 16-bit
- * PCM is what the decoders hand out by default, floats when a decoder
- * prefers them. One log line per file under the tag "Loudness".
+ * Where decoded audio goes: planar floats, one array per channel, after
+ * [start] has told the format.
  */
-object MediaCodecLoudness {
+interface PcmTarget<R> {
+    fun start(sampleRate: Double, channels: Int)
+    fun add(planar: Array<FloatArray>, frames: Int)
+    val result: R?
+}
+
+/**
+ * Decodes a whole file with the platform's codecs into a [PcmTarget]:
+ * the loudness meter ([measure]) or the waveform ([waveform]); null when
+ * the file is silent or cannot be decoded. In batches with callbacks
+ * where the decoder allows it, else buffer by buffer on the calling
+ * worker thread; cancellable either way. 16-bit PCM is what the decoders
+ * hand out by default, floats when a decoder prefers them. One log line
+ * per measured file under the tag "Loudness".
+ */
+object MediaCodecAudio {
     private const val TAG = "Loudness"
 
-    suspend fun measure(context: Context, track: Track): TrackLoudness? {
+    /** The outline of the track, for the practice panel. */
+    suspend fun waveform(context: Context, track: Track): Waveform? =
+        decodeFile(context, track, object : PcmTarget<Waveform> {
+            private var builder: WaveformBuilder? = null
+            override fun start(sampleRate: Double, channels: Int) {
+                builder = WaveformBuilder(sampleRate, channels)
+            }
+            override fun add(planar: Array<FloatArray>, frames: Int) {
+                builder?.add(planar, frames)
+            }
+            override val result: Waveform? get() = builder?.result()
+        })
+
+    /** What one pass over a file gives: its loudness and, since the
+     *  samples go by anyway, its outline. */
+    class Measured(val loudness: TrackLoudness?, val waveform: Waveform?)
+
+    suspend fun measure(context: Context, track: Track): Measured? {
         val started = System.currentTimeMillis()
-        val result = try {
-            decodeFile(context, track)
+        val measured = try {
+            decodeFile(context, track, object : PcmTarget<Measured> {
+                private var meter: LoudnessMeter? = null
+                private var builder: WaveformBuilder? = null
+                override fun start(sampleRate: Double, channels: Int) {
+                    meter = LoudnessMeter(sampleRate, channels)
+                    builder = WaveformBuilder(sampleRate, channels)
+                }
+                override fun add(planar: Array<FloatArray>, frames: Int) {
+                    meter?.add(planar, frames)
+                    builder?.add(planar, frames)
+                }
+                override val result: Measured get() = Measured(meter?.result, builder?.result())
+            })
         } catch (e: TimeoutCancellationException) {
             Log.w(TAG, "gave up: ${track.title} took longer than it plays")
             throw e
@@ -51,12 +93,13 @@ object MediaCodecLoudness {
             throw e
         }
         val seconds = (System.currentTimeMillis() - started) / 1000.0
+        val result = measured?.loudness
         if (result == null) Log.w(TAG, "nothing measured: ${track.title} (${"%.1f".format(seconds)} s)")
         else Log.d(TAG, "%.1f LUFS, peak %.1f dBFS: %s (%.1f s audio in %.1f s)".format(result.loudness ?: Double.NaN, 20 * kotlin.math.log10(result.peak.coerceAtLeast(1e-6)), track.title, track.duration, seconds))
-        return result
+        return measured
     }
 
-    private suspend fun decodeFile(context: Context, track: Track): TrackLoudness? {
+    private suspend fun <R> decodeFile(context: Context, track: Track, target: PcmTarget<R>): R? {
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(context, Uri.parse(track.uri), null)
@@ -69,11 +112,11 @@ object MediaCodecLoudness {
             val codec = MediaCodec.createDecoderByType(mime)
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM && supportsBatches(codec, mime)) {
-                    return decodeBatched(extractor, codec, format)
+                    return decodeBatched(extractor, codec, format, target)
                 }
                 codec.configure(format, null, null, 0)
                 codec.start()
-                return decode(extractor, codec)
+                return decode(extractor, codec, target)
             } finally {
                 codec.stop()
                 codec.release()
@@ -102,17 +145,19 @@ object MediaCodecLoudness {
         }.getOrDefault(false)
 
     @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
-    private suspend fun decodeBatched(extractor: MediaExtractor, codec: MediaCodec, format: MediaFormat): TrackLoudness? {
+    private suspend fun <R> decodeBatched(
+        extractor: MediaExtractor, codec: MediaCodec, format: MediaFormat, target: PcmTarget<R>,
+    ): R? {
         format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, INPUT_BATCH_BYTES)
         format.setInteger(MediaFormat.KEY_BUFFER_BATCH_MAX_OUTPUT_SIZE, OUTPUT_BATCH_BYTES)
         format.setInteger(MediaFormat.KEY_BUFFER_BATCH_THRESHOLD_OUTPUT_SIZE, OUTPUT_BATCH_BYTES / 2)
         val thread = HandlerThread("loudness-codec")
         thread.start()
         try {
-            val done = CompletableDeferred<TrackLoudness?>()
+            val done = CompletableDeferred<R?>()
             // All callbacks arrive on the handler thread, one at a time.
             codec.setCallback(object : MediaCodec.Callback() {
-                val sink = PcmSink()
+                val sink = PcmSink(target)
                 var inputDone = false
 
                 override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {
@@ -190,27 +235,28 @@ object MediaCodecLoudness {
     }
 
     /** Turns the decoder's interleaved PCM into planar floats for the
-     *  meter; shared by both decode paths. */
-    private class PcmSink {
-        private var meter: LoudnessMeter? = null
+     *  target; shared by both decode paths. */
+    private class PcmSink<R>(private val target: PcmTarget<R>) {
+        private var started = false
         private var channels = 0
         private var encoding = AudioFormat.ENCODING_PCM_16BIT
         private var planar: Array<FloatArray> = emptyArray()
         private var shorts = ShortArray(0)
         private var floats = FloatArray(0)
 
-        val result: TrackLoudness? get() = meter?.result
+        val result: R? get() = target.result
 
         fun formatChanged(format: MediaFormat) {
             val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             encoding = if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) format.getInteger(MediaFormat.KEY_PCM_ENCODING) else AudioFormat.ENCODING_PCM_16BIT
-            meter = LoudnessMeter(sampleRate.toDouble(), channels)
+            target.start(sampleRate.toDouble(), channels)
+            started = true
             planar = Array(channels) { FloatArray(0) }
         }
 
         fun add(buffer: ByteBuffer, offset: Int, size: Int) {
-            val current = meter ?: return
+            if (!started) return
             if (size <= 0 || channels == 0) return
             buffer.position(offset)
             buffer.limit(offset + size)
@@ -241,13 +287,13 @@ object MediaCodecLoudness {
                     for (i in 0 until frames) { plane[i] = shorts[j] / 32768f; j += channels }
                 }
             }
-            current.add(planar, frames)
+            target.add(planar, frames)
         }
     }
 
-    private suspend fun decode(extractor: MediaExtractor, codec: MediaCodec): TrackLoudness? {
+    private suspend fun <R> decode(extractor: MediaExtractor, codec: MediaCodec, target: PcmTarget<R>): R? {
         val info = MediaCodec.BufferInfo()
-        val sink = PcmSink()
+        val sink = PcmSink(target)
         var inputDone = false
         while (true) {
             currentCoroutineContext().ensureActive()

@@ -36,6 +36,10 @@ import de.schliweb.crate.core.Library
 import de.schliweb.crate.core.LoudnessAnalyzer
 import de.schliweb.crate.core.Lyrics
 import de.schliweb.crate.core.Paths
+import de.schliweb.crate.core.PracticeLoop
+import de.schliweb.crate.core.PracticeSettings
+import de.schliweb.crate.core.Waveform
+import de.schliweb.crate.library.MediaCodecAudio
 import de.schliweb.crate.core.ScannedFile
 import de.schliweb.crate.core.SearchIndex
 import de.schliweb.crate.core.SearchQuery
@@ -52,6 +56,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
@@ -164,6 +169,29 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     data class QueueEntry(val index: Int, val track: Track)
 
+    // Practice
+
+    /** How the current track is practised. The playback service applies
+     *  it; this is what the panel shows and changes. */
+    var practice by mutableStateOf(PracticeSettings.NEUTRAL)
+        private set
+    /** Where the next loop starts, between "A" and "B" while there is no
+     *  loop yet. Seconds. */
+    var loopStartMark by mutableStateOf<Double?>(null)
+        private set
+    /** The current track's outline; null while it is decoded or while
+     *  the practice sheet is closed. */
+    var waveform by mutableStateOf<Waveform?>(null)
+        private set
+    private var waveformJob: Job? = null
+    /** Whether the practice sheet is open: only then is the outline read,
+     *  so a listener who never opens it pays no decoding. */
+    var practiceShown = false
+        set(value) {
+            field = value
+            if (value && waveform == null) loadWaveform(current)
+        }
+
     val duration: Double
         get() = if (reportedDuration > 0) reportedDuration else current?.duration ?: 0.0
 
@@ -181,6 +209,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 withContext(Dispatchers.IO) { library.load() }
                 app.favorites.load()
                 app.history.load()
+                app.practice.load()
                 val t1 = System.currentTimeMillis()
                 refresh()
                 Log.i(TAG, "load: ${tracks.size} tracks, read ${t1 - t0} ms, grouped ${System.currentTimeMillis() - t1} ms")
@@ -211,6 +240,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
         viewModelScope.launch { app.favorites.errors.collect { lastError = it } }
+        viewModelScope.launch {
+            app.practice.state.collect { book -> practice = current?.let { book[it.id] } ?: PracticeSettings.NEUTRAL }
+        }
+        viewModelScope.launch { app.practice.errors.collect { lastError = it } }
         // Off the main thread and once per keystroke: the field shows
         // what was typed right away, the lists follow when they are ready.
         viewModelScope.launch {
@@ -330,6 +363,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             notice = "Removed ${folder.name}"
             app.favorites.update { it.removeAllUnder(folder.path) }
             app.history.update { it.removeAllUnder(folder.path) }
+            app.practice.update { it.removeAllUnder(folder.path) }
             app.cancelAnalysis()
             withContext(Dispatchers.IO) { app.loudness.removeAllUnder(folder.path) }
             val controller = controllerReady.takeIf { it.isCompleted }?.await()
@@ -520,8 +554,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         currentTime = controller.currentPosition.coerceAtLeast(0) / 1000.0
         if (track?.id != current?.id) {
             current = track
+            practice = track?.let { app.practice.current[it.id] } ?: PracticeSettings.NEUTRAL
+            loopStartMark = null
             loadArtwork(track)
             loadLyrics(track)
+            loadWaveform(track)
         }
         if (track != null) lastError = null
         updateUpcoming(controller)
@@ -561,6 +598,94 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             if (current?.id == track.id) currentArtwork = image
         }
     }
+
+    private fun loadWaveform(track: Track?) {
+        waveformJob?.cancel()
+        waveform = null
+        if (track == null || !practiceShown) return
+        waveformJob = viewModelScope.launch {
+            val started = System.currentTimeMillis()
+            val cached = withContext(Dispatchers.IO) { runCatching { app.waveforms.get(track) }.getOrNull() }
+            if (cached != null) {
+                if (current?.id == track.id) waveform = cached
+                Log.i(TAG, "waveform: cached, ${System.currentTimeMillis() - started} ms for ${track.title}")
+                return@launch
+            }
+            // Holds new loudness measurements back while this one reads.
+            app.waveformsReading.update { it + 1 }
+            val read = try {
+                withContext(Dispatchers.Default) {
+                    try {
+                        MediaCodecAudio.waveform(app, track)?.also { app.waveforms.put(track, it) }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "no waveform for ${track.title}: $e")
+                        null
+                    }
+                }
+            } finally {
+                app.waveformsReading.update { it - 1 }
+            }
+            if (current?.id == track.id) waveform = read
+            Log.i(TAG, "waveform: decoded, ${System.currentTimeMillis() - started} ms for ${track.title}")
+        }
+    }
+
+    /** The one way the settings change: shown at once, applied by the
+     *  service through the shared value, written shortly after. */
+    private fun updatePractice(change: (PracticeSettings) -> PracticeSettings) {
+        val track = current ?: return
+        val changed = change(practice)
+        if (changed == practice) return
+        practice = changed
+        app.practice.update { it.with(track.id, changed) }
+    }
+
+    fun setTempo(tempo: Double) {
+        // Whole percents: a slider lands on 0.7300000001 otherwise.
+        val rounded = Math.round(tempo * 100) / 100.0
+        updatePractice { it.copy(tempo = rounded) }
+    }
+
+    fun changeTempo(steps: Int) = setTempo(practice.tempo + steps * PracticeSettings.TEMPO_STEP)
+
+    fun transpose(semitones: Int) = updatePractice { it.copy(semitones = it.semitones + semitones) }
+
+    fun setCents(cents: Int) = updatePractice { it.copy(cents = cents) }
+
+    fun tune(cents: Int) = setCents(practice.cents + cents)
+
+    /** Tempo, key and tuning back to the recording; the loop stays. */
+    fun resetSound() = updatePractice { it.resetSound() }
+
+    /** "A": with a loop, moves its start here; without one, marks where
+     *  the next one starts. */
+    fun setLoopStart() {
+        val now = currentTime
+        val moved = practice.loop?.let { PracticeLoop.of(now, it.end) }
+        if (moved != null) setLoop(moved) else loopStartMark = now
+    }
+
+    /** "B": closes the loop from the mark (or the loop's start, or the
+     *  top of the file) to here; the service jumps back to its start. */
+    fun setLoopEnd() {
+        val start = loopStartMark ?: practice.loop?.start ?: 0.0
+        PracticeLoop.of(start, currentTime)?.let(::setLoop)
+    }
+
+    fun setLoop(loop: PracticeLoop?) {
+        loopStartMark = null
+        // A new or moved loop is always on.
+        updatePractice { it.copy(loop = loop, loopOff = false) }
+    }
+
+    /** Switches the loop off and on again, keeping A and B. */
+    fun toggleLoop() {
+        if (practice.loop != null) updatePractice { it.copy(loopOff = !it.loopOff) }
+    }
+
+    fun clearLoop() = setLoop(null)
 
     private fun loadLyrics(track: Track?) {
         lyricsJob?.cancel()

@@ -25,7 +25,12 @@ struct MenuSnapshot: Equatable {
     var queueIsEmpty = true
     var showsUpNext = false
     var showsLyrics = false
+    var showsPractice = false
     var hasLyrics = false
+    var changesSound = false
+    var hasLoop = false
+    var hasSavedLoop = false
+    var loopOff = false
 
     init() {}
 
@@ -44,7 +49,12 @@ struct MenuSnapshot: Equatable {
         queueIsEmpty = model.queue.isEmpty
         showsUpNext = model.showsUpNext
         showsLyrics = model.showsLyrics
+        showsPractice = model.showsPractice
         hasLyrics = model.lyrics != nil
+        changesSound = model.practice.changesSound
+        hasLoop = model.practice.loop != nil || model.loopStartMark != nil
+        hasSavedLoop = model.practice.loop != nil
+        loopOff = model.practice.loopOff
     }
 }
 
@@ -146,6 +156,46 @@ struct CrateCommands: Commands {
             Button(state.showsLyrics ? "Hide Lyrics" : "Show Lyrics") { model.showsLyrics.toggle() }
                 .keyboardShortcut("l", modifiers: [.command, .option])
                 .disabled(!state.hasLyrics)
+        }
+        // Everything here belongs to the track playing and is remembered
+        // for its file. Arrows and digits only: they sit in the same place
+        // on every layout, while [ ] \\ = need Option or Shift on a
+        // German keyboard.
+        CommandMenu("Practice") {
+            Button(state.showsPractice ? "Hide Practice Panel" : "Show Practice Panel") { model.showsPractice.toggle() }
+                .keyboardShortcut("p", modifiers: [.command, .option])
+            Divider()
+            Group {
+                Button("Slower") { model.changeTempo(by: -1) }
+                    .keyboardShortcut(.downArrow)
+                Button("Faster") { model.changeTempo(by: 1) }
+                    .keyboardShortcut(.upArrow)
+                Divider()
+                Button("Key Down a Semitone") { model.transpose(by: -1) }
+                    .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                Button("Key Up a Semitone") { model.transpose(by: 1) }
+                    .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                Button("Tune Down a Cent") { model.tune(by: -1) }
+                    // Not Control: ⌃↑ and ⌃↓ belong to Mission Control.
+                    .keyboardShortcut(.downArrow, modifiers: [.command, .option, .shift])
+                Button("Tune Up a Cent") { model.tune(by: 1) }
+                    .keyboardShortcut(.upArrow, modifiers: [.command, .option, .shift])
+                Button("Back to the Recording") { model.resetSound() }
+                    .keyboardShortcut("0")
+                    .disabled(!state.changesSound)
+                Divider()
+                Button("Loop Starts Here") { model.setLoopStart() }
+                    .keyboardShortcut("1")
+                Button("Loop Ends Here") { model.setLoopEnd() }
+                    .keyboardShortcut("2")
+                Button(state.loopOff ? "Turn Loop On" : "Turn Loop Off") { model.toggleLoop() }
+                    .keyboardShortcut("3")
+                    .disabled(!state.hasSavedLoop)
+                Button("Clear Loop") { model.clearLoop() }
+                    .keyboardShortcut(.delete)
+                    .disabled(!state.hasLoop)
+            }
+            .disabled(!state.hasCurrent)
         }
     }
 }

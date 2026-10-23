@@ -18,6 +18,19 @@ import Foundation
 /// the album's and does not change, and between albums there is no
 /// seamless join to protect.
 ///
+/// Tempo and key: an `AVAudioUnitTimePitch` sits between the node and
+/// the gain stage and is bypassed while both are neutral, so a track
+/// nobody practises plays bit for bit as before. The node still renders
+/// the file's own frames, only faster or slower, so its clock keeps
+/// counting file time and every position below stays in file seconds.
+///
+/// Loop: the passage is scheduled as segments of its own, always one
+/// pass ahead of the one playing; each pass that finishes queues the
+/// next, so the jump from the end back to the start happens inside the
+/// render thread like a gapless hand-over. While a loop runs nothing is
+/// preloaded; the announced file is kept and scheduled once the loop
+/// is gone.
+///
 /// Bookkeeping: the node's own clock (`playerTime`) counts rendered frames
 /// since the last `stop()`; every `load` and `seek` stops the node, so a
 /// segment's position is simply its start offset plus that clock. On the
@@ -35,20 +48,42 @@ public final class AVAudioEngineBackend: AudioPlayer {
         let generation: Int
         /// dB, see `AudioPlayer.load(_:gain:)`.
         let gain: Double
+        let loop: PracticeLoop?
 
         var sampleRate: Double { file.processingFormat.sampleRate }
         var duration: TimeInterval { Double(file.length) / sampleRate }
+        /// Whether playback from `offset` runs into the loop.
+        var isLooping: Bool {
+            guard let loop else { return false }
+            return offset < loop.end
+        }
+        /// Where the first pass stops: the loop's end when playback runs
+        /// into it, else the end of the file.
+        var firstEnd: TimeInterval { isLooping ? min(loop!.end, duration) : duration }
         var remainingFrames: AVAudioFrameCount {
-            AVAudioFrameCount(max(0, file.length - AVAudioFramePosition(offset * sampleRate)))
+            frames(from: offset, to: firstEnd)
+        }
+
+        func frames(from start: TimeInterval, to end: TimeInterval) -> AVAudioFrameCount {
+            let first = AVAudioFramePosition(start * sampleRate)
+            let last = min(file.length, AVAudioFramePosition(end * sampleRate))
+            return AVAudioFrameCount(max(0, last - first))
+        }
+
+        func with(offset: TimeInterval, generation: Int, loop: PracticeLoop?) -> Segment {
+            Segment(url: url, file: file, offset: offset, generation: generation, gain: gain, loop: loop)
         }
     }
 
     private let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()
+    private let timePitch = AVAudioUnitTimePitch()
     private let gainStage = AVAudioUnitEQ(numberOfBands: 0)
     private var connectedFormat: AVAudioFormat?
     private var current: Segment?
     private var next: Segment?
+    /// What `preload` was last told, kept while a loop holds it back.
+    private var announced: (url: URL, gain: Double)?
     /// Node-clock frames that belong to segments finished before `current`.
     private var framesBeforeCurrent: AVAudioFramePosition = 0
     private var generation = 0
@@ -65,7 +100,9 @@ public final class AVAudioEngineBackend: AudioPlayer {
 
     public init() {
         engine.attach(node)
+        engine.attach(timePitch)
         engine.attach(gainStage)
+        timePitch.bypass = true
         configurationObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
         ) { [weak self] _ in
@@ -83,8 +120,21 @@ public final class AVAudioEngineBackend: AudioPlayer {
 
     public var currentTime: TimeInterval {
         guard let current else { return 0 }
-        return min(current.offset + nodeSeconds(rate: current.sampleRate), current.duration)
+        let elapsed = nodeSeconds(rate: current.sampleRate)
+        if current.isLooping, let loop = current.loop {
+            let first = current.firstEnd - current.offset
+            if elapsed < first { return current.offset + elapsed }
+            return loop.start + (elapsed - first).truncatingRemainder(dividingBy: loop.length)
+        }
+        return min(current.offset + elapsed, current.duration)
     }
+
+    /// The loop in effect, nil when playback runs to the end.
+    public var loop: PracticeLoop? { current?.loop }
+    public var tempo: Double { Double(timePitch.rate) }
+    /// Cents.
+    public var pitch: Double { Double(timePitch.pitch) }
+    public var isTimePitchBypassed: Bool { timePitch.bypass }
 
     public var duration: TimeInterval { current?.duration ?? 0 }
 
@@ -107,8 +157,9 @@ public final class AVAudioEngineBackend: AudioPlayer {
         }
         stopNode()
         let file = try AVAudioFile(forReading: url)
-        current = Segment(url: url, file: file, offset: 0, generation: generation, gain: gain)
+        current = Segment(url: url, file: file, offset: 0, generation: generation, gain: gain, loop: nil)
         next = nil
+        announced = nil
         framesBeforeCurrent = 0
         currentFinished = false
         try connect(for: file)
@@ -117,20 +168,38 @@ public final class AVAudioEngineBackend: AudioPlayer {
     }
 
     public func preload(_ url: URL?, gain: Double) {
+        announced = url.map { ($0, gain) }
         guard let url, let current else {
             next = nil
             return
         }
         if next?.url == url { return }
         next = nil
+        // A loop never reaches the end of the file; the next one waits.
+        if current.isLooping { return }
         // Only a file in the current connection format can follow without
         // a stop; anything else goes through the normal onFinished/load path
         // and the backend reconnects then.
         guard let file = try? AVAudioFile(forReading: url),
               let connectedFormat, Self.compatible(file.processingFormat, connectedFormat) else { return }
-        let segment = Segment(url: url, file: file, offset: 0, generation: current.generation, gain: gain)
+        let segment = Segment(
+            url: url, file: file, offset: 0, generation: current.generation, gain: gain, loop: nil)
         next = segment
         schedule(segment)
+    }
+
+    public func setTempo(_ tempo: Double, pitch cents: Double) {
+        timePitch.rate = Float(tempo)
+        timePitch.pitch = Float(cents)
+        timePitch.bypass = tempo == 1 && cents == 0
+    }
+
+    public func setLoop(_ loop: PracticeLoop?) {
+        guard let segment = current, segment.loop != loop else { return }
+        let position = currentTime
+        var start = position
+        if let loop, position >= loop.end || position >= segment.duration { start = loop.start }
+        restart(segment.with(offset: start, generation: generation, loop: loop))
     }
 
     private func apply(gain: Double) {
@@ -160,17 +229,24 @@ public final class AVAudioEngineBackend: AudioPlayer {
         stopNode()
         current = nil
         next = nil
+        announced = nil
         framesBeforeCurrent = 0
         engine.stop()
     }
 
     public func seek(to time: TimeInterval) {
         guard let segment = current else { return }
-        let wasPlaying = playing
-        let following = next
-        stopNode()
         let offset = min(max(time, 0), segment.duration)
-        current = Segment(url: segment.url, file: segment.file, offset: offset, generation: generation, gain: segment.gain)
+        restart(segment.with(offset: offset, generation: generation, loop: segment.loop))
+    }
+
+    /// Replaces the node's schedule with the segment, keeping the
+    /// play state and the announced next file.
+    private func restart(_ segment: Segment) {
+        let wasPlaying = playing
+        let following = announced
+        stopNode()
+        current = segment.with(offset: segment.offset, generation: generation, loop: segment.loop)
         next = nil
         framesBeforeCurrent = 0
         currentFinished = false
@@ -193,8 +269,10 @@ public final class AVAudioEngineBackend: AudioPlayer {
         let wasRunning = engine.isRunning
         engine.stop()
         engine.disconnectNodeOutput(node)
+        engine.disconnectNodeOutput(timePitch)
         engine.disconnectNodeOutput(gainStage)
-        engine.connect(node, to: gainStage, format: format)
+        engine.connect(node, to: timePitch, format: format)
+        engine.connect(timePitch, to: gainStage, format: format)
         engine.connect(gainStage, to: engine.mainMixerNode, format: format)
         connectedFormat = format
         engine.prepare()
@@ -214,11 +292,42 @@ public final class AVAudioEngineBackend: AudioPlayer {
             Task { @MainActor in self.segmentFinished(generation: generation, url: segment.url) }
             return
         }
+        if segment.isLooping {
+            node.scheduleSegment(
+                segment.file, startingFrame: start, frameCount: frames, at: nil, completionCallbackType: .dataPlayedBack
+            ) { [weak self] _ in
+                Task { @MainActor in self?.passFinished(generation: generation) }
+            }
+            schedulePass(of: segment)
+            return
+        }
         node.scheduleSegment(
             segment.file, startingFrame: start, frameCount: frames, at: nil, completionCallbackType: .dataPlayedBack
         ) { [weak self] _ in
             Task { @MainActor in self?.segmentFinished(generation: generation, url: segment.url) }
         }
+    }
+
+    /// Queues one more round of the segment's loop behind what is
+    /// scheduled.
+    private func schedulePass(of segment: Segment) {
+        guard let loop = segment.loop else { return }
+        let frames = segment.frames(from: loop.start, to: loop.end)
+        guard frames > 0 else { return }
+        let generation = segment.generation
+        node.scheduleSegment(
+            segment.file, startingFrame: AVAudioFramePosition(loop.start * segment.sampleRate), frameCount: frames,
+            at: nil, completionCallbackType: .dataPlayedBack
+        ) { [weak self] _ in
+            Task { @MainActor in self?.passFinished(generation: generation) }
+        }
+    }
+
+    /// A pass of the loop (or the run-in to it) has played; the next one
+    /// is already playing, so queue the one after it.
+    private func passFinished(generation: Int) {
+        guard let current, current.generation == generation, current.isLooping else { return }
+        schedulePass(of: current)
     }
 
     private func segmentFinished(generation: Int, url: URL) {
@@ -256,11 +365,11 @@ public final class AVAudioEngineBackend: AudioPlayer {
     /// The output device changed (headphones in, Bluetooth out): the
     /// engine stops and forgets the node's clock. Resume at the same spot.
     private func outputChanged() {
-        guard current != nil else { return }
+        guard let current else { return }
         let position = currentTime
         let wasPlaying = playing
         playing = false
-        seek(to: position)
+        restart(current.with(offset: position, generation: generation, loop: current.loop))
         if wasPlaying { play() }
     }
 }

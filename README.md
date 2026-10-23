@@ -34,6 +34,12 @@ see [Android](#android) below.
   being sung follows the music. The apps fetch nothing from the
   internet; `scripts/lyrics.py` fills a collection with timed lyrics in
   one run you start yourself (see [below](#lyrics-for-a-collection)).
+- **Practice with the records you play along to.** Slower or faster
+  without changing the key, higher or lower without changing the
+  tempo, tuned to your instrument, and the passage you are working on
+  repeated, set over the track's waveform. Behind one button, out of
+  the way until you want it, and remembered per file; nothing is
+  written into the music. See [Practice](#practice) below.
 - **No settings.** What can be decided for you is decided: gapless
   playback, album gain when an album plays, resume where you stopped.
 - **Fully offline.** No account, no telemetry, no network permission on
@@ -89,6 +95,10 @@ What the package does:
   folder, or from the tags, timed or plain (`Lyrics`, `FileLyricsSource`)
 - **Favorites** as a set of track paths in a small file of its own, so
   a tap on a heart never rewrites the index (`Favorites`)
+- **Practice** settings per file, tempo, key, tuning and an A-B loop,
+  in a small file of their own (`PracticeSettings`), played through
+  `AVAudioUnitTimePitch` and a sample-accurate loop in the engine, and
+  a track's outline for the waveform (`Waveform`)
 
 Formats are whatever AVFoundation decodes: MP3, AAC/M4A (including M4B
 audiobooks), FLAC, ALAC, WAV, AIFF, CAF. Ogg Vorbis and Opus are not supported, because the system
@@ -101,6 +111,29 @@ style ID3v1 references). FLAC is parsed by Crate itself
 because AVFoundation does not expose Vorbis comments on every macOS
 version. Checked against real MP3, M4A and FLAC files; reports with a
 sample file for anything that reads wrong are welcome.
+
+## Practice
+
+The sliders button in the player bar opens the practice panel for the
+track playing: its waveform (click to jump, drag to loop), tempo from
+50 to 200 % with the key unchanged, key up to an octave either way with
+the tempo unchanged, and tuning up to 50 cents, shown as the A it
+amounts to (A = 432 Hz, 442 Hz, ...). Whatever you set comes back the
+next time that file plays; the button is coloured while a track does
+not play as recorded. On the Mac the loop repeats without a gap; on
+Android its jump is a seek, with a short one. On Android the Tune icon
+opens the same controls as a sheet.
+
+| Keys (Mac) | |
+|---|---|
+| ⌥⌘P | Show or hide the practice panel |
+| ⌘↓ ⌘↑ | Slower, faster (5 % steps) |
+| ⌥⌘↓ ⌥⌘↑ | Key down, up a semitone |
+| ⇧⌥⌘↓ ⇧⌥⌘↑ | Tune down, up a cent |
+| ⌘0 | Back to the recording's tempo, key and tuning |
+| ⌘1 ⌘2 | Loop starts here, ends here |
+| ⌘3 | Loop off, on again (A and B stay) |
+| ⌘⌫ | Clear the loop |
 
 ## Build and test
 

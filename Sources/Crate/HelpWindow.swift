@@ -64,6 +64,18 @@ struct HelpView: View {
                     HelpRow("", "Recently Added lists the newest files by their date, an album copied in one go together; Recently Played what was played last, newest first, kept in a file next to the index like the favorites. Both tiles play their list, and the search narrows them.")
                     HelpRow("", "The media keys and Control Center's Now Playing work as with any player.")
                     HelpRow("", "Crate remembers where you stopped: the next launch comes up with the same queue, at the same spot, paused.")
+                    HelpRow("", "At the end of the queue the last track goes back to its start, paused, so Play plays it again.")
+                }
+
+                HelpSection("Practice") {
+                    HelpRow("⌥⌘P", "For playing along: the sliders button in the player bar opens a panel above it, for the track playing, and closes it again. The button is coloured while the track does not play as recorded: another tempo, key or tuning, or a loop that is on. Whatever you set is remembered for that file and comes back the next time it plays, in a file next to the library index; the music files are not touched. The keys below work with the panel closed too.")
+                    HelpRow("⌘↓  ⌘↑", "Tempo, 50 to 200 %, in steps of 5 % with − and + or with the slider. The key stays where it is. Double-click the percentage for 100 %.")
+                    HelpRow("⌥⌘↓  ⌥⌘↑", "Key, up to an octave down or up, in semitones. The tempo stays where it is.")
+                    HelpRow("⇧⌥⌘↓  ⇧⌥⌘↑", "Tuning, up to 50 cents either way, for a recording that is not at A = 440 Hz or an instrument that cannot follow it. The panel shows the A it amounts to; double-click it for 440 Hz.")
+                    HelpRow("⌘0", "Back to the recording's tempo, key and tuning: the round arrow at the panel's right end. The loop stays.")
+                    HelpRow("⌘1  ⌘2", "Loop: A marks where it starts, B where it ends, at the spot playing; from then on that passage repeats without a gap and shows as a band on the wave. Or drag over the wave. A click on the wave jumps there. With a loop set, A and B move its ends.")
+                    HelpRow("⌘3", "Turn the loop off and on again; A and B stay. The repeat symbol in the panel does the same and is coloured while the loop plays.")
+                    HelpRow("⌘⌫", "Clear the loop, the × beside its times: A and B are gone and playback runs on to the end.")
                 }
 
                 HelpSection("Finder") {

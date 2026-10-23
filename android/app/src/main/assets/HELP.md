@@ -62,6 +62,29 @@ uploaded or changed.
   track's name beside it or in a `lyrics` folder, then in the track's
   tags. A timed `.lrc` follows the playback.
 
+## Practice
+
+- For playing along: the sliders icon in the player bar opens
+  **Practice** for the track playing. The icon is coloured while the
+  track does not play as recorded: another tempo, key or tuning, or a
+  loop that is on.
+- The wave at the top shows the track; tap it to jump there, drag
+  across it to loop that passage.
+- Tempo from 50 to 200 % (the key stays), key up to an octave down or
+  up in semitones (the tempo stays), and tuning up to 50 cents either
+  way, for a recording that is not at A = 440 Hz or an instrument that
+  cannot follow it; the A it amounts to is shown. **Original** sets
+  tempo, key and tuning back; the loop stays.
+- **A** and **B** mark the loop's start and end at the spot playing;
+  from then on that passage repeats and shows as a band on the wave.
+  With a loop set, A and B move its ends. The repeat symbol turns the
+  loop off and on again without losing A and B; it is coloured while
+  the loop plays. The × clears it.
+- Everything is remembered for that file and comes back the next time
+  it plays, also when it is reached with the notification's buttons. It
+  is kept on this device next to the library index; the music files are
+  not touched.
+
 ## Opening files
 
 A music file opened from a file manager with Crate plays at once. A file

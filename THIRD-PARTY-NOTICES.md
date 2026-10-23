@@ -10,7 +10,8 @@ none, and the app links only frameworks that ship with macOS:
 
 | Framework | Used for |
 |---|---|
-| AVFoundation | Reading tags, covers and audio; playback through `AVAudioEngine` |
+| AVFoundation | Reading tags, covers and audio; playback through `AVAudioEngine`, tempo and key through `AVAudioUnitTimePitch` |
+| Accelerate | Reducing a track to its waveform |
 | MediaPlayer | Now Playing information and the media keys |
 | ImageIO, CoreGraphics | Decoding and scaling cover art |
 | CryptoKit | Hashing album names for the cover cache file names |

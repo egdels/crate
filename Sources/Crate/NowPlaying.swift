@@ -53,7 +53,10 @@ final class NowPlaying {
         }
     }
 
-    func update(track: Track?, artwork: CGImage?, duration: TimeInterval, position: TimeInterval, isPlaying: Bool) {
+    func update(
+        track: Track?, artwork: CGImage?, duration: TimeInterval, position: TimeInterval, isPlaying: Bool,
+        tempo: Double = 1
+    ) {
         guard let track else {
             center.nowPlayingInfo = nil
             center.playbackState = .stopped
@@ -63,7 +66,8 @@ final class NowPlaying {
             MPMediaItemPropertyTitle: track.title,
             MPMediaItemPropertyPlaybackDuration: duration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
+            // The tempo, so the system's clock runs at the speed of the file.
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? tempo : 0.0,
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
         ]
         if let artist = track.artist { info[MPMediaItemPropertyArtist] = artist }

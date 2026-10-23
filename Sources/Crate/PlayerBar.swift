@@ -66,6 +66,16 @@ struct PlayerBar: View {
 
             Spacer()
 
+            // Practice: tinted while the track plays other than recorded,
+            // so a remembered 80 % never passes for the record.
+            Button { model.showsPractice.toggle() } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .foregroundStyle(model.showsPractice || model.practice.changesPlayback ? Color.accentColor : Color.secondary)
+            }
+            .buttonStyle(.borderless)
+            .disabled(model.current == nil)
+            .help(model.showsPractice ? "Hide Practice Panel (⌥⌘P)" : "Tempo, Key and Loop (⌥⌘P)")
+
             // Up Next: the icon with how many tracks follow; the popover
             // lists them.
             Button { model.showsUpNext.toggle() } label: {
@@ -180,7 +190,7 @@ private struct UpNextRow: View {
 /// opaque background let the seek slider vanish in dark mode, which is
 /// most likely the VM's slider rendering (see CLAUDE.md), but real
 /// hardware with 12 has not been checked.
-private struct PlayerBarBackground: ViewModifier {
+struct PlayerBarBackground: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 13, *) {
             content.background(Color(nsColor: .textBackgroundColor))

@@ -88,6 +88,10 @@ struct ContentView: View {
             .modifier(ClearToolbar())
             .background(TitlebarStyle())
             Divider()
+            if model.showsPractice, model.current != nil {
+                PracticePanel()
+                Divider()
+            }
             PlayerBar()
         }
         // A failure shows as a red line over the window's top until it is

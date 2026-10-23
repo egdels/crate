@@ -1,6 +1,6 @@
 # Privacy Policy
 
-*Crate for Android and macOS. Effective 2026-10-14. The Android app shows
+*Crate for Android and macOS. Effective 2026-10-23. The Android app shows
 this text under Privacy Policy in its menu.*
 
 ## Who is responsible
@@ -23,7 +23,7 @@ its own. It only reads the music files in the folders you point it at.
 - **Music files in folders you choose.** On Android you pick a folder with
   the system's folder picker; Crate keeps the access grant for that folder
   and reads the audio files in it to show titles, artists, albums,
-  durations and covers, and to play them, and a lyrics file (`.lrc` or
+  durations, covers and waveforms, and to play them, and a lyrics file (`.lrc` or
   `.txt` with the track's name) lying next to a track to show its words. It never requests broad storage
   access, never reads other folders and never modifies, copies, moves or
   uploads a file. On macOS the same applies to folders you open or drop on
@@ -46,6 +46,11 @@ its own. It only reads the music files in the folders you point it at.
   the loudness and peak level Crate measured by decoding the file in the
   background, in `loudness.json` next to the index, so that albums play
   equally loud. The files themselves are not changed.
+- **Practice settings**: tempo, key, tuning and loop of the tracks you
+  changed them for, by file path, in `practice.json` next to the index,
+  so that a song comes back the way you left it. On Android also a
+  small waveform per track in the app's cache, made while the loudness
+  is measured, for the Practice sheet.
 - **Recently played**: the file paths of the last tracks that played,
   newest first and at most a few hundred, in `history.json` next to the
   index, for the Recently Played tile.
@@ -105,9 +110,12 @@ from anyone, of any age.
 ## Deleting your data
 
 Uninstalling the app removes the library index, the favorites, the
-cover thumbnails and the folder grants. Taking the heart off a track
-removes it from the favorites file right away. "Remove folder" in the
-app drops that folder's entries from the index and its favorites. On
+practice settings, the cover thumbnails and the folder grants. Taking
+the heart off a track removes it from the favorites file right away;
+setting a track back to its recording's tempo and key and clearing its
+loop removes it from the practice settings. "Remove folder" in the app
+drops that folder's entries from the index, the favorites and the
+practice settings. On
 macOS, deleting
 `~/Library/Application Support/Crate/` removes everything Crate has ever
 written. Your music files are never touched.

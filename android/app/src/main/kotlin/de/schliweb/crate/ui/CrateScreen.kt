@@ -65,6 +65,7 @@ import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -96,6 +97,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -152,6 +155,9 @@ fun CrateScreen(model: PlayerViewModel) {
         var showingUpNext by rememberSaveable { mutableStateOf(false) }
         if (showingUpNext) UpNextSheet(model, onDismiss = { showingUpNext = false })
         var showingLyrics by rememberSaveable { mutableStateOf(false) }
+        var showingPractice by rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(showingPractice) { model.practiceShown = showingPractice }
+        if (showingPractice && model.current != null) PracticeSheet(model, onDismiss = { showingPractice = false })
         val lyrics = model.lyrics
         if (showingLyrics && lyrics != null) LyricsSheet(model, lyrics, onDismiss = { showingLyrics = false })
         val showingDetail = !wide && model.selection != null && model.folders.isNotEmpty()
@@ -205,7 +211,12 @@ fun CrateScreen(model: PlayerViewModel) {
             },
             bottomBar = {
                 if (model.current != null) {
-                    PlayerBar(model, onShowUpNext = { showingUpNext = true }, onShowLyrics = { showingLyrics = true })
+                    PlayerBar(
+                        model,
+                        onShowUpNext = { showingUpNext = true },
+                        onShowLyrics = { showingLyrics = true },
+                        onShowPractice = { showingPractice = true },
+                    )
                 }
             },
         ) { padding ->
@@ -821,55 +832,101 @@ private fun FlatTrackList(model: PlayerViewModel, tracks: List<Track>, emptyText
 }
 
 @Composable
-private fun PlayerBar(model: PlayerViewModel, onShowUpNext: () -> Unit, onShowLyrics: () -> Unit) {
+private fun PlayerBar(model: PlayerViewModel, onShowUpNext: () -> Unit, onShowLyrics: () -> Unit, onShowPractice: () -> Unit) {
     val track = model.current ?: return
+    // A phone on its side has little height: one row instead of two, or
+    // the list above shows a row and a half.
+    val compact = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() } < 480.dp
     Surface(tonalElevation = 3.dp) {
         // Below the bar is the system's gesture area; keep the slider out of it.
-        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(Modifier.size(48.dp).clip(RoundedCornerShape(4.dp))) { ArtworkImage(model.currentArtwork) }
-                Column(Modifier.weight(1f)) {
-                    Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        listOfNotNull(track.artist, track.album).joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                HeartButton(on = model.isFavorite(track), onClick = { model.toggleFavorite(track) })
-                IconButton(onClick = model::previous) { Icon(Icons.Default.SkipPrevious, contentDescription = "Previous") }
-                IconButton(onClick = model::togglePlayPause) {
-                    Icon(
-                        if (model.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (model.isPlaying) "Pause" else "Play",
-                        modifier = Modifier.size(32.dp),
-                    )
-                }
-                IconButton(onClick = model::next) { Icon(Icons.Default.SkipNext, contentDescription = "Next") }
+        val padding = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = if (compact) 4.dp else 8.dp)
+        if (compact) {
+            Row(padding, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.size(40.dp).clip(RoundedCornerShape(4.dp))) { ArtworkImage(model.currentArtwork) }
+                TrackTitle(track, Modifier.width(160.dp))
+                WaveRow(model, Modifier.weight(1f))
+                Transport(model, track)
+                BarIcons(model, onShowUpNext, onShowLyrics, onShowPractice)
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val duration = model.duration
-                Text(timeText(model.currentTime), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Slider(
-                    value = model.currentTime.toFloat().coerceIn(0f, maxOf(duration, 1.0).toFloat()),
-                    onValueChange = { model.seek(it.toDouble()) },
-                    valueRange = 0f..maxOf(duration, 1.0).toFloat(),
-                    modifier = Modifier.weight(1f),
-                )
-                Text(timeText(duration), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                // Lyrics, only while the track has some; then Up Next.
-                if (model.lyrics != null) {
-                    IconButton(onClick = onShowLyrics, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Lyrics, contentDescription = "Lyrics", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+        } else {
+            Column(padding) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.size(48.dp).clip(RoundedCornerShape(4.dp))) { ArtworkImage(model.currentArtwork) }
+                    TrackTitle(track, Modifier.weight(1f))
+                    Transport(model, track)
                 }
-                IconButton(onClick = onShowUpNext, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Up Next", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    WaveRow(model, Modifier.weight(1f))
+                    BarIcons(model, onShowUpNext, onShowLyrics, onShowPractice)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TrackTitle(track: Track, modifier: Modifier) {
+    Column(modifier) {
+        Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            listOfNotNull(track.artist, track.album).joinToString(" · "),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun Transport(model: PlayerViewModel, track: Track) {
+    HeartButton(on = model.isFavorite(track), onClick = { model.toggleFavorite(track) })
+    IconButton(onClick = model::previous) { Icon(Icons.Default.SkipPrevious, contentDescription = "Previous") }
+    IconButton(onClick = model::togglePlayPause) {
+        Icon(
+            if (model.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+            contentDescription = if (model.isPlaying) "Pause" else "Play",
+            modifier = Modifier.size(32.dp),
+        )
+    }
+    IconButton(onClick = model::next) { Icon(Icons.Default.SkipNext, contentDescription = "Next") }
+}
+
+/** Position, the seek slider and the length. The wave with the loop is
+ *  in the practice sheet. */
+@Composable
+private fun WaveRow(model: PlayerViewModel, modifier: Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        val duration = model.duration
+        Text(timeText(model.currentTime), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Slider(
+            value = model.currentTime.toFloat().coerceIn(0f, maxOf(duration, 1.0).toFloat()),
+            onValueChange = { model.seek(it.toDouble()) },
+            valueRange = 0f..maxOf(duration, 1.0).toFloat(),
+            modifier = Modifier.weight(1f),
+        )
+        Text(timeText(model.duration), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** Practice (tinted while anything is set), lyrics while the track has
+ *  some, Up Next. */
+@Composable
+private fun BarIcons(model: PlayerViewModel, onShowUpNext: () -> Unit, onShowLyrics: () -> Unit, onShowPractice: () -> Unit) {
+    val practising = model.practice.changesPlayback
+    IconButton(onClick = onShowPractice, modifier = Modifier.size(32.dp)) {
+        Icon(
+            Icons.Default.Tune, contentDescription = "Practice",
+            tint = if (practising) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    if (model.lyrics != null) {
+        IconButton(onClick = onShowLyrics, modifier = Modifier.size(32.dp)) {
+            Icon(Icons.Default.Lyrics, contentDescription = "Lyrics", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+    IconButton(onClick = onShowUpNext, modifier = Modifier.size(32.dp)) {
+        Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Up Next", tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

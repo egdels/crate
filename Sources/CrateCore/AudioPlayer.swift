@@ -33,10 +33,19 @@ public protocol AudioPlayer: AnyObject {
     /// `onFinished` continues the playback already running. `gain` is
     /// that file's correction, applied at the hand-over.
     func preload(_ url: URL?, gain: Double)
+    /// Speed (1 = as recorded) and pitch shift in cents, independent of
+    /// each other. Stays in effect across loads until set again.
+    func setTempo(_ tempo: Double, pitch cents: Double)
+    /// Repeats the passage without a gap once playback reaches its end;
+    /// nil plays on to the end of the file. A position after the end
+    /// jumps back to the start. `load` clears it.
+    func setLoop(_ loop: PracticeLoop?)
 }
 
 public extension AudioPlayer {
     func preload(_ url: URL?, gain: Double) {}
+    func setTempo(_ tempo: Double, pitch cents: Double) {}
+    func setLoop(_ loop: PracticeLoop?) {}
 
     func load(_ url: URL) throws { try load(url, gain: 0) }
     func preload(_ url: URL?) { preload(url, gain: 0) }

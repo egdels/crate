@@ -27,7 +27,7 @@ never sees it.
 
 ```sh
 swift build                    # whole package
-swift test                     # 92 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
+swift test                     # 144 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
 swift run crate-scan <folder>  # tag-reader check against real files, prints gaps
 swift run crate-scan <folder> --lyrics   # counts files with lyrics (USLT/SYLT, ©lyr, FLAC LYRICS, .lrc)
 swift run crate-scan <folder> --loudness # BS.1770 loudness, peak and gain per file, with the speed
@@ -99,7 +99,9 @@ Sources/CrateCore/    UI-free library: Track, Album, LibraryScanner,
                       (+HistoryStore, JSON impl; Track.recentlyAdded),
                       Loudness (LoudnessMeter, LoudnessHistogram,
                       TrackLoudness, Loudness, LoudnessStore + JSON impl,
-                      LoudnessAnalyzer; AVAudioFile decoding)
+                      LoudnessAnalyzer; AVAudioFile decoding),
+                      PracticeSettings (+PracticeBook, PracticeStore,
+                      JSON impl), Waveform
 Sources/Crate/        SwiftUI app: CrateApp, PlayerModel (@Observable,
                       the only UI state), ContentView (album grid + track
                       list + empty state), PlayerBar
@@ -160,8 +162,9 @@ android/core/   Kotlin/JVM, package de.schliweb.crate.core: Track (uri +
                 PlaybackState (+JsonPlaybackStateStore), Lyrics
                 (+LyricsSource; SafLyricsSource lives in the app),
                 History (+JsonHistoryStore, recentlyAdded()), Loudness
-                (meter, histogram, store, analyzer; MediaCodecLoudness
-                in the app decodes)
+                (meter, histogram, store, analyzer; MediaCodecAudio
+                in the app decodes), PracticeSettings, Waveform
+                (+WaveformBuilder, FileWaveformCache)
 android/app/    de.schliweb.crate: CrateApplication (owns Library and
                 ArtworkCache), PlayerViewModel (the only UI state),
                 MainActivity, ui/CrateScreen (grid + detail, two panes
@@ -650,6 +653,60 @@ come from `playback/MediaItems.kt`, shared with the service's
 gone; written, not verified on a device). Verified: Mac quit and
 relaunch at 1:15 of a track; Android force-stop at 0:15 came back at
 0:09 (the last periodic save) and played on from there.
+
+Practice (both apps, 2026-10-23): tempo, key, tuning and an A-B loop
+per file, merged in from Practizer (`../practizer`, a copy of Crate
+0.12.0 with the abandoned Java Practizer's core idea on top; archived
+after the merge). Do not bring back the Java app's scope (markers, grid,
+metronome, exercises, project files): it is why that app was never
+finished. Hidden until asked for: Mac, the sliders button in the player
+bar (`showsPractice`, kept in UserDefaults, ⌥⌘P) shows `PracticePanel`
+above the bar; Android, the Tune icon opens `PracticeSheet`, the seek
+slider stays in the bar. The button is tinted while the track has any
+setting or loop, so a remembered 80 % never passes for the record.
+`PracticeSettings` (Core, both): tempo 0.5...2.0, semitones -12...12,
+cents -50...50, optional `PracticeLoop` (start < end, at least 0.2 s),
+clamped on init and on decode; `loopOff` keeps A and B while the loop
+does not play (the repeat symbol is its switch, added 2026-10-23 after
+the developer took the plain indicator for a button; written to JSON
+only when true, `activeLoop` is what the players get, a new loop is
+always on); `PracticeBook` maps track id to settings
+and drops neutral ones; `practice.json` next to the index, the same JSON
+on both; Remove Folder prunes it. Mac `AVAudioEngineBackend`: node ->
+`AVAudioUnitTimePitch` -> gain EQ -> mixer, time-pitch bypassed while
+neutral; the node renders file frames, so its clock stays in file time
+at any tempo. The loop is scheduled as segments (run-in to the loop's
+end, then always one full pass queued ahead, `passFinished` queues the
+next), sample-accurate; while looping `preload` only remembers the next
+file (`announced`). `load` clears the loop, tempo stays across loads.
+`PlayerModel.applyPractice` after every `player.load` (also on
+restore), `updatePractice` the single write path (backend, Now Playing
+rate, debounced save, also on quit). Menu "Practice": tempo ⌘↓/⌘↑, key
+⌥⌘↓/⌥⌘↑, tuning ⇧⌥⌘↓/⇧⌥⌘↑, reset ⌘0, loop ⌘1/⌘2, loop off/on ⌘3, clear ⌘⌫; they work
+with the panel closed. Arrows and digits on purpose: German keyboard,
+and ⌃↑/⌃↓ are Mission Control. `Waveform` (vDSP on the Mac, 1000
+slices): both apps draw RMS squared (energy) scaled to the loudest
+slice, since a mastered record's peaks and even its RMS are nearly
+level. Android: `PlaybackParameters(tempo, 2^(cents/1200))` and the loop
+as a `PlayerMessage` at its end (a seek, so a short gap), applied by
+`PlaybackService.applyPractice` from `SharedPractice` on item
+transitions, timeline changes and book changes, so notification skips
+get the right settings without the activity; only a loop just set on
+the same item jumps back (`practisedId`), or the re-arm on the gapless
+pre-roll undid a seek past the loop. `MediaCodecAudio` (was
+`MediaCodecLoudness`) decodes into a `PcmTarget`, the meter or
+`WaveformBuilder`; the loudness pass stores each file's outline in
+`FileWaveformCache` (`cacheDir/waveforms`, about 2 KB a track), and the
+view model reads it only while the sheet is open (`practiceShown`),
+decoding with `waveformsReading` raised so the analysis waits. No cache
+on the Mac: a 3:48 FLAC reads in 0.28 s. At the end of the queue the
+last track is reloaded paused at 0 (it used to be unloaded). Verified
+2026-10-23 on this Mac (button, panel, tint with the panel closed, a
+seeded practice.json applied) and the Pixel_9a emulator (sheet decodes
+the wave only when opened, tempo reaches the media session, icon
+tinted); Practizer's own checks of 2026-10-21 cover the rest of the
+Android controls. Not yet checked by hand on the Mac: dragging in the
+wave, the shortcuts; by ear on either: pitch quality, Android's loop gap.
 
 **Open, in no fixed order:**
 

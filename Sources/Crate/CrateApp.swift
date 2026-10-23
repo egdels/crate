@@ -129,7 +129,10 @@ struct CrateApp: App {
                 .task {
                     NSApp.activate(ignoringOtherApps: true)
                     delegate.onOpen = { [model] urls in Task { await model.open(urls) } }
-                    delegate.onTerminate = { [model] in model.savePlayback() }
+                    delegate.onTerminate = { [model] in
+                        model.savePlayback()
+                        model.savePractice()
+                    }
                     await model.start()
                 }
         }

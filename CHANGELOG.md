@@ -7,6 +7,28 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+### Added
+
+- Practice, for playing along with a record: tempo from 50 to 200 %
+  without changing the key, key up to an octave either way without
+  changing the tempo, tuning in cents with the resulting A in Hz, and
+  an A-B loop over the passage you are working on (seamless on the Mac,
+  a short jump on Android), which can be switched off and on again
+  without setting A and B anew. Set over the track's waveform, remembered
+  per file in `practice.json`; the music files are not touched. Hidden
+  until asked for: the sliders button in the player bar (Mac, ⌥⌘P)
+  opens the panel, the Tune icon (Android) the sheet; the button is
+  coloured while a track does not play as recorded. Mac: a Practice
+  menu with keys for all of it (⌘↓ ⌘↑ tempo, ⌥⌘↓ ⌥⌘↑ key, ⇧⌥⌘↓ ⇧⌥⌘↑
+  tuning, ⌘0 back to the recording, ⌘1 ⌘2 loop, ⌘3 loop off/on, ⌘⌫
+  clear).
+  This was Practizer, a separate app; it lives on in Crate.
+
+### Changed
+
+- At the end of the queue the last track goes back to its start, paused,
+  instead of being unloaded, so Play plays it again.
+
 ## [0.12.0] - 2026-10-18
 
 ### Added

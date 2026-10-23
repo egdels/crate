@@ -4,18 +4,20 @@
 package de.schliweb.crate
 
 import android.app.Application
+import de.schliweb.crate.core.FileWaveformCache
 import de.schliweb.crate.core.JsonFavoritesStore
 import de.schliweb.crate.core.JsonHistoryStore
 import de.schliweb.crate.core.JsonLoudnessStore
 import de.schliweb.crate.core.LoudnessAnalyzer
 import de.schliweb.crate.core.JsonLibraryStore
 import de.schliweb.crate.core.JsonPlaybackStateStore
+import de.schliweb.crate.core.JsonPracticeStore
 import de.schliweb.crate.core.Library
 import de.schliweb.crate.core.Track
 import de.schliweb.crate.library.AndroidArtworkReader
 import de.schliweb.crate.library.AndroidMetadataReader
 import de.schliweb.crate.library.ArtworkCache
-import de.schliweb.crate.library.MediaCodecLoudness
+import de.schliweb.crate.library.MediaCodecAudio
 import de.schliweb.crate.library.SafFileSource
 import de.schliweb.crate.library.SafLyricsSource
 import java.io.File
@@ -24,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -48,6 +51,10 @@ class CrateApplication : Application() {
      *  shared with the service for the notification's heart. */
     val favorites: SharedFavorites by lazy { SharedFavorites(JsonFavoritesStore(File(filesDir, "favorites.json"))) }
 
+    /** Tempo, key, tuning and loop per track, in `practice.json`; the
+     *  view model changes them, the playback service applies them. */
+    val practice: SharedPractice by lazy { SharedPractice(JsonPracticeStore(File(filesDir, "practice.json"))) }
+
     /** What was played, newest first, for the Recently Played tile. */
     val history: SharedHistory by lazy { SharedHistory(JsonHistoryStore(File(filesDir, "history.json"))) }
 
@@ -56,11 +63,26 @@ class CrateApplication : Application() {
     val loudness: LoudnessAnalyzer by lazy {
         LoudnessAnalyzer(
             JsonLoudnessStore(File(filesDir, "loudness.json")),
-            measure = { MediaCodecLoudness.measure(this, it) },
+            measure = { track ->
+                // The waveform of the track playing goes first: no new
+                // file starts while one is being read for the screen.
+                waveformsReading.first { it == 0 }
+                val measured = MediaCodecAudio.measure(this, track)
+                measured?.waveform?.let { runCatching { waveforms.put(track, it) } }
+                measured?.loudness
+            },
             // The meter is CPU work; half the cores, two to four.
             concurrency = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(2, 4),
         )
     }
+
+    /** Outlines of the tracks, made by the loudness analysis on its way
+     *  through each file and by the view model for the track playing. */
+    val waveforms: FileWaveformCache by lazy { FileWaveformCache(File(cacheDir, "waveforms")) }
+
+    /** How many outlines are being read for the screen right now; the
+     *  analysis waits for zero before it starts a file. */
+    val waveformsReading = MutableStateFlow(0)
 
     /** Files measured so far and files to measure while the analysis
      *  runs; null otherwise. The view model mirrors it into the footer. */

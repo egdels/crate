@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.BitmapLoader
@@ -22,6 +23,7 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.FileDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.PlayerMessage
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -37,6 +39,8 @@ import com.google.common.util.concurrent.ListenableFuture
 import de.schliweb.crate.CrateApplication
 import de.schliweb.crate.MainActivity
 import de.schliweb.crate.SharedFavorites
+import de.schliweb.crate.SharedPractice
+import de.schliweb.crate.core.PracticeLoop
 import de.schliweb.crate.core.ReplayGain
 import de.schliweb.crate.core.Track
 import de.schliweb.crate.library.ArtworkCache
@@ -78,6 +82,14 @@ import java.io.IOException
  * The notification carries a heart for the current track, a custom
  * command button whose icon follows the process-wide [SharedFavorites];
  * tapping it toggles the heart there, which the app's own hearts mirror.
+ *
+ * Practice: the current item's tempo, key and tuning from the
+ * process-wide [SharedPractice] become the player's `PlaybackParameters`
+ * (Sonic in the audio sink: speed and pitch independent), on every item
+ * transition and every change. The loop is a `PlayerMessage` at its
+ * end, kept after delivery so that it fires on every pass, which seeks
+ * back to its start. That seek flushes the renderers, so unlike the
+ * Mac's scheduled segments the jump has a short gap.
  */
 @UnstableApi
 class PlaybackService : MediaSessionService() {
@@ -85,6 +97,12 @@ class PlaybackService : MediaSessionService() {
     private val gain = GainProcessor()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val favorites: SharedFavorites get() = (application as CrateApplication).favorites
+    private val practice: SharedPractice get() = (application as CrateApplication).practice
+    private var loopMessage: PlayerMessage? = null
+    /** The item id and loop the message stands for. */
+    private var loopTarget: Pair<String, PracticeLoop>? = null
+    /** The item the settings were last applied to. */
+    private var practisedId: String? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -114,6 +132,11 @@ class PlaybackService : MediaSessionService() {
                 Log.i(TAG, "gain: ${"%.1f".format(decibels)} dB for ${mediaItem?.mediaMetadata?.title}")
             }
 
+            override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                // Items moved: the loop message points at an index.
+                applyPractice(player, force = true)
+            }
+
             override fun onShuffleModeEnabledChanged(enabled: Boolean) {
                 if (enabled) reorder(player, queuedNext = IntRange.EMPTY, currentFirst = true)
             }
@@ -122,6 +145,7 @@ class PlaybackService : MediaSessionService() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 updateHeart()
                 recordPlay(player)
+                applyPractice(player)
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -143,6 +167,43 @@ class PlaybackService : MediaSessionService() {
             favorites.load()
             favorites.state.collect { updateHeart() }
         }
+        scope.launch {
+            practice.load()
+            practice.state.collect { applyPractice(player) }
+        }
+    }
+
+    /** Puts the current item's practice settings into effect. */
+    private fun applyPractice(player: ExoPlayer, force: Boolean = false) {
+        val id = player.currentMediaItem?.mediaId
+        val settings = id?.let { practice.current[it] }
+        val parameters = if (settings == null) PlaybackParameters.DEFAULT
+            else PlaybackParameters(settings.tempo.toFloat(), settings.pitchFactor)
+        if (player.playbackParameters != parameters) player.playbackParameters = parameters
+
+        val duration = player.duration.takeIf { it != C.TIME_UNSET }?.let { it / 1000.0 } ?: 0.0
+        val loop = settings?.activeLoop?.clampedTo(duration)
+        val target = if (id != null && loop != null) id to loop else null
+        val sameItem = id == practisedId
+        practisedId = id
+        if (target == loopTarget && !force) return
+        // Only a loop just set or moved on the track playing jumps back,
+        // like the Mac's setLoop. Not a re-armed one: the timeline also
+        // changes when the next item is prepared for the gapless join,
+        // and a seek past the loop's end must not be undone by that.
+        val changedHere = sameItem && target != null && target != loopTarget
+        loopMessage?.cancel()
+        loopMessage = null
+        loopTarget = target
+        if (target == null) return
+        val start = (loop!!.start * 1000).toLong()
+        val end = (loop.end * 1000).toLong()
+        if (changedHere && player.currentPosition >= end) player.seekTo(start)
+        loopMessage = player.createMessage { _, _ -> if (loopTarget == target) player.seekTo(start) }
+            .setLooper(mainLooper)
+            .setPosition(player.currentMediaItemIndex, end)
+            .setDeleteAfterDelivery(false)
+            .send()
     }
 
     /** The id the history was last told about, so a track counts once

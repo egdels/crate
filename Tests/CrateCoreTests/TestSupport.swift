@@ -43,8 +43,9 @@ final class TemporaryDirectory: @unchecked Sendable {
         return file.standardizedFileURL
     }
 
-    /// A real, playable, untagged WAV of silence.
-    func wav(_ relativePath: String, seconds: Double = 1) throws -> URL {
+    /// A real, playable, untagged WAV of silence, or of whatever
+    /// `level` gives each second (0...1, a square wave at that level).
+    func wav(_ relativePath: String, seconds: Double = 1, level: ((Double) -> Float)? = nil) throws -> URL {
         let file = url.appendingPathComponent(relativePath)
         try FileManager.default.createDirectory(
             at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -53,6 +54,12 @@ final class TemporaryDirectory: @unchecked Sendable {
         let frames = AVAudioFrameCount(seconds * format.sampleRate)
         let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!
         buffer.frameLength = frames
+        if let level, let samples = buffer.floatChannelData?[0] {
+            for frame in 0..<Int(frames) {
+                let sign: Float = frame % 2 == 0 ? 1 : -1
+                samples[frame] = sign * level(Double(frame) / format.sampleRate)
+            }
+        }
         try audioFile.write(from: buffer)
         return file.standardizedFileURL
     }
