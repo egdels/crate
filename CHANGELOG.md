@@ -7,6 +7,8 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-23
+
 ### Added
 
 - Practice, for playing along with a record: tempo from 50 to 200 %

@@ -711,7 +711,7 @@ wave, the shortcuts; by ear on either: pitch quality, Android's loop gap.
 **Open, in no fixed order:**
 
 1. Released: v0.1.0 (DMG only), v0.2.0 (DMG + signed APK), v0.3.0 to
-   v0.10.0 (DMG + APK + AAB) are published at github.com/egdels/crate,
+   v0.13.0 (DMG + APK + AAB) are published at github.com/egdels/crate,
    built by `release.yml`. 0.6.0 to 0.6.2 (all 2026-10-14) are
    withdrawn: Android could not play untagged files (0.6.0, 0.6.1) and
    the Mac DMG crashed on Now Playing (all three); 0.6.3 was the first
