@@ -7,6 +7,11 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Mac: Crate > Use Crate for Audio Files now also takes over `.m4b`
+  audiobooks and raw `.aac` files, which kept opening in Books.
+
 ## [0.13.0] - 2026-10-23
 
 ### Added

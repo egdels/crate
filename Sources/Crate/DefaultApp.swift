@@ -12,7 +12,10 @@ enum DefaultApp {
     /// The types Crate declares in Info.plist, minus folders: a folder
     /// double-clicked in Finder should keep opening in Finder.
     static let audioTypes: [UTType] = [
-        "public.mp3", "public.mpeg-4-audio", "com.apple.m4a-audio", "org.xiph.flac",
+        "public.mp3", "public.mpeg-4-audio", "com.apple.m4a-audio",
+        // .m4b and raw .aac sit beside MPEG-4 audio, not under it, and
+        // Books claims both; binding public.audio does not reach them.
+        "com.apple.protected-mpeg-4-audio-b", "public.aac-audio", "org.xiph.flac",
         "com.microsoft.waveform-audio", "public.aiff-audio", "public.aifc-audio",
         "com.apple.coreaudio-format", "public.audio",
     ].compactMap(UTType.init)
