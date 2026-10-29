@@ -7,6 +7,8 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-29
+
 ### Added
 
 - Jumps: back 15 seconds and forward 30. For audiobooks, radio plays,
@@ -31,9 +33,9 @@ version's section from this file as the GitHub release notes.
 
 ### Fixed
 
-- Mac: while paused, the jumps and the practice panel's A started from
-  the beginning of the track (or where it was last sought), since the
-  paused engine reported that as its position.
+- Mac: while paused, the practice panel's A marked the start of the
+  track (or where it was last sought) instead of the paused position,
+  since the paused engine reported that as its position.
 - Mac: Crate > Use Crate for Audio Files now also takes over `.m4b`
   audiobooks and raw `.aac` files, which kept opening in Books.
 

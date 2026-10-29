@@ -1,0 +1,6 @@
+New in this version, for audiobooks and podcasts:
+- Back 15 and forward 30 seconds in the player bar and the notification.
+- Each book goes on where you left it, also after other music.
+- After a pause it goes back a few seconds, more the longer the pause.
+- The tempo set in Practice applies to the whole book.
+Practice also has 5-second jumps.
