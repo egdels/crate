@@ -32,6 +32,26 @@ import Testing
         #expect(!player.isPlaying)
     }
 
+    @Test func pausedPositionStaysWherePlaybackStopped() async throws {
+        let dir = try TemporaryDirectory()
+        let player = AVAudioEngineBackend()
+        try player.load(try dir.wav("a.wav", seconds: 3))
+        player.seek(to: 1)
+        player.play()
+        try await Task.sleep(nanoseconds: 400_000_000)
+        player.pause()
+        let paused = player.currentTime
+        #expect(paused > 1.2 && paused < 2)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        #expect(player.currentTime == paused)
+        player.seek(to: 0.5)
+        #expect(abs(player.currentTime - 0.5) < 0.01)
+        player.play()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        #expect(player.currentTime > 0.6)
+        player.stop()
+    }
+
     @Test func gainFollowsTheFileAcrossTheHandOver() async throws {
         let dir = try TemporaryDirectory()
         let player = AVAudioEngineBackend()

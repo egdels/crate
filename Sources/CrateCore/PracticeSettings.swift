@@ -142,6 +142,17 @@ public struct PracticeBook: Equatable, Sendable {
         set { entries[id] = newValue.isNeutral ? nil : newValue }
     }
 
+    /// An audiobook's tempo is the whole book's: sets it on the tracks
+    /// that `Skip` treats as spoken word or long among the given ones (an
+    /// album), leaving their other settings and every other track alone.
+    public mutating func setTempo(_ tempo: Double, forBook tracks: [Track]) {
+        for track in tracks where Skip.isOffered(for: track) {
+            let old = self[track.id]
+            self[track.id] = PracticeSettings(
+                tempo: tempo, semitones: old.semitones, cents: old.cents, loop: old.loop, loopOff: old.loopOff)
+        }
+    }
+
     /// Forgets every track under the folder, for when the folder leaves
     /// the library.
     public mutating func removeAll(under folder: URL) {

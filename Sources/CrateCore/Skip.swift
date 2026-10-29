@@ -32,6 +32,19 @@ public enum Skip {
         return spokenGenres.contains { genre.contains($0) }
     }
 
+    /// How far an audiobook goes back when it plays on after a pause of
+    /// the given length: after a breath nothing, after a while a
+    /// sentence or two, the longer the pause the more, so the thread is
+    /// picked up again.
+    public static func rewind(afterPause seconds: TimeInterval) -> TimeInterval {
+        switch seconds {
+        case ..<5: 0
+        case ..<60: 3
+        case ..<3600: 10
+        default: 20
+        }
+    }
+
     public enum Target: Equatable, Sendable {
         case position(TimeInterval)
         /// The jump went past the end: on to the next track, as if the

@@ -35,6 +35,16 @@ object Skip {
         return SPOKEN_GENRES.any { it in genre }
     }
 
+    /** How far an audiobook goes back when it plays on after a pause of
+     *  [seconds]: after a breath nothing, after a while a sentence or two,
+     *  the longer the pause the more, so the thread is picked up again. */
+    fun rewind(seconds: Double): Double = when {
+        seconds < 5 -> 0.0
+        seconds < 60 -> 3.0
+        seconds < 3600 -> 10.0
+        else -> 20.0
+    }
+
     sealed interface Target {
         data class Position(val seconds: Double) : Target
         /** The jump went past the end: on to the next track, as if the

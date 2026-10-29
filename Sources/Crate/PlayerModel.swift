@@ -116,6 +116,9 @@ final class PlayerModel: ObservableObject {
     /// the playback state.
     private var bookmarks = Bookmarks()
     private var savedBookmarks = Bookmarks()
+    /// When the track playing was paused, for the rewind of an audiobook
+    /// that plays on; nil once something else moved the playhead.
+    private var pausedAt: Date?
     private var practiceBook = PracticeBook()
     private var practiceSaveTask: Task<Void, Never>?
     private var waveformTask: Task<Void, Never>?
@@ -610,7 +613,7 @@ final class PlayerModel: ObservableObject {
         queueAlbumMean = asAlbum ? ReplayGain.albumMean(tracks) : nil
         queueAlbumGain = asAlbum ? loudness.albumGain(for: tracks) : nil
         // An audiobook goes on where it was left.
-        loadCurrent(autoplay: true, at: current.flatMap(bookmarks.position) ?? 0)
+        loadCurrent(autoplay: true, at: current.flatMap { bookmarks.position(for: $0) } ?? 0)
     }
 
     private var queueIsAlbum = false
@@ -698,8 +701,10 @@ final class PlayerModel: ObservableObject {
         if isPlaying {
             player.pause()
             isPlaying = false
+            pausedAt = Date()
             savePlayback()
         } else {
+            rewindAfterPause()
             player.play()
             isPlaying = true
             if let current { recordPlay(current) }
@@ -729,6 +734,7 @@ final class PlayerModel: ObservableObject {
     }
 
     func seek(to time: TimeInterval) {
+        pausedAt = nil
         player.seek(to: time)
         currentTime = player.currentTime
         syncNowPlaying()
@@ -749,6 +755,20 @@ final class PlayerModel: ObservableObject {
             if let current { bookmarks.finish(current) }
             if queue.hasNext { next() } else { trackFinished() }
         }
+    }
+
+    /// An audiobook that plays on after a pause goes back a little first,
+    /// more the longer the pause (`Skip.rewind`); never out of a loop.
+    private func rewindAfterPause() {
+        defer { pausedAt = nil }
+        guard let current, let pausedAt, Skip.isOffered(for: current) else { return }
+        let back = Skip.rewind(afterPause: Date().timeIntervalSince(pausedAt))
+        guard back > 0,
+              case .position(let time) = Skip.target(
+                from: player.currentTime, by: -back, duration: duration, loop: practice.activeLoop)
+        else { return }
+        player.seek(to: time)
+        currentTime = player.currentTime
     }
 
     func setShuffle(_ on: Bool) {
@@ -776,6 +796,7 @@ final class PlayerModel: ObservableObject {
         do {
             try player.load(track.url, gain: gain(for: track))
             currentTime = 0
+            pausedAt = nil
             lastError = nil
             applyPractice(for: track)
             if position > 0 {
@@ -918,6 +939,11 @@ final class PlayerModel: ObservableObject {
         let old = practice
         practice = settings
         practiceBook[track.id] = settings
+        if settings.tempo != old.tempo, Skip.isOffered(for: track),
+           let album = albums.first(where: { album in album.tracks.contains { $0.id == track.id } }) {
+            // An audiobook's tempo is the book's: its other files follow.
+            practiceBook.setTempo(settings.tempo, forBook: album.tracks)
+        }
         if settings.tempo != old.tempo || settings.pitchCents != old.pitchCents {
             player.setTempo(settings.tempo, pitch: settings.pitchCents)
         }
@@ -1086,6 +1112,8 @@ final class PlayerModel: ObservableObject {
             player.seek(to: position)
         }
         currentTime = player.currentTime
+        // Paused since the last run: Play rewinds an audiobook by that long.
+        pausedAt = bookmarks.entries[currentTrack.id].map { Date(timeIntervalSince1970: $0.saved) }
         loadArtwork(for: currentTrack)
         loadLyrics(for: currentTrack)
         syncNowPlaying()

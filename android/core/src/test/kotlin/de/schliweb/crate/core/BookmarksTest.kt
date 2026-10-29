@@ -39,6 +39,15 @@ class BookmarksTest {
     }
 
     @Test
+    fun anOldMarkResumesALittleEarlier() {
+        val one = chapter("01")
+        val marks = Bookmarks().set(one, 300.0, day)
+        assertEquals(300.0, marks.position(one, day + 2_000))
+        assertEquals(290.0, marks.position(one, day + 1_800_000))
+        assertEquals(280.0, marks.position(one, day + 86_400_000))
+    }
+
+    @Test
     fun theAlbumResumesAtTheFileHeardLast() {
         val tracks = listOf(chapter("01"), chapter("02"), chapter("03"))
         assertNull(Bookmarks().resumeIndex(tracks))

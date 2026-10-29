@@ -104,6 +104,10 @@ class PlaybackService : MediaSessionService() {
     private val bookmarks: SharedBookmarks get() = (application as CrateApplication).bookmarks
     /** Sets the playing audiobook's mark every ten seconds. */
     private var bookmarkJob: Job? = null
+    /** When playback was paused (by the user, a call, another app), for
+     *  the rewind of an audiobook that plays on; null once something
+     *  else moved the playhead. Wall clock, since a mark's time is one. */
+    private var pausedAtMillis: Long? = null
     private val practice: SharedPractice get() = (application as CrateApplication).practice
     private var loopMessage: PlayerMessage? = null
     /** The item id and loop the message stands for. */
@@ -156,9 +160,25 @@ class PlaybackService : MediaSessionService() {
                 updateButtons()
                 recordPlay(player)
                 applyPractice(player)
+                // A playlist set up paused is the restore after a restart:
+                // paused since its mark was set.
+                pausedAtMillis = if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED && !player.playWhenReady) {
+                    mediaItem?.mediaId?.let { bookmarks.current.entries[it] }?.let { (it.saved * 1000).toLong() }
+                } else {
+                    null
+                }
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (!playWhenReady && player.playbackState != Player.STATE_ENDED) pausedAtMillis = System.currentTimeMillis()
+            }
+
+            override fun onPlaybackSuppressionReasonChanged(reason: Int) {
+                if (reason != Player.PLAYBACK_SUPPRESSION_REASON_NONE && pausedAtMillis == null) pausedAtMillis = System.currentTimeMillis()
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) rewindAfterPause(player)
                 if (isPlaying) recordPlay(player)
                 bookmarkJob?.cancel()
                 if (isPlaying) {
@@ -178,6 +198,7 @@ class PlaybackService : MediaSessionService() {
                     // Played to its end: done, the next time it starts from the top.
                     Player.DISCONTINUITY_REASON_AUTO_TRANSITION -> finishMark(oldPosition.mediaItem)
                     Player.DISCONTINUITY_REASON_SEEK, Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT -> {
+                        if (reason == Player.DISCONTINUITY_REASON_SEEK) pausedAtMillis = null
                         if (oldPosition.mediaItemIndex != newPosition.mediaItemIndex) mark(oldPosition.mediaItem, oldPosition.positionMs)
                         mark(newPosition.mediaItem, newPosition.positionMs)
                     }
@@ -248,6 +269,21 @@ class PlaybackService : MediaSessionService() {
     private fun mark(item: MediaItem?, positionMs: Long) {
         val track = item?.mediaId?.let { (application as CrateApplication).library.track(it) } ?: return
         bookmarks.update { it.set(track, positionMs.coerceAtLeast(0) / 1000.0) }
+    }
+
+    /** An audiobook that plays on after a pause goes back a little first,
+     *  more the longer the pause ([Skip.rewind]); never out of a loop. */
+    private fun rewindAfterPause(player: Player) {
+        val pausedAt = pausedAtMillis ?: return
+        pausedAtMillis = null
+        val id = player.currentMediaItem?.mediaId ?: return
+        val track = (application as CrateApplication).library.track(id) ?: return
+        if (!Skip.isOffered(track)) return
+        val back = Skip.rewind((System.currentTimeMillis() - pausedAt) / 1000.0)
+        if (back <= 0) return
+        val duration = player.duration.takeIf { it != C.TIME_UNSET }?.let { it / 1000.0 } ?: 0.0
+        val target = Skip.target(player.currentPosition / 1000.0, -back, duration, practice.current[id]?.activeLoop)
+        if (target is Skip.Target.Position) player.seekTo((target.seconds * 1000).toLong())
     }
 
     private fun finishMark(item: MediaItem?) {

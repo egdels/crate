@@ -42,14 +42,20 @@ data class Bookmarks(val entries: Map<String, Mark> = emptyMap()) {
     /** The track was heard to its end. */
     fun finish(track: Track): Bookmarks = if (track.id in entries) Bookmarks(entries - track.id) else this
 
-    /** Where to start the track: its mark, unless that is at the very
+    /** Where to start the track: its mark, a little earlier the longer
+     *  ago it was set ([Skip.rewind]), unless the mark is at the very
      *  start or so close to the end that it was as good as finished. */
-    fun position(track: Track): Double? {
+    fun position(track: Track, nowMillis: Long = System.currentTimeMillis()): Double? {
+        val mark = resumableMark(track) ?: return null
+        return (mark.position - Skip.rewind(nowMillis / 1000.0 - mark.saved)).coerceAtLeast(0.0)
+    }
+
+    private fun resumableMark(track: Track): Mark? {
         if (!Skip.isOffered(track)) return null
         val mark = entries[track.id] ?: return null
         if (mark.position < MINIMUM_POSITION) return null
         if (track.duration > 0 && mark.position > track.duration - END_MARGIN) return null
-        return mark.position
+        return mark
     }
 
     /** The index of the track heard last among the given ones (an
@@ -67,7 +73,7 @@ data class Bookmarks(val entries: Map<String, Mark> = emptyMap()) {
         }
         val index = best ?: return null
         // Stopped in the last seconds of a file: on with the next one.
-        return if (position(tracks[index]) == null && index + 1 < tracks.size) index + 1 else index
+        return if (resumableMark(tracks[index]) == null && index + 1 < tracks.size) index + 1 else index
     }
 
     fun removeAllUnder(folderPath: String): Bookmarks = Bookmarks(entries.filterKeys { !Paths.isUnder(it, folderPath) })

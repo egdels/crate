@@ -165,6 +165,12 @@ data class PracticeBook(val entries: Map<String, PracticeSettings> = emptyMap())
     fun with(id: String, settings: PracticeSettings): PracticeBook =
         PracticeBook(if (settings.isNeutral) entries - id else entries + (id to settings))
 
+    /** An audiobook's tempo is the whole book's: sets it on the tracks
+     *  [Skip] treats as spoken word or long among the given ones (an
+     *  album), leaving their other settings and every other track alone. */
+    fun withTempo(tempo: Double, book: List<Track>): PracticeBook =
+        book.filter(Skip::isOffered).fold(this) { result, track -> result.with(track.id, result[track.id].copy(tempo = tempo)) }
+
     /** Forgets every track under the folder, for when the folder leaves
      *  the library. */
     fun removeAllUnder(folderPath: String): PracticeBook =

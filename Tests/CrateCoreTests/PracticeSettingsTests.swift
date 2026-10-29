@@ -75,6 +75,24 @@ import Testing
         #expect(book.count == 0)
     }
 
+    @Test func aBooksTempoReachesItsSpokenTracksOnly() throws {
+        func track(_ name: String, genre: String) -> Track {
+            Track(
+                url: URL(fileURLWithPath: "/books/\(name).mp3"), fileSize: 1, modified: Date(timeIntervalSince1970: 0),
+                title: name, genre: genre, duration: 600)
+        }
+        let one = track("01", genre: "Hörbuch"), two = track("02", genre: "Hörbuch"), song = track("song", genre: "Pop")
+        let loop = try #require(PracticeLoop(start: 1, end: 5))
+        var book = PracticeBook()
+        book[two.id] = PracticeSettings(semitones: 1, loop: loop)
+        book.setTempo(1.25, forBook: [one, two, song])
+        #expect(book[one.id] == PracticeSettings(tempo: 1.25))
+        #expect(book[two.id] == PracticeSettings(tempo: 1.25, semitones: 1, loop: loop))
+        #expect(book[song.id] == .neutral)
+        book.setTempo(1, forBook: [one, two, song])
+        #expect(book.count == 1)
+    }
+
     @Test func removingAFolderDropsOnlyItsTracks() {
         var book = PracticeBook()
         book["/music/two/a.mp3"] = PracticeSettings(semitones: 1)

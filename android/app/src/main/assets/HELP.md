@@ -64,7 +64,9 @@ uploaded or changed.
   between: Crate keeps the position of each such file, next to the
   library index. Playing it again starts there, playing its album
   starts at the file heard last; a file heard to its end starts from
-  the top next time.
+  the top next time. After a pause it goes back a few seconds before
+  playing on, more the longer the pause. Its tempo in Practice is the
+  whole book's.
 - Crate remembers where you stopped: the next launch comes up with the
   same queue, at the same spot, paused.
 - Lyrics: when a track has them, an icon appears next to the slider in

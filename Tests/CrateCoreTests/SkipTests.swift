@@ -24,6 +24,13 @@ import Testing
         #expect(!Skip.isOffered(for: track("Song.mp3")))
     }
 
+    @Test func theLongerThePauseTheFurtherBack() {
+        #expect(Skip.rewind(afterPause: 2) == 0)
+        #expect(Skip.rewind(afterPause: 30) == 3)
+        #expect(Skip.rewind(afterPause: 600) == 10)
+        #expect(Skip.rewind(afterPause: 86_400) == 20)
+    }
+
     @Test func jumpsStayInsideTheTrack() {
         #expect(Skip.target(from: 60, by: -15, duration: 300) == .position(45))
         #expect(Skip.target(from: 10, by: -15, duration: 300) == .position(0))

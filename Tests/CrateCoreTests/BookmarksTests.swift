@@ -40,6 +40,15 @@ import Testing
         #expect(bookmarks.count == 0)
     }
 
+    @Test func anOldMarkResumesALittleEarlier() {
+        var bookmarks = Bookmarks()
+        let one = chapter("01")
+        bookmarks.set(one, at: 300, now: day)
+        #expect(bookmarks.position(for: one, now: day.addingTimeInterval(2)) == 300)
+        #expect(bookmarks.position(for: one, now: day.addingTimeInterval(1800)) == 290)
+        #expect(bookmarks.position(for: one, now: day.addingTimeInterval(86_400)) == 280)
+    }
+
     @Test func theAlbumResumesAtTheFileHeardLast() {
         var bookmarks = Bookmarks()
         let tracks = [chapter("01"), chapter("02"), chapter("03")]

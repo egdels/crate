@@ -61,14 +61,21 @@ public struct Bookmarks: Equatable, Sendable {
         entries[track.id] = nil
     }
 
-    /// Where to start the track: its mark, unless that is at the very
+    /// Where to start the track: its mark, a little earlier the longer
+    /// ago it was set (`Skip.rewind`), unless the mark is at the very
     /// start or so close to the end that it was as good as finished.
-    public func position(for track: Track) -> TimeInterval? {
+    public func position(for track: Track, now: Date = Date()) -> TimeInterval? {
+        guard let mark = resumableMark(for: track) else { return nil }
+        let pause = now.timeIntervalSince1970 - mark.saved
+        return max(0, mark.position - Skip.rewind(afterPause: pause))
+    }
+
+    private func resumableMark(for track: Track) -> Mark? {
         guard Skip.isOffered(for: track), let mark = entries[track.id], mark.position >= Self.minimumPosition else {
             return nil
         }
         if track.duration > 0, mark.position > track.duration - Self.endMargin { return nil }
-        return mark.position
+        return mark
     }
 
     /// The index of the track heard last among the given ones (an
@@ -82,7 +89,7 @@ public struct Bookmarks: Equatable, Sendable {
         guard let index = best?.index else { return nil }
         // Stopped in the last seconds of a file: on with the next one.
         let track = tracks[index]
-        if position(for: track) == nil, index + 1 < tracks.count { return index + 1 }
+        if resumableMark(for: track) == nil, index + 1 < tracks.count { return index + 1 }
         return index
     }
 

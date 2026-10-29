@@ -22,9 +22,18 @@ version's section from this file as the GitHub release notes.
   again starts there, playing its album starts at the file heard last,
   and a file heard to its end starts from the top next time. Songs are
   not affected.
+- An audiobook that plays on after a pause goes back a little first:
+  3 seconds after a pause of a few seconds, 10 after minutes, 20 after
+  an hour or more; also when it resumes from its bookmark or after a
+  restart. A jump during the pause skips it.
+- The tempo of an audiobook is the whole book's: changing it on one
+  file of the album sets it on all of them.
 
 ### Fixed
 
+- Mac: while paused, the jumps and the practice panel's A started from
+  the beginning of the track (or where it was last sought), since the
+  paused engine reported that as its position.
 - Mac: Crate > Use Crate for Audio Files now also takes over `.m4b`
   audiobooks and raw `.aac` files, which kept opening in Books.
 

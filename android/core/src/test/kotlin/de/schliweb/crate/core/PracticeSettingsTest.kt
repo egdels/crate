@@ -98,6 +98,22 @@ class PracticeSettingsTest {
     }
 
     @Test
+    fun aBooksTempoReachesItsSpokenTracksOnly() {
+        fun track(name: String, genre: String) =
+            Track(uri = "content://$name", path = "primary:Books/$name.mp3", fileSize = 1, modified = 0, title = name, genre = genre, duration = 600.0)
+        val one = track("01", "Hörbuch")
+        val two = track("02", "Hörbuch")
+        val song = track("song", "Pop")
+        val loop = PracticeLoop.of(1.0, 5.0)
+        var book = PracticeBook().with(two.id, PracticeSettings(semitones = 1, loop = loop))
+        book = book.withTempo(1.25, listOf(one, two, song))
+        assertEquals(PracticeSettings(tempo = 1.25), book[one.id])
+        assertEquals(PracticeSettings(tempo = 1.25, semitones = 1, loop = loop), book[two.id])
+        assertEquals(PracticeSettings.NEUTRAL, book[song.id])
+        assertEquals(1, book.withTempo(1.0, listOf(one, two, song)).size)
+    }
+
+    @Test
     fun storeRoundTripsAndClampsWhatItReads() {
         val store = JsonPracticeStore(File(dir.dir, "deep/practice.json"))
         assertNull(store.load())

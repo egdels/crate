@@ -641,8 +641,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val track = current ?: return
         val changed = change(practice)
         if (changed == practice) return
+        val before = practice
         practice = changed
-        app.practice.update { it.with(track.id, changed) }
+        // An audiobook's tempo is the book's: its other files follow.
+        val book = if (changed.tempo != before.tempo && Skip.isOffered(track)) albums.firstOrNull { album -> album.tracks.any { it.id == track.id } } else null
+        app.practice.update { if (book != null) it.with(track.id, changed).withTempo(changed.tempo, book.tracks) else it.with(track.id, changed) }
     }
 
     fun setTempo(tempo: Double) {

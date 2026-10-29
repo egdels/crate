@@ -27,7 +27,7 @@ never sees it.
 
 ```sh
 swift build                    # whole package
-swift test                     # 152 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
+swift test                     # 156 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
 swift run crate-scan <folder>  # tag-reader check against real files, prints gaps
 swift run crate-scan <folder> --lyrics   # counts files with lyrics (USLT/SYLT, ©lyr, FLAC LYRICS, .lrc)
 swift run crate-scan <folder> --loudness # BS.1770 loudness, peak and gain per file, with the speed
@@ -67,7 +67,7 @@ Android, from `android/` (needs JDK 17+, Android SDK with platform 37;
 `ANDROID_HOME` is set on this machine, Gradle 9.7 via the wrapper):
 
 ```sh
-./gradlew :core:test             # 73 JVM tests, ~2 s
+./gradlew :core:test             # 76 JVM tests, ~2 s
 CRATE_MUSIC_DIRS=~/Music/Music/Media.localized ./gradlew :core:test --tests '*TagParserTest*' -i
                                  # also runs the MP3/MP4 parsers over real files (colon-separated dirs)
 ./gradlew :app:testDebugUnitTest # 4 JVM tests in the app module (GainProcessor), ~10 s
@@ -747,6 +747,30 @@ the file; the view model passes the start position to
 `setMediaItems`. Verified on the emulator (mark written, song between,
 resumed at the mark, cleared when skipped past the end) and on this
 Mac (same through Finder opens).
+Rewind after a pause (both apps): `Skip.rewind` (under 5 s nothing,
+under a minute 3 s, under an hour 10 s, else 20 s), only for offered
+tracks, clamped by `Skip.target` (never out of a loop).
+`Bookmarks.position` applies it by the time since the mark, and the
+restore after a restart counts as paused since the mark (Mac:
+`pausedAt` from `mark.saved`; Android: the PLAYLIST_CHANGED transition
+while not playWhenReady). Mac: `pausedAt` set on pause, cleared by
+seek and load, `rewindAfterPause` seeks before `player.play()`.
+Android: `PlaybackService.pausedAtMillis` set when playWhenReady goes
+false or playback is suppressed (a call), cleared by a SEEK
+discontinuity, applied on `onIsPlayingChanged(true)` (a seek just after
+resuming, so a few ms of audio can play first). Verified: emulator 8 s
+pause -> 3 s back, 2 s pause -> none, +30 during the pause -> none,
+force-stop and restart -> 3 s back; Mac 1:03 -> 1:00.
+That check found an engine bug: a paused `AVAudioPlayerNode` has no
+player time, so `AVAudioEngineBackend.currentTime` read as the
+segment's start while paused (jumps and "A" while paused started from
+0); `pausedPosition` now holds it, test
+`pausedPositionStaysWherePlaybackStopped`.
+Tempo per book (both apps): changing the tempo of an offered track sets
+it on every offered track of its album (`PracticeBook.setTempo(_:
+forBook:)` / `withTempo`), key, tuning and loop stay per file; reset
+goes through the same path. Verified on the emulator with a two-file
+book (practice.json gets both files, reset clears both).
 
 **Open, in no fixed order:**
 

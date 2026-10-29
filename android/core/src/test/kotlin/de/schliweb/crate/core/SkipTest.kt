@@ -26,6 +26,14 @@ class SkipTest {
     }
 
     @Test
+    fun theLongerThePauseTheFurtherBack() {
+        assertEquals(0.0, Skip.rewind(2.0))
+        assertEquals(3.0, Skip.rewind(30.0))
+        assertEquals(10.0, Skip.rewind(600.0))
+        assertEquals(20.0, Skip.rewind(86_400.0))
+    }
+
+    @Test
     fun jumpsStayInsideTheTrack() {
         assertEquals(Skip.Target.Position(45.0), Skip.target(60.0, -15.0, 300.0))
         assertEquals(Skip.Target.Position(0.0), Skip.target(10.0, -15.0, 300.0))

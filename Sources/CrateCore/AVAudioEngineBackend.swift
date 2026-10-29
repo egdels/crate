@@ -88,6 +88,9 @@ public final class AVAudioEngineBackend: AudioPlayer {
     private var framesBeforeCurrent: AVAudioFramePosition = 0
     private var generation = 0
     private var playing = false
+    /// The position at the last pause: a paused node has no player time,
+    /// so its clock would read as the segment's start.
+    private var pausedPosition: TimeInterval?
     /// Set when `current` has played to its end and the node has moved on
     /// to `next`; only then does loading `next`'s URL mean a hand-over
     /// rather than a skip.
@@ -119,6 +122,7 @@ public final class AVAudioEngineBackend: AudioPlayer {
     public var isPlaying: Bool { playing }
 
     public var currentTime: TimeInterval {
+        if let pausedPosition { return pausedPosition }
         guard let current else { return 0 }
         let elapsed = nodeSeconds(rate: current.sampleRate)
         if current.isLooping, let loop = current.loop {
@@ -215,12 +219,14 @@ public final class AVAudioEngineBackend: AudioPlayer {
             }
             node.play()
             playing = true
+            pausedPosition = nil
         } catch {
             playing = false
         }
     }
 
     public func pause() {
+        if playing { pausedPosition = currentTime }
         node.pause()
         playing = false
     }
@@ -258,6 +264,7 @@ public final class AVAudioEngineBackend: AudioPlayer {
     // MARK: - Internals
 
     private func stopNode() {
+        pausedPosition = nil
         generation += 1
         node.stop()
         playing = false
