@@ -58,6 +58,7 @@ struct HelpView: View {
                     HelpRow("Space", "Play or pause.")
                     HelpRow("⌘→  ⌘←", "Next and previous track.")
                     HelpRow("⌥⌘←  ⌥⌘→", "Back 15 seconds, forward 30. For audiobooks, radio plays, podcasts and tracks over 20 minutes the buttons sit beside Play, and Control Center and the media controls offer the jumps instead of previous and next. A track counts as spoken when it is an .m4b file or its genre says so (Audiobook, Hörbuch, Spoken Word, Podcast…).")
+                    HelpRow("", "Audiobooks go on where you left them, also after other music in between: Crate keeps the position of each such file (in a file next to the library index). Playing it again starts there, playing its album starts at the file heard last; a file heard to its end starts from the top next time.")
                     HelpRow("⇧⌘S", "Shuffle. Repeat is in the Playback menu.")
                     HelpRow("⌥⌘L", "Lyrics, when the track has them: an .lrc or .txt file with the track's name beside it or in a lyrics folder, or the lyrics in its tags. A timed .lrc follows the playback. The button appears in the player bar for such tracks.")
                     HelpRow("⌘U", "Up Next: what plays after this track, also behind the list icon in the player bar. Double-click plays an entry now, the × takes it out. Right-click a track or an album for Play Next and Play Last.")

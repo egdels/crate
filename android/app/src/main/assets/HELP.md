@@ -60,6 +60,11 @@ uploaded or changed.
   notification shows them in place of previous and next. A track counts
   as spoken when it is an `.m4b` file or its genre says so (Audiobook,
   Hörbuch, Spoken Word, Podcast…).
+- Audiobooks go on where you left them, also after other music in
+  between: Crate keeps the position of each such file, next to the
+  library index. Playing it again starts there, playing its album
+  starts at the file heard last; a file heard to its end starts from
+  the top next time.
 - Crate remembers where you stopped: the next launch comes up with the
   same queue, at the same spot, paused.
 - Lyrics: when a track has them, an icon appears next to the slider in

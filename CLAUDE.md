@@ -27,7 +27,7 @@ never sees it.
 
 ```sh
 swift build                    # whole package
-swift test                     # 147 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
+swift test                     # 152 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
 swift run crate-scan <folder>  # tag-reader check against real files, prints gaps
 swift run crate-scan <folder> --lyrics   # counts files with lyrics (USLT/SYLT, ©lyr, FLAC LYRICS, .lrc)
 swift run crate-scan <folder> --loudness # BS.1770 loudness, peak and gain per file, with the speed
@@ -67,7 +67,7 @@ Android, from `android/` (needs JDK 17+, Android SDK with platform 37;
 `ANDROID_HOME` is set on this machine, Gradle 9.7 via the wrapper):
 
 ```sh
-./gradlew :core:test             # 68 JVM tests, ~2 s
+./gradlew :core:test             # 73 JVM tests, ~2 s
 CRATE_MUSIC_DIRS=~/Music/Music/Media.localized ./gradlew :core:test --tests '*TagParserTest*' -i
                                  # also runs the MP3/MP4 parsers over real files (colon-separated dirs)
 ./gradlew :app:testDebugUnitTest # 4 JVM tests in the app module (GainProcessor), ~10 s
@@ -101,7 +101,8 @@ Sources/CrateCore/    UI-free library: Track, Album, LibraryScanner,
                       TrackLoudness, Loudness, LoudnessStore + JSON impl,
                       LoudnessAnalyzer; AVAudioFile decoding),
                       PracticeSettings (+PracticeBook, PracticeStore,
-                      JSON impl), Waveform
+                      JSON impl), Waveform, Skip, Bookmarks
+                      (+BookmarksStore, JSON impl)
 Sources/Crate/        SwiftUI app: CrateApp, PlayerModel (@Observable,
                       the only UI state), ContentView (album grid + track
                       list + empty state), PlayerBar
@@ -725,6 +726,27 @@ ExoPlayer) in the back/forward slots, which replaces previous and next
 there; those go through ExoPlayer's own seek, not `Skip.target`.
 Verified on the Pixel_9a emulator (bar, notification both ways, 5 s in
 a loop) and on this Mac (bar, menus, end of queue).
+Bookmarks (both apps, 2026-10-29): where each audiobook was left,
+`bookmarks.json` next to the index (same layout on both: track id ->
+position and `saved`, seconds since 1970), only for `Skip.isOffered`
+tracks, capped at 1000. A position under 5 s removes the mark (else the
+last file of a finished book, reloaded at 0, became the album's newest
+mark); one in the last 10 s does not resume, and `resumeIndex` then
+picks the next file. Played to the end = `finish`. Applied only when
+playback is started deliberately: `play(album:)` without an index
+(tile, toolbar Play, context menu) starts at `resumeIndex`, any
+`play(tracks:startingAt:)` (a row, Finder/"open with") at the file's
+mark; Next, auto-advance and Up Next start files at 0. Mac: the model
+sets the mark on every tick and in `savePlayback`, writes only when
+changed, `loadCurrent(autoplay:at:)` seeks before playing. Android:
+`PlaybackService` sets the marks (every 10 s while playing, on pause,
+on seeks incl. the old item's position on a skip, `finish` on
+AUTO_TRANSITION and STATE_ENDED, on destroy) into `SharedBookmarks`,
+which ignores updates until loaded so an empty value never overwrites
+the file; the view model passes the start position to
+`setMediaItems`. Verified on the emulator (mark written, song between,
+resumed at the mark, cleared when skipped past the end) and on this
+Mac (same through Finder opens).
 
 **Open, in no fixed order:**
 

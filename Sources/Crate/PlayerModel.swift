@@ -111,6 +111,11 @@ final class PlayerModel: ObservableObject {
     @Published private(set) var analysisProgress: LoudnessAnalyzer.Progress?
     private let lyricsSource: any LyricsSource
     private let practiceStore: any PracticeStore
+    private let bookmarksStore: any BookmarksStore
+    /// Where each audiobook was left; set while it plays, written with
+    /// the playback state.
+    private var bookmarks = Bookmarks()
+    private var savedBookmarks = Bookmarks()
     private var practiceBook = PracticeBook()
     private var practiceSaveTask: Task<Void, Never>?
     private var waveformTask: Task<Void, Never>?
@@ -127,9 +132,10 @@ final class PlayerModel: ObservableObject {
     init(
         library: Library, player: any AudioPlayer, artwork: ArtworkCache, favorites: any FavoritesStore,
         playback: any PlaybackStateStore, history: any HistoryStore, loudness: any LoudnessStore,
-        practice: any PracticeStore, lyrics: any LyricsSource = FileLyricsSource()
+        practice: any PracticeStore, bookmarks: any BookmarksStore, lyrics: any LyricsSource = FileLyricsSource()
     ) {
         self.practiceStore = practice
+        self.bookmarksStore = bookmarks
         self.library = library
         self.player = player
         self.artworkCache = artwork
@@ -161,13 +167,16 @@ final class PlayerModel: ObservableObject {
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("crate-loudness.json")
         let practiceURL = (try? JSONPracticeStore.defaultFileURL(appName: "Crate"))
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("crate-practice.json")
+        let bookmarksURL = (try? JSONBookmarksStore.defaultFileURL(appName: "Crate"))
+            ?? FileManager.default.temporaryDirectory.appendingPathComponent("crate-bookmarks.json")
         let model = PlayerModel(
             library: library, player: AVAudioEngineBackend(), artwork: artwork,
             favorites: JSONFavoritesStore(fileURL: favoritesURL),
             playback: JSONPlaybackStateStore(directory: playbackDirectory),
             history: JSONHistoryStore(fileURL: historyURL),
             loudness: JSONLoudnessStore(fileURL: loudnessURL),
-            practice: JSONPracticeStore(fileURL: practiceURL))
+            practice: JSONPracticeStore(fileURL: practiceURL),
+            bookmarks: JSONBookmarksStore(fileURL: bookmarksURL))
         model.nowPlaying = NowPlaying(model: model)
         return model
     }
@@ -349,6 +358,8 @@ final class PlayerModel: ObservableObject {
                     favorites = try favoritesStore.load() ?? Favorites()
                     history = try historyStore.load() ?? History()
                     practiceBook = try practiceStore.load() ?? PracticeBook()
+                    bookmarks = try bookmarksStore.load() ?? Bookmarks()
+                    savedBookmarks = bookmarks
                     await refresh()
                 } catch {
                     lastError = "Could not load the library: \(error.localizedDescription)"
@@ -459,6 +470,8 @@ final class PlayerModel: ObservableObject {
         try? historyStore.save(history)
         practiceBook.removeAll(under: url)
         try? practiceStore.save(practiceBook)
+        bookmarks.removeAll(under: url)
+        saveBookmarks()
         analysisTask?.cancel()
         await loudnessAnalyzer.removeAll(under: url)
         loudness = await loudnessAnalyzer.load()
@@ -581,10 +594,11 @@ final class PlayerModel: ObservableObject {
 
     // MARK: - Playback
 
-    /// Queues the album and starts at the given track.
-    func play(album: Album, startingAt index: Int = 0) {
+    /// Queues the album and starts at the given track; without one, an
+    /// audiobook starts at the file heard last, else at the first.
+    func play(album: Album, startingAt index: Int? = nil) {
         selection = .album(album.id)
-        play(tracks: album.tracks, startingAt: index, asAlbum: true)
+        play(tracks: album.tracks, startingAt: index ?? bookmarks.resumeIndex(in: album.tracks) ?? 0, asAlbum: true)
     }
 
     /// Queues the given tracks and starts at the given one. `asAlbum`
@@ -595,7 +609,8 @@ final class PlayerModel: ObservableObject {
         queueIsAlbum = asAlbum
         queueAlbumMean = asAlbum ? ReplayGain.albumMean(tracks) : nil
         queueAlbumGain = asAlbum ? loudness.albumGain(for: tracks) : nil
-        loadCurrent(autoplay: true)
+        // An audiobook goes on where it was left.
+        loadCurrent(autoplay: true, at: current.flatMap(bookmarks.position) ?? 0)
     }
 
     private var queueIsAlbum = false
@@ -731,6 +746,7 @@ final class PlayerModel: ObservableObject {
         case .position(let time):
             seek(to: time)
         case .nextTrack:
+            if let current { bookmarks.finish(current) }
             if queue.hasNext { next() } else { trackFinished() }
         }
     }
@@ -752,7 +768,7 @@ final class PlayerModel: ObservableObject {
         return reported > 0 ? reported : (current?.duration ?? 0)
     }
 
-    private func loadCurrent(autoplay: Bool) {
+    private func loadCurrent(autoplay: Bool, at position: TimeInterval = 0) {
         guard let track = current else {
             stop()
             return
@@ -762,6 +778,10 @@ final class PlayerModel: ObservableObject {
             currentTime = 0
             lastError = nil
             applyPractice(for: track)
+            if position > 0 {
+                player.seek(to: position)
+                currentTime = player.currentTime
+            }
             loadArtwork(for: track)
             loadLyrics(for: track)
             if autoplay {
@@ -815,6 +835,7 @@ final class PlayerModel: ObservableObject {
     }
 
     private func trackFinished() {
+        if let current { bookmarks.finish(current) }
         if queue.advance() != nil {
             loadCurrent(autoplay: true)
         } else {
@@ -858,6 +879,7 @@ final class PlayerModel: ObservableObject {
     private func tick() {
         guard isPlaying else { return }
         currentTime = player.currentTime
+        if let current { bookmarks.set(current, at: currentTime) }
         if Date().timeIntervalSince(lastSave) >= 10 {
             savePlayback()
         }
@@ -1003,6 +1025,8 @@ final class PlayerModel: ObservableObject {
     /// playback; the store rewrites the queue only when it changed.
     func savePlayback() {
         lastSave = Date()
+        if let current { bookmarks.set(current, at: currentTime) }
+        saveBookmarks()
         do {
             guard let currentEntry = queue.currentEntry,
                   let index = queue.entries.firstIndex(where: { $0.id == currentEntry.id }) else {
@@ -1014,6 +1038,18 @@ final class PlayerModel: ObservableObject {
                 position: currentTime, isShuffled: queue.isShuffled, repeatMode: queue.repeatMode))
         } catch {
             // Nothing the user can act on; the next launch starts fresh.
+        }
+    }
+
+    /// Writes `bookmarks.json` when a mark changed: songs alone leave it
+    /// untouched.
+    private func saveBookmarks() {
+        guard bookmarks != savedBookmarks else { return }
+        do {
+            try bookmarksStore.save(bookmarks)
+            savedBookmarks = bookmarks
+        } catch {
+            // Nothing the user can act on; the next save tries again.
         }
     }
 

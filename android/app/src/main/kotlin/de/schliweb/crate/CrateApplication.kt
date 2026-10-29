@@ -5,6 +5,7 @@ package de.schliweb.crate
 
 import android.app.Application
 import de.schliweb.crate.core.FileWaveformCache
+import de.schliweb.crate.core.JsonBookmarksStore
 import de.schliweb.crate.core.JsonFavoritesStore
 import de.schliweb.crate.core.JsonHistoryStore
 import de.schliweb.crate.core.JsonLoudnessStore
@@ -57,6 +58,10 @@ class CrateApplication : Application() {
 
     /** What was played, newest first, for the Recently Played tile. */
     val history: SharedHistory by lazy { SharedHistory(JsonHistoryStore(File(filesDir, "history.json"))) }
+
+    /** Where each audiobook was left, in `bookmarks.json`; the playback
+     *  service sets the marks, the view model starts books there. */
+    val bookmarks: SharedBookmarks by lazy { SharedBookmarks(JsonBookmarksStore(File(filesDir, "bookmarks.json"))) }
 
     /** The measured loudness of files without ReplayGain tags, in
      *  `loudness.json`; the media items read the gains. */

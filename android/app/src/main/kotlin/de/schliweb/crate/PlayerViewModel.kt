@@ -211,6 +211,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 app.favorites.load()
                 app.history.load()
                 app.practice.load()
+                app.bookmarks.load()
                 val t1 = System.currentTimeMillis()
                 refresh()
                 Log.i(TAG, "load: ${tracks.size} tracks, read ${t1 - t0} ms, grouped ${System.currentTimeMillis() - t1} ms")
@@ -364,6 +365,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             notice = "Removed ${folder.name}"
             app.favorites.update { it.removeAllUnder(folder.path) }
             app.history.update { it.removeAllUnder(folder.path) }
+            app.bookmarks.update { it.removeAllUnder(folder.path) }
             app.practice.update { it.removeAllUnder(folder.path) }
             app.cancelAnalysis()
             withContext(Dispatchers.IO) { app.loudness.removeAllUnder(folder.path) }
@@ -702,10 +704,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch { block(controllerReady.await()) }
     }
 
-    /** Queues the album and starts at the given track. */
-    fun play(album: Album, index: Int = 0) {
+    /** Queues the album and starts at the given track; without one, an
+     *  audiobook starts at the file heard last, else at the first. */
+    fun play(album: Album, index: Int? = null) {
         selection = Selection.AlbumId(album.id)
-        play(album.tracks, index, asAlbum = true)
+        play(album.tracks, index ?: app.bookmarks.current.resumeIndex(album.tracks) ?: 0, asAlbum = true)
     }
 
     /** Queues the given tracks and starts at the given one. [asAlbum]
@@ -716,8 +719,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val items = mediaItems(app, tracks, albums, asAlbum)
         queued = tracks.associateBy { it.id }
         queueIsAlbum = asAlbum
+        val start = index.coerceIn(0, items.size - 1)
+        // An audiobook goes on where it was left.
+        val position = app.bookmarks.current.position(tracks[start]) ?: 0.0
         withController { controller ->
-            controller.setMediaItems(items, index.coerceIn(0, items.size - 1), 0L)
+            controller.setMediaItems(items, start, (position * 1000).toLong())
             controller.prepare()
             controller.play()
         }

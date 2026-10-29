@@ -17,6 +17,11 @@ version's section from this file as the GitHub release notes.
   Mac: ⌥⌘← ⌥⌘→ for every track. The practice panel and sheet have
   jumps of 5 seconds (Mac: ⇧⌥⌘← ⇧⌥⌘→), which stay inside a loop that
   is on.
+- Audiobooks go on where you left them: for the same tracks, Crate
+  keeps the position per file in `bookmarks.json`. Playing the file
+  again starts there, playing its album starts at the file heard last,
+  and a file heard to its end starts from the top next time. Songs are
+  not affected.
 
 ### Fixed
 

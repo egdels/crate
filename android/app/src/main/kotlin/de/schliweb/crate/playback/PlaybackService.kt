@@ -38,6 +38,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import de.schliweb.crate.CrateApplication
 import de.schliweb.crate.MainActivity
+import de.schliweb.crate.SharedBookmarks
 import de.schliweb.crate.SharedFavorites
 import de.schliweb.crate.SharedPractice
 import de.schliweb.crate.core.PracticeLoop
@@ -48,7 +49,9 @@ import de.schliweb.crate.library.ArtworkCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.guava.future
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -98,6 +101,9 @@ class PlaybackService : MediaSessionService() {
     private val gain = GainProcessor()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val favorites: SharedFavorites get() = (application as CrateApplication).favorites
+    private val bookmarks: SharedBookmarks get() = (application as CrateApplication).bookmarks
+    /** Sets the playing audiobook's mark every ten seconds. */
+    private var bookmarkJob: Job? = null
     private val practice: SharedPractice get() = (application as CrateApplication).practice
     private var loopMessage: PlayerMessage? = null
     /** The item id and loop the message stands for. */
@@ -154,9 +160,36 @@ class PlaybackService : MediaSessionService() {
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) recordPlay(player)
+                bookmarkJob?.cancel()
+                if (isPlaying) {
+                    bookmarkJob = scope.launch {
+                        while (true) {
+                            delay(BOOKMARK_INTERVAL_MS)
+                            mark(player.currentMediaItem, player.currentPosition)
+                        }
+                    }
+                } else {
+                    mark(player.currentMediaItem, player.currentPosition)
+                }
+            }
+
+            override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+                when (reason) {
+                    // Played to its end: done, the next time it starts from the top.
+                    Player.DISCONTINUITY_REASON_AUTO_TRANSITION -> finishMark(oldPosition.mediaItem)
+                    Player.DISCONTINUITY_REASON_SEEK, Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT -> {
+                        if (oldPosition.mediaItemIndex != newPosition.mediaItemIndex) mark(oldPosition.mediaItem, oldPosition.positionMs)
+                        mark(newPosition.mediaItem, newPosition.positionMs)
+                    }
+                }
+            }
+
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_ENDED) finishMark(player.currentMediaItem)
             }
         })
         scope.launch { (application as CrateApplication).history.load() }
+        scope.launch { bookmarks.load() }
         val openApp = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
@@ -208,6 +241,18 @@ class PlaybackService : MediaSessionService() {
             .setPosition(player.currentMediaItemIndex, end)
             .setDeleteAfterDelivery(false)
             .send()
+    }
+
+    /** An audiobook's place: the mark for a spoken or long track, nothing
+     *  for a song (`Bookmarks.set` decides). */
+    private fun mark(item: MediaItem?, positionMs: Long) {
+        val track = item?.mediaId?.let { (application as CrateApplication).library.track(it) } ?: return
+        bookmarks.update { it.set(track, positionMs.coerceAtLeast(0) / 1000.0) }
+    }
+
+    private fun finishMark(item: MediaItem?) {
+        val track = item?.mediaId?.let { (application as CrateApplication).library.track(it) } ?: return
+        bookmarks.update { it.finish(track) }
     }
 
     /** The id the history was last told about, so a track counts once
@@ -362,11 +407,14 @@ class PlaybackService : MediaSessionService() {
 
         /** The notification's heart: toggles the current track's favorite. */
         const val COMMAND_TOGGLE_FAVORITE = "de.schliweb.crate.toggle_favorite"
+
+        private const val BOOKMARK_INTERVAL_MS = 10_000L
     }
 
     override fun onDestroy() {
         scope.cancel()
         session?.run {
+            mark(player.currentMediaItem, player.currentPosition)
             player.release()
             release()
         }
