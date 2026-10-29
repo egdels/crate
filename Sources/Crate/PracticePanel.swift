@@ -20,6 +20,7 @@ struct PracticePanel: View {
                 key.fixedSize()
                 tuning.fixedSize()
                 Spacer(minLength: 0)
+                skips.fixedSize()
                 loop.fixedSize()
                 Button { model.resetSound() } label: { Image(systemName: "arrow.counterclockwise") }
                     .buttonStyle(.borderless)
@@ -84,6 +85,17 @@ struct PracticePanel: View {
             StepButton(systemImage: "plus", help: "Tune Up a Cent (⇧⌥⌘↑)") { model.tune(by: 1) }
                 .disabled(model.practice.cents >= PracticeSettings.centRange.upperBound)
         }
+    }
+
+    /// Short jumps, a bar or two; inside a playing loop they stay in it.
+    private var skips: some View {
+        HStack(spacing: 6) {
+            Button { model.skip(by: -Skip.practiceStep) } label: { Image(systemName: "gobackward.5") }
+                .help("Back 5 Seconds (⇧⌥⌘←)")
+            Button { model.skip(by: Skip.practiceStep) } label: { Image(systemName: "goforward.5") }
+                .help("Forward 5 Seconds (⇧⌥⌘→)")
+        }
+        .buttonStyle(.borderless)
     }
 
     private var loop: some View {

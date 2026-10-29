@@ -42,6 +42,7 @@ import de.schliweb.crate.SharedFavorites
 import de.schliweb.crate.SharedPractice
 import de.schliweb.crate.core.PracticeLoop
 import de.schliweb.crate.core.ReplayGain
+import de.schliweb.crate.core.Skip
 import de.schliweb.crate.core.Track
 import de.schliweb.crate.library.ArtworkCache
 import kotlinx.coroutines.CoroutineScope
@@ -122,6 +123,9 @@ class PlaybackService : MediaSessionService() {
                     .build(),
                 true,
             )
+            // The notification's jumps for audiobooks (`updateButtons`).
+            .setSeekBackIncrementMs((Skip.BACK * 1000).toLong())
+            .setSeekForwardIncrementMs((Skip.FORWARD * 1000).toLong())
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
@@ -143,7 +147,7 @@ class PlaybackService : MediaSessionService() {
         })
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                updateHeart()
+                updateButtons()
                 recordPlay(player)
                 applyPractice(player)
             }
@@ -165,7 +169,7 @@ class PlaybackService : MediaSessionService() {
             .build()
         scope.launch {
             favorites.load()
-            favorites.state.collect { updateHeart() }
+            favorites.state.collect { updateButtons() }
         }
         scope.launch {
             practice.load()
@@ -219,17 +223,34 @@ class PlaybackService : MediaSessionService() {
         (application as CrateApplication).history.update { it.record(id) }
     }
 
-    /** The notification's heart, filled when the current track has one. */
-    private fun updateHeart() {
+    /** The notification's heart, filled when the current track has one,
+     *  and for audiobooks and long tracks the jumps in place of previous
+     *  and next, as Apple's players do. */
+    private fun updateButtons() {
         val session = session ?: return
         val id = session.player.currentMediaItem?.mediaId
-        session.setMediaButtonPreferences(listOf(heartButton(id != null && id in favorites.current.ids)))
+        val heart = heartButton(id != null && id in favorites.current.ids)
+        val track = id?.let { (application as CrateApplication).library.track(it) }
+        session.setMediaButtonPreferences(if (track != null && Skip.isOffered(track)) listOf(skipBack, skipForward, heart) else listOf(heart))
     }
+
+    private val skipBack = CommandButton.Builder(CommandButton.ICON_SKIP_BACK_15)
+        .setDisplayName("Back 15 seconds")
+        .setPlayerCommand(Player.COMMAND_SEEK_BACK)
+        .setSlots(CommandButton.SLOT_BACK)
+        .build()
+
+    private val skipForward = CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_30)
+        .setDisplayName("Forward 30 seconds")
+        .setPlayerCommand(Player.COMMAND_SEEK_FORWARD)
+        .setSlots(CommandButton.SLOT_FORWARD)
+        .build()
 
     private fun heartButton(on: Boolean): CommandButton =
         CommandButton.Builder(if (on) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
             .setDisplayName(if (on) "Remove from favorites" else "Add to favorites")
             .setSessionCommand(SessionCommand(COMMAND_TOGGLE_FAVORITE, Bundle.EMPTY))
+            .setSlots(CommandButton.SLOT_OVERFLOW)
             .build()
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session

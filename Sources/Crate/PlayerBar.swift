@@ -11,10 +11,19 @@ struct PlayerBar: View {
         HStack(spacing: 16) {
             HStack(spacing: 8) {
                 Button { model.previous() } label: { Image(systemName: "backward.fill") }
+                // Audiobooks and long tracks: the jumps around Play.
+                if model.offersSkips {
+                    Button { model.skip(by: -Skip.back) } label: { Image(systemName: "gobackward.15") }
+                        .help("Back 15 Seconds (⌥⌘←)")
+                }
                 Button { model.togglePlayPause() } label: {
                     Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
                         .font(.title2)
                         .frame(width: 28)
+                }
+                if model.offersSkips {
+                    Button { model.skip(by: Skip.forward) } label: { Image(systemName: "goforward.30") }
+                        .help("Forward 30 Seconds (⌥⌘→)")
                 }
                 Button { model.next() } label: { Image(systemName: "forward.fill") }
             }

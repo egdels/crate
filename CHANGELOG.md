@@ -7,6 +7,17 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+### Added
+
+- Jumps: back 15 seconds and forward 30. For audiobooks, radio plays,
+  podcasts and tracks over 20 minutes (an `.m4b` file, a genre such as
+  Audiobook, Hörbuch or Spoken Word, or the length) the buttons appear
+  in the player bar, and Control Center (Mac) and the media
+  notification (Android) offer them in place of previous and next.
+  Mac: ⌥⌘← ⌥⌘→ for every track. The practice panel and sheet have
+  jumps of 5 seconds (Mac: ⇧⌥⌘← ⇧⌥⌘→), which stay inside a loop that
+  is on.
+
 ### Fixed
 
 - Mac: Crate > Use Crate for Audio Files now also takes over `.m4b`

@@ -43,6 +43,7 @@ import de.schliweb.crate.library.MediaCodecAudio
 import de.schliweb.crate.core.ScannedFile
 import de.schliweb.crate.core.SearchIndex
 import de.schliweb.crate.core.SearchQuery
+import de.schliweb.crate.core.Skip
 import de.schliweb.crate.core.Track
 import de.schliweb.crate.core.countText
 import de.schliweb.crate.core.recentlyAdded
@@ -810,6 +811,30 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun seek(seconds: Double) {
         currentTime = seconds
         withController { it.seekTo((seconds * 1000).toLong()) }
+    }
+
+    /** Whether the player bar shows the jumps for the track playing. */
+    val offersSkips: Boolean get() = current?.let(Skip::isOffered) ?: false
+
+    /** Jumps by some seconds (negative: back), never out of a playing
+     *  loop; past the end, on to the next track, or at the end of the
+     *  playlist back to the top of this one, paused, like the Mac. */
+    fun skip(seconds: Double) = withController { controller ->
+        if (controller.currentMediaItem == null) return@withController
+        val time = controller.currentPosition.coerceAtLeast(0) / 1000.0
+        when (val target = Skip.target(time, seconds, duration, practice.activeLoop)) {
+            is Skip.Target.Position -> {
+                currentTime = target.seconds
+                controller.seekTo((target.seconds * 1000).toLong())
+            }
+            Skip.Target.NextTrack ->
+                if (controller.hasNextMediaItem()) {
+                    controller.seekToNextMediaItem()
+                } else {
+                    controller.pause()
+                    controller.seekTo(0)
+                }
+        }
     }
 
     fun setShuffle(on: Boolean) {

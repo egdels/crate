@@ -55,6 +55,11 @@ uploaded or changed.
 - The notification, the lock screen and headphone buttons control
   playback, and the notification has the heart too; the music keeps
   playing when the app is in the background.
+- Audiobooks, radio plays, podcasts and tracks over 20 minutes get
+  jumps beside the slider: back 15 seconds, forward 30. The
+  notification shows them in place of previous and next. A track counts
+  as spoken when it is an `.m4b` file or its genre says so (Audiobook,
+  Hörbuch, Spoken Word, Podcast…).
 - Crate remembers where you stopped: the next launch comes up with the
   same queue, at the same spot, paused.
 - Lyrics: when a track has them, an icon appears next to the slider in
@@ -69,7 +74,8 @@ uploaded or changed.
   track does not play as recorded: another tempo, key or tuning, or a
   loop that is on.
 - The wave at the top shows the track; tap it to jump there, drag
-  across it to loop that passage.
+  across it to loop that passage. The round arrows under it jump 5
+  seconds back or on; inside a loop that is on, they stay in the loop.
 - Tempo from 50 to 200 % (the key stays), key up to an octave down or
   up in semitones (the tempo stays), and tuning up to 50 cents either
   way, for a recording that is not at A = 440 Hz or an instrument that

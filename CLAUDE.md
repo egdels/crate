@@ -27,7 +27,7 @@ never sees it.
 
 ```sh
 swift build                    # whole package
-swift test                     # 144 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
+swift test                     # 147 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
 swift run crate-scan <folder>  # tag-reader check against real files, prints gaps
 swift run crate-scan <folder> --lyrics   # counts files with lyrics (USLT/SYLT, ©lyr, FLAC LYRICS, .lrc)
 swift run crate-scan <folder> --loudness # BS.1770 loudness, peak and gain per file, with the speed
@@ -67,7 +67,7 @@ Android, from `android/` (needs JDK 17+, Android SDK with platform 37;
 `ANDROID_HOME` is set on this machine, Gradle 9.7 via the wrapper):
 
 ```sh
-./gradlew :core:test             # 65 JVM tests, ~2 s
+./gradlew :core:test             # 68 JVM tests, ~2 s
 CRATE_MUSIC_DIRS=~/Music/Music/Media.localized ./gradlew :core:test --tests '*TagParserTest*' -i
                                  # also runs the MP3/MP4 parsers over real files (colon-separated dirs)
 ./gradlew :app:testDebugUnitTest # 4 JVM tests in the app module (GainProcessor), ~10 s
@@ -707,6 +707,24 @@ the wave only when opened, tempo reaches the media session, icon
 tinted); Practizer's own checks of 2026-10-21 cover the rest of the
 Android controls. Not yet checked by hand on the Mac: dragging in the
 wave, the shortcuts; by ear on either: pitch quality, Android's loop gap.
+
+Jumps (both apps, 2026-10-29): `Skip` in the core (Swift and Kotlin)
+holds the rules: back 15 s, forward 30 s, 5 s in the practice panel;
+`isOffered` (an .m4b, a spoken-word genre folded and matched by part,
+or 20 minutes and longer, no Track field) decides whether the player bar
+shows the buttons; `target` keeps a jump inside a playing loop it starts
+in (up to 1 s before B) and past the end goes on as if the track had
+finished. Mac: buttons around Play, Playback menu ⌥⌘← ⌥⌘→ (every
+track), Practice menu ⇧⌥⌘← ⇧⌥⌘→, and `skipBackward`/`skipForward` in
+`NowPlaying` switched on only for offered tracks. Android: buttons on
+either side of the seek slider (beside previous/next the title had no
+room on a phone), drawn by `SkipIcon` (Material has no "replay 15");
+the notification gets `ICON_SKIP_BACK_15`/`ICON_SKIP_FORWARD_30` player
+command buttons (`COMMAND_SEEK_BACK/FORWARD`, increments set on the
+ExoPlayer) in the back/forward slots, which replaces previous and next
+there; those go through ExoPlayer's own seek, not `Skip.target`.
+Verified on the Pixel_9a emulator (bar, notification both ways, 5 s in
+a loop) and on this Mac (bar, menus, end of queue).
 
 **Open, in no fixed order:**
 

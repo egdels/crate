@@ -48,6 +48,23 @@ final class NowPlaying {
             model.seek(to: event.positionTime)
             return .success
         }
+        // The jumps, for audiobooks and long tracks only (`update`
+        // switches them): where they are on, the system shows them
+        // instead of previous and next.
+        commands.skipBackwardCommand.preferredIntervals = [NSNumber(value: Skip.back)]
+        commands.skipForwardCommand.preferredIntervals = [NSNumber(value: Skip.forward)]
+        commands.skipBackwardCommand.addTarget { [weak model] event in
+            guard let model, model.current != nil,
+                  let event = event as? MPSkipIntervalCommandEvent else { return .noActionableNowPlayingItem }
+            model.skip(by: -event.interval)
+            return .success
+        }
+        commands.skipForwardCommand.addTarget { [weak model] event in
+            guard let model, model.current != nil,
+                  let event = event as? MPSkipIntervalCommandEvent else { return .noActionableNowPlayingItem }
+            model.skip(by: event.interval)
+            return .success
+        }
         for command in [commands.seekForwardCommand, commands.seekBackwardCommand, commands.stopCommand] {
             command.isEnabled = false
         }
@@ -57,6 +74,9 @@ final class NowPlaying {
         track: Track?, artwork: CGImage?, duration: TimeInterval, position: TimeInterval, isPlaying: Bool,
         tempo: Double = 1
     ) {
+        let skips = track.map(Skip.isOffered) ?? false
+        commands.skipBackwardCommand.isEnabled = skips
+        commands.skipForwardCommand.isEnabled = skips
         guard let track else {
             center.nowPlayingInfo = nil
             center.playbackState = .stopped

@@ -720,6 +720,21 @@ final class PlayerModel: ObservableObject {
         savePlayback()
     }
 
+    /// Whether the player bar shows the jumps for the track playing.
+    var offersSkips: Bool { current.map(Skip.isOffered) ?? false }
+
+    /// Jumps by some seconds (negative: back), never out of a playing
+    /// loop; past the end, on as if the track had finished.
+    func skip(by seconds: TimeInterval) {
+        guard current != nil else { return }
+        switch Skip.target(from: player.currentTime, by: seconds, duration: duration, loop: practice.activeLoop) {
+        case .position(let time):
+            seek(to: time)
+        case .nextTrack:
+            if queue.hasNext { next() } else { trackFinished() }
+        }
+    }
+
     func setShuffle(_ on: Bool) {
         queue.setShuffle(on)
         preloadNext()

@@ -132,6 +132,14 @@ struct CrateCommands: Commands {
             Button("Previous") { model.previous() }
                 .keyboardShortcut(.leftArrow, modifiers: .command)
                 .disabled(!state.hasCurrent)
+            // For every track, while the bar shows the buttons only for
+            // audiobooks and long ones.
+            Button("Back 15 Seconds") { model.skip(by: -Skip.back) }
+                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                .disabled(!state.hasCurrent)
+            Button("Forward 30 Seconds") { model.skip(by: Skip.forward) }
+                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                .disabled(!state.hasCurrent)
             Divider()
             Toggle("Shuffle", isOn: Binding(get: { state.isShuffled }, set: { model.setShuffle($0) }))
                 .keyboardShortcut("s", modifiers: [.command, .shift])
@@ -183,6 +191,11 @@ struct CrateCommands: Commands {
                 Button("Back to the Recording") { model.resetSound() }
                     .keyboardShortcut("0")
                     .disabled(!state.changesSound)
+                Divider()
+                Button("Back 5 Seconds") { model.skip(by: -Skip.practiceStep) }
+                    .keyboardShortcut(.leftArrow, modifiers: [.command, .option, .shift])
+                Button("Forward 5 Seconds") { model.skip(by: Skip.practiceStep) }
+                    .keyboardShortcut(.rightArrow, modifiers: [.command, .option, .shift])
                 Divider()
                 Button("Loop Starts Here") { model.setLoopStart() }
                     .keyboardShortcut("1")

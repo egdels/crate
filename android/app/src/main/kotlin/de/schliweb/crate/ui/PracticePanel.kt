@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.sp
 import de.schliweb.crate.PlayerViewModel
 import de.schliweb.crate.core.PracticeLoop
 import de.schliweb.crate.core.PracticeSettings
+import de.schliweb.crate.core.Skip
 import de.schliweb.crate.core.timeText
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -171,6 +172,14 @@ fun PracticeSheet(model: PlayerViewModel, onDismiss: () -> Unit) {
                 WaveformBar(model, Modifier.fillMaxWidth().height(64.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(timeText(model.currentTime), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.weight(1f))
+                    // A bar or two back or on; inside a playing loop they stay in it.
+                    IconButton(onClick = { model.skip(-Skip.PRACTICE_STEP) }) {
+                        SkipIcon(Skip.PRACTICE_STEP, forward = false, description = "Back 5 seconds")
+                    }
+                    IconButton(onClick = { model.skip(Skip.PRACTICE_STEP) }) {
+                        SkipIcon(Skip.PRACTICE_STEP, forward = true, description = "Forward 5 seconds")
+                    }
                     Spacer(Modifier.weight(1f))
                     Text(timeText(model.duration), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -62,6 +63,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
@@ -75,6 +77,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
@@ -108,6 +111,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -118,6 +122,7 @@ import de.schliweb.crate.PlayerViewModel.Selection
 import de.schliweb.crate.core.Album
 import de.schliweb.crate.core.Lyrics
 import de.schliweb.crate.core.SearchQuery
+import de.schliweb.crate.core.Skip
 import de.schliweb.crate.core.Track
 import de.schliweb.crate.core.countText
 import de.schliweb.crate.core.lengthText
@@ -893,10 +898,17 @@ private fun Transport(model: PlayerViewModel, track: Track) {
 }
 
 /** Position, the seek slider and the length. The wave with the loop is
- *  in the practice sheet. */
+ *  in the practice sheet. Audiobooks and long tracks get the jumps on
+ *  either side; beside previous and next they did not fit a phone. */
 @Composable
 private fun WaveRow(model: PlayerViewModel, modifier: Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        val skips = model.offersSkips
+        if (skips) {
+            IconButton(onClick = { model.skip(-Skip.BACK) }, modifier = Modifier.size(36.dp)) {
+                SkipIcon(Skip.BACK, forward = false, description = "Back 15 seconds", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         val duration = model.duration
         Text(timeText(model.currentTime), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Slider(
@@ -906,6 +918,28 @@ private fun WaveRow(model: PlayerViewModel, modifier: Modifier) {
             modifier = Modifier.weight(1f),
         )
         Text(timeText(model.duration), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (skips) {
+            IconButton(onClick = { model.skip(Skip.FORWARD) }, modifier = Modifier.size(36.dp)) {
+                SkipIcon(Skip.FORWARD, forward = true, description = "Forward 30 seconds", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+/** The round arrow with the seconds in it. Material has no "replay 15",
+ *  so every jump is drawn the same way: the replay arrow, mirrored for
+ *  forward, and the number. */
+@Composable
+fun SkipIcon(seconds: Double, forward: Boolean, description: String, tint: Color = LocalContentColor.current) {
+    Box(contentAlignment = Alignment.Center) {
+        Icon(
+            Icons.Default.Replay, contentDescription = description, tint = tint,
+            modifier = if (forward) Modifier.graphicsLayer(scaleX = -1f) else Modifier,
+        )
+        Text(
+            "${seconds.toInt()}", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = tint,
+            modifier = Modifier.offset(y = 1.5.dp),
+        )
     }
 }
 
