@@ -7,6 +7,8 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-01
+
 ### Changed
 
 - Files Crate measures itself now play 2 dB louder: levelled to

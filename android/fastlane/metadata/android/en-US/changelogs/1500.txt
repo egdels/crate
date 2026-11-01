@@ -1,0 +1,4 @@
+- Music plays 2 dB louder: files Crate measures itself are levelled
+  to -16 LUFS instead of -18, which was too quiet on headphones.
+- Radio play and audiobook series sort by their numbers ("Folge 12",
+  "Band 3", "Vol. 2") instead of the year, which is often a reissue's.
