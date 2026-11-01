@@ -14,6 +14,11 @@ version's section from this file as the GitHub release notes.
   ReplayGain's -18, which left music too quiet on headphones. The peak
   still caps the gain, so nothing clips; nothing is measured again.
   Files with ReplayGain tags play as their tags say.
+- A numbered series sorts by its numbers instead of the year: radio
+  plays, audiobook series and "Vol. 1" to "Vol. 4" sets, where the
+  year is often that of a reissue (episode 36 used to come after 98).
+  Recognised from the titles alone ("Volume 36", "Folge 194", "Peter
+  Grant 4"), with no genre needed; other artists stay by year.
 
 ## [0.14.0] - 2026-10-29
 

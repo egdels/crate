@@ -20,7 +20,10 @@ uploaded or changed.
 - Tap an album to open it, then tap a track to play from there through
   the album. On a wide screen the album opens next to the grid.
 - Albums are sorted by artist, ignoring a leading "The" and following
-  the sort names in the tags when the files have them, then by year.
+  the sort names in the tags when the files have them, then by year. A
+  numbered series (a radio play with "Folge 12", an audiobook series
+  with "Band 3", "Vol. 1" to "Vol. 4") goes by its numbers instead,
+  since the year is often the edition's.
 - The play button in the bar plays the open album, or every track when
   All Tracks is open.
 - **All Tracks** lists everything; a tap plays from that row to the end

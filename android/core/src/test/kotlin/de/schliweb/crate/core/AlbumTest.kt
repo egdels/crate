@@ -5,6 +5,7 @@ package de.schliweb.crate.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class AlbumTest {
@@ -163,6 +164,54 @@ class AlbumTest {
             makeTrack("3", artist = "A", album = "Z"),
         )
         assertEquals(listOf("Z", "Early", "Late"), Album.group(tracks).map { it.title })
+    }
+
+    @Test
+    fun aNumberedSeriesSortsByItsNumbersNotTheEditionsYear() {
+        val tracks = listOf(
+            makeTrack("a", artist = "Die drei ???", album = "Die drei ??? Volume 98: Tal", year = 2001, folder = "/m/98"),
+            makeTrack("b", artist = "Die drei ???", album = "Die drei ??? Volume 36: Wal", year = 2010, folder = "/m/36"),
+            makeTrack("c", artist = "Die drei ???", album = "Die drei ??? Volume 3: Hund", year = 1979, folder = "/m/3"),
+            makeTrack("d", artist = "Die drei ???", album = "Folge 194: Zeitreisende", folder = "/m/194"),
+            makeTrack("e", artist = "Die drei ???", album = "Die drei ??? und der 5. Advent", year = 2012, folder = "/m/advent"),
+            makeTrack("f", artist = "Die drei ???", album = "Folge 120: Skorpion", year = 2005, folder = "/m/120"),
+        )
+        assertEquals(
+            listOf(
+                "Die drei ??? Volume 3: Hund", "Die drei ??? Volume 36: Wal", "Die drei ??? Volume 98: Tal",
+                "Folge 120: Skorpion", "Folge 194: Zeitreisende", "Die drei ??? und der 5. Advent",
+            ),
+            Album.group(tracks).map { it.title },
+        )
+    }
+
+    @Test
+    fun aNumberAtTheEndAndAnAbbreviationCountToo() {
+        val titles = listOf("Der böse Ort: Peter Grant 4", "Schwarzer Mond: Peter Grant 2", "Ein Wispern: Peter Grant 3")
+        assertEquals(listOf(4, 2, 3), Album.seriesNumbers(titles))
+        val beatles = listOf("Deluxe Vol. 1 (Disc 2)", "Deluxe Vol. 1 (Disc 1)", "Deluxe, Volume 2", "Deluxe Vol. 3", "White Album")
+        assertEquals(listOf(1, 1, 2, 3, null), Album.seriesNumbers(beatles))
+    }
+
+    @Test
+    fun numbersNowAndThenAreNoSeries() {
+        assertNull(Album.seriesNumbers(listOf("Calling Card", "Cologne 1990", "Japan Tour 74", "Jinx", "Blues Box CD 2")))
+        // Two numbered titles are too few, and one number repeated is a copy.
+        assertNull(Album.seriesNumbers(listOf("Vol. 1", "Vol. 2", "Blue")))
+        assertNull(Album.seriesNumbers(listOf("Band 1-4", "Band 1-4", "Band 1-4")))
+        val tracks = listOf(
+            makeTrack("1", artist = "B", album = "Live 1991", year = 1991, folder = "/m/1"),
+            makeTrack("2", artist = "B", album = "Hits Vol. 2", year = 1980, folder = "/m/2"),
+            makeTrack("3", artist = "B", album = "Blue", year = 1975, folder = "/m/3"),
+        )
+        assertEquals(listOf("Blue", "Hits Vol. 2", "Live 1991"), Album.group(tracks).map { it.title })
+    }
+
+    @Test
+    fun onlyFreeStandingNumbersCount() {
+        val found = Album.numberedWords("Die Dr3i 5: Das Haus der 1.000 Rätsel, CD 2, Teil 12345")
+        assertEquals(listOf("dr3i" to 5), found)
+        assertEquals(listOf("" to 1), Album.numberedWords("001 - Anfang"))
     }
 
     @Test

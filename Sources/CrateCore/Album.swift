@@ -72,7 +72,8 @@ public struct Album: Identifiable, Hashable, Sendable {
     }
 
     /// Groups by (folder, loosely compared album title) and sorts albums
-    /// by artist, then year, then title. `roots` are the watched folders:
+    /// by artist, then year, then title, or a numbered series by its
+    /// numbers (`sorted(_:)`). `roots` are the watched folders:
     /// an untagged album takes its artist from the parent folder's name,
     /// unless that parent is a root.
     public static func group(_ tracks: [Track], roots: [URL] = []) -> [Album] {
@@ -130,7 +131,7 @@ public struct Album: Identifiable, Hashable, Sendable {
         }
 
         let rootPaths = Set(roots.map { $0.standardizedFileURL.path.lowercased() })
-        return buckets.values.map { bucket in
+        return sorted(buckets.values.map { bucket in
             let parent = bucket.folder.deletingLastPathComponent()
             let insideRoot = !rootPaths.contains(bucket.folder.path.lowercased())
                 && !rootPaths.contains(parent.path.lowercased()) && parent.path != bucket.folder.path
@@ -143,8 +144,110 @@ public struct Album: Identifiable, Hashable, Sendable {
                 folder: bucket.folder,
                 tracks: bucket.tracks.sorted(by: trackOrder)
             )
+        })
+    }
+
+    // MARK: - Order
+
+    /// Sorted by artist; an artist's albums by year, then title. Unless
+    /// they form a numbered series (`seriesNumbers`): radio plays and
+    /// audiobook series carry the year of the edition, not of the
+    /// episode (a reissued episode 36 came after episode 98), so then
+    /// the number decides, ties by title, then year, and the albums
+    /// without a number follow by year and title. Decided without a
+    /// genre: in a real collection a big radio play series was tagged
+    /// with none.
+    static func sorted(_ albums: [Album]) -> [Album] {
+        let keyed = albums.map { (album: $0, artist: $0.sortArtist, title: $0.sortTitle) }
+            .sorted { $0.artist.localizedStandardCompare($1.artist) == .orderedAscending }
+        var result: [Album] = []
+        result.reserveCapacity(albums.count)
+        var start = 0
+        while start < keyed.count {
+            var end = start + 1
+            while end < keyed.count, keyed[end].artist.localizedStandardCompare(keyed[start].artist) == .orderedSame {
+                end += 1
+            }
+            let run = keyed[start..<end]
+            let numbers = seriesNumbers(run.map(\.title)) ?? Array(repeating: nil, count: run.count)
+            let ordered = zip(run, numbers).sorted { a, b in
+                switch (a.1, b.1) {
+                case let (x?, y?) where x != y: return x < y
+                case (_?, nil): return true
+                case (nil, _?): return false
+                case (_?, _?):
+                    let byTitle = a.0.title.localizedStandardCompare(b.0.title)
+                    if byTitle != .orderedSame { return byTitle == .orderedAscending }
+                    return (a.0.album.year ?? Int.max) < (b.0.album.year ?? Int.max)
+                case (nil, nil):
+                    let ya = a.0.album.year ?? Int.max, yb = b.0.album.year ?? Int.max
+                    if ya != yb { return ya < yb }
+                    return a.0.title.localizedStandardCompare(b.0.title) == .orderedAscending
+                }
+            }
+            result += ordered.map(\.0.album)
+            start = end
         }
-        .sorted(by: albumOrder)
+        return result
+    }
+
+    /// The episode number of each title when one artist's titles form a
+    /// numbered series, else nil. A number counts under the word in
+    /// front of it ("Volume 36", "Folge 194", "Peter Grant 4", "Staffel
+    /// 2"); a word is a series word when at least two titles carry it
+    /// with different numbers, so a title spelled "Volume" here and
+    /// "Folge" there still counts; a word and its abbreviation (three
+    /// letters or more: "Vol." and "Volume") are one word. A series needs three numbered titles
+    /// and two thirds of all. Not numbers: disc numbers ("CD 2"), digits
+    /// inside a word ("Dr3i"), parts of "1.000", anything over four
+    /// digits. Checked against a real collection: it took five radio
+    /// play and audiobook series and three "Vol. 1-4" sets, and no
+    /// artist whose albums only now and then carry a number.
+    static func seriesNumbers(_ titles: [String]) -> [Int?]? {
+        var found = titles.map(numberedWords)
+        let words = Set(found.flatMap { $0.map(\.word) })
+        let short = words.filter { $0.count >= 3 }.sorted { $0.count < $1.count }
+        found = found.map { list in
+            list.map { entry in (short.first { entry.word.hasPrefix($0) } ?? entry.word, entry.number) }
+        }
+        var titlesWith: [String: Int] = [:]
+        var numbersOf: [String: Set<Int>] = [:]
+        for words in found {
+            for word in Set(words.map(\.word)) { titlesWith[word, default: 0] += 1 }
+            for (word, number) in words { numbersOf[word, default: []].insert(number) }
+        }
+        let seriesWords = Set(titlesWith.keys.filter { titlesWith[$0]! >= 2 && numbersOf[$0]!.count >= 2 })
+        let numbers = found.map { words in words.first { seriesWords.contains($0.word) }?.number }
+        let numbered = numbers.compactMap { $0 }.count
+        return numbered >= 3 && numbered * 3 >= titles.count * 2 ? numbers : nil
+    }
+
+    /// Every free-standing number in the title with the word before it,
+    /// lowercased ("" at the start).
+    static func numberedWords(_ title: String) -> [(word: String, number: Int)] {
+        let chars = Array(title)
+        func isDigit(_ i: Int) -> Bool { i >= 0 && i < chars.count && chars[i].isASCII && chars[i].isNumber }
+        func isWordChar(_ i: Int) -> Bool { i >= 0 && i < chars.count && (chars[i].isLetter || chars[i].isNumber) }
+        var result: [(word: String, number: Int)] = []
+        var i = 0
+        while i < chars.count {
+            guard isDigit(i) else { i += 1; continue }
+            let start = i
+            while isDigit(i) { i += 1 }
+            let end = i
+            if end - start > 4 { continue }
+            if (start > 0 && chars[start - 1].isLetter) || (end < chars.count && chars[end].isLetter) { continue }
+            if start > 1, ".,".contains(chars[start - 1]), isDigit(start - 2) { continue }
+            if end + 1 < chars.count, ".,".contains(chars[end]), isDigit(end + 1) { continue }
+            var wordEnd = start - 1
+            while wordEnd >= 0, !isWordChar(wordEnd) { wordEnd -= 1 }
+            var wordStart = wordEnd
+            while wordStart > 0, isWordChar(wordStart - 1) { wordStart -= 1 }
+            let word = wordEnd >= 0 ? String(chars[wordStart...wordEnd]).lowercased() : ""
+            if ["cd", "disc", "disk"].contains(word) { continue }
+            result.append((word, Int(String(chars[start..<end]))!))
+        }
+        return result
     }
 
     // MARK: - Deriving the album from its tracks
@@ -240,14 +343,6 @@ public struct Album: Identifiable, Hashable, Sendable {
         let ta = a.trackNumber ?? Int.max, tb = b.trackNumber ?? Int.max
         if ta != tb { return ta < tb }
         return a.title.localizedStandardCompare(b.title) == .orderedAscending
-    }
-
-    private static func albumOrder(_ a: Album, _ b: Album) -> Bool {
-        let byArtist = a.sortArtist.localizedStandardCompare(b.sortArtist)
-        if byArtist != .orderedSame { return byArtist == .orderedAscending }
-        let ya = a.year ?? Int.max, yb = b.year ?? Int.max
-        if ya != yb { return ya < yb }
-        return a.sortTitle.localizedStandardCompare(b.sortTitle) == .orderedAscending
     }
 }
 

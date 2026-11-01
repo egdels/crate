@@ -77,7 +77,8 @@ data class Album(
 
         /**
          * Groups by (folder, loosely compared album title) and sorts
-         * albums by artist, then year, then title. [roots] are the
+         * albums by artist, then year, then title, or a numbered series
+         * by its numbers ([sorted]). [roots] are the
          * watched folders' paths: an untagged album takes its artist from
          * the parent folder's name, unless that parent is a root.
          */
@@ -138,7 +139,98 @@ data class Album(
                     folder = bucket.folder,
                     tracks = bucket.tracks.sortedWith(TRACK_ORDER),
                 )
-            }.sortedWith(ALBUM_ORDER)
+            }.let(::sorted)
+        }
+
+        /**
+         * Sorted by artist; an artist's albums by year, then title. Unless
+         * they form a numbered series ([seriesNumbers]): radio plays and
+         * audiobook series carry the year of the edition, not of the
+         * episode, so then the number decides, ties by title, then year,
+         * and the albums without a number follow by year and title. A
+         * port of `Album.sorted` in the Swift core.
+         */
+        internal fun sorted(albums: List<Album>): List<Album> {
+            class Keyed(val album: Album, val artist: String, val title: String)
+            val keyed = albums.map { Keyed(it, it.sortArtist, it.sortTitle) }
+                .sortedWith { a, b -> naturalCompare(a.artist, b.artist) }
+            val result = ArrayList<Album>(albums.size)
+            var start = 0
+            while (start < keyed.size) {
+                var end = start + 1
+                while (end < keyed.size && naturalCompare(keyed[end].artist, keyed[start].artist) == 0) end++
+                val run = keyed.subList(start, end)
+                val numbers = seriesNumbers(run.map { it.title }) ?: List(run.size) { null }
+                val byYear = Comparator<Keyed> { a, b ->
+                    val y = (a.album.year ?: Int.MAX_VALUE).compareTo(b.album.year ?: Int.MAX_VALUE)
+                    if (y != 0) y else naturalCompare(a.title, b.title)
+                }
+                run.zip(numbers).sortedWith { (a, x), (b, y) ->
+                    when {
+                        x != null && y != null && x != y -> x.compareTo(y)
+                        x != null && y == null -> -1
+                        x == null && y != null -> 1
+                        x != null -> naturalCompare(a.title, b.title).takeIf { it != 0 }
+                            ?: (a.album.year ?: Int.MAX_VALUE).compareTo(b.album.year ?: Int.MAX_VALUE)
+                        else -> byYear.compare(a, b)
+                    }
+                }.mapTo(result) { it.first.album }
+                start = end
+            }
+            return result
+        }
+
+        /**
+         * The episode number of each title when one artist's titles form
+         * a numbered series, else null. A number counts under the word in
+         * front of it ("Volume 36", "Folge 194", "Peter Grant 4"); a word
+         * is a series word when at least two titles carry it with
+         * different numbers; a word and its abbreviation (three letters
+         * or more: "Vol." and "Volume") are one word. A series needs
+         * three numbered titles and two thirds of all. See the Swift core.
+         */
+        internal fun seriesNumbers(titles: List<String>): List<Int?>? {
+            var found = titles.map(::numberedWords)
+            val short = found.flatten().map { it.first }.toSet().filter { it.length >= 3 }.sortedBy { it.length }
+            found = found.map { list -> list.map { (word, n) -> (short.firstOrNull { word.startsWith(it) } ?: word) to n } }
+            val titlesWith = HashMap<String, Int>()
+            val numbersOf = HashMap<String, MutableSet<Int>>()
+            for (words in found) {
+                for (word in words.map { it.first }.toSet()) titlesWith[word] = (titlesWith[word] ?: 0) + 1
+                for ((word, n) in words) numbersOf.getOrPut(word) { HashSet() }.add(n)
+            }
+            val seriesWords = titlesWith.keys.filter { titlesWith.getValue(it) >= 2 && numbersOf.getValue(it).size >= 2 }.toSet()
+            val numbers = found.map { words -> words.firstOrNull { it.first in seriesWords }?.second }
+            val numbered = numbers.count { it != null }
+            return if (numbered >= 3 && numbered * 3 >= titles.size * 2) numbers else null
+        }
+
+        /** Every free-standing number in the title with the word before
+         *  it, lowercased ("" at the start). Not: disc numbers ("CD 2"),
+         *  digits inside a word, parts of "1.000", over four digits. */
+        internal fun numberedWords(title: String): List<Pair<String, Int>> {
+            fun isDigit(i: Int) = i in title.indices && title[i] in '0'..'9'
+            fun isWordChar(i: Int) = i in title.indices && title[i].isLetterOrDigit()
+            val result = ArrayList<Pair<String, Int>>()
+            var i = 0
+            while (i < title.length) {
+                if (!isDigit(i)) { i++; continue }
+                val start = i
+                while (isDigit(i)) i++
+                val end = i
+                if (end - start > 4) continue
+                if ((start > 0 && title[start - 1].isLetter()) || (end < title.length && title[end].isLetter())) continue
+                if (start > 1 && title[start - 1] in ".," && isDigit(start - 2)) continue
+                if (end + 1 < title.length && title[end] in ".," && isDigit(end + 1)) continue
+                var wordEnd = start - 1
+                while (wordEnd >= 0 && !isWordChar(wordEnd)) wordEnd--
+                var wordStart = wordEnd
+                while (wordStart > 0 && isWordChar(wordStart - 1)) wordStart--
+                val word = if (wordEnd >= 0) title.substring(wordStart, wordEnd + 1).lowercase() else ""
+                if (word in setOf("cd", "disc", "disk")) continue
+                result.add(word to title.substring(start, end).toInt())
+            }
+            return result
         }
 
         // Deriving the album from its tracks
@@ -224,14 +316,6 @@ data class Album(
             val byTrack = (a.trackNumber ?: Int.MAX_VALUE).compareTo(b.trackNumber ?: Int.MAX_VALUE)
             if (byTrack != 0) return@Comparator byTrack
             naturalCompare(a.title, b.title)
-        }
-
-        private val ALBUM_ORDER = Comparator<Album> { a, b ->
-            val byArtist = naturalCompare(a.sortArtist, b.sortArtist)
-            if (byArtist != 0) return@Comparator byArtist
-            val byYear = (a.year ?: Int.MAX_VALUE).compareTo(b.year ?: Int.MAX_VALUE)
-            if (byYear != 0) return@Comparator byYear
-            naturalCompare(a.sortTitle, b.sortTitle)
         }
     }
 }

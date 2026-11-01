@@ -117,7 +117,14 @@ tracks agree on, "Various Artists" when they do not or when most tracks
 carry the compilation flag without an album artist, untagged tracks
 named after the folder. Albums sort by the tags' sort names (TSOP/TSO2/
 TSOA, soar/soaa/soal, ARTISTSORT...) or, without them, by the name with
-a leading "The" moved back. `LibrarySnapshot.currentVersion` is 2; an
+a leading "The" moved back; within an artist by year, then title,
+unless the artist's titles form a numbered series (`Album.seriesNumbers`,
+2026-11-01: a number counts under the word before it, a word with two
+or more different numbers is a series word, abbreviations merge,
+three numbered titles and two thirds of all): then by number, the
+rest after it. The edition's year scrambled radio play series (episode
+36 reissued after 98); checked on the real collection: five spoken-word
+series and three "Vol." sets taken, no music artist. `LibrarySnapshot.currentVersion` is 2; an
 older index sets `Library.needsRescan`, and the app's start triggers one
 full re-read (every file, not only changed ones) with the grid up. Bump
 the version whenever `Track` gains a tag field. Android: kotlinx leaves
