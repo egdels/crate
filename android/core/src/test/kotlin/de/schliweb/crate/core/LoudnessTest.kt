@@ -39,7 +39,7 @@ class LoudnessTest {
             val result = meter.result!!
             assertTrue(abs(result.loudness!! - -23) < 0.1, "at $rate: ${result.loudness}")
             assertTrue(abs(result.peak - 10.0.pow(-23.0 / 20)) < 0.001)
-            assertTrue(abs(result.gain!! - 5) < 0.1)
+            assertTrue(abs(result.gain!! - 7) < 0.1)
         }
     }
 
@@ -103,8 +103,8 @@ class LoudnessTest {
         val result = analyzer.run(tracks + tagged) { progress, _ -> last = progress }
         assertEquals(LoudnessAnalyzer.Progress(25, 25), last)
         assertEquals(25, result.size)
-        assertEquals(2.0, result.trackGain(tracks[0]))
-        assertEquals(-8.0, result.trackGain(tracks[10]))
+        assertEquals(4.0, result.trackGain(tracks[0]))
+        assertEquals(-6.0, result.trackGain(tracks[10]))
         assertNull(result.measurement(tagged))
         assertEquals(25, store.load()!!.size)
         assertTrue(analyzer.pending(tracks + tagged).isEmpty())

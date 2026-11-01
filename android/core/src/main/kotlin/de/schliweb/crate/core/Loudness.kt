@@ -246,9 +246,9 @@ class LoudnessHistogram(bins: Map<Int, Bin> = emptyMap()) {
  *  factor, and the blocks for album gating. */
 @Serializable
 data class TrackLoudness(val loudness: Double?, val peak: Double, val histogram: LoudnessHistogram) {
-    /** ReplayGain 2.0: the gain that brings the track to -18 LUFS, limited
+    /** The gain that brings the track to [ReplayGain.TARGET], limited
      *  by the peak so nothing clips. null for silence. */
-    val gain: Double? get() = loudness?.let { ReplayGain.limited(ReplayGain.REFERENCE - it, peak) }
+    val gain: Double? get() = loudness?.let { ReplayGain.limited(ReplayGain.TARGET - it, peak) }
 
     companion object {
         /** The album gain over several tracks' blocks and the loudest peak. */
@@ -256,7 +256,7 @@ data class TrackLoudness(val loudness: Double?, val peak: Double, val histogram:
             val histogram = LoudnessHistogram()
             var peak = 0.0
             for (track in tracks) { histogram.merge(track.histogram); peak = max(peak, track.peak) }
-            return histogram.integratedLoudness?.let { ReplayGain.limited(ReplayGain.REFERENCE - it, peak) }
+            return histogram.integratedLoudness?.let { ReplayGain.limited(ReplayGain.TARGET - it, peak) }
         }
     }
 }

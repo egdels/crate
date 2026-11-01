@@ -21,7 +21,7 @@ import Testing
         let result = meter.result!
         #expect(abs(result.loudness! - -23) < 0.1)
         #expect(abs(result.peak - pow(10, -23.0 / 20)) < 0.001)
-        #expect(abs(result.gain! - 5) < 0.1)
+        #expect(abs(result.gain! - 7) < 0.1)
     }
 
     @Test func samplesArriveInAnyChunking() {

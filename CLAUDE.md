@@ -432,7 +432,11 @@ K-filter biquads designed per sample rate as libebur128 does, 400 ms
 blocks every 100 ms, -70 LUFS absolute gate, relative gate 10 LU under
 the mean) with a `LoudnessHistogram` of 1 LU bins so an album can be
 gated over all its tracks' blocks from the stored per-track data
-(`TrackLoudness.albumGain`); gain = -18 LUFS minus loudness, limited by
+(`TrackLoudness.albumGain`); gain = -16 LUFS (`ReplayGain.target`/`TARGET`, since 2026-11-01;
+-18 played music 3 dB down at the median, too quiet on headphones;
+-14 would need a limiter: the peak capped 42 % of the music, 85 % of
+the spoken word; tags keep their -18, stored limited without the
+peak) minus loudness, limited by
 the sample peak (`ReplayGain.limited`). Checked against
 `ffmpeg -af ebur128`: identical LUFS on MP3, M4A and FLAC; the peak
 differs where ffmpeg's decoder exceeds full scale (AVFoundation clips

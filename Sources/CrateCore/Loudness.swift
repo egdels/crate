@@ -270,10 +270,10 @@ public struct TrackLoudness: Equatable, Sendable, Codable {
         self.histogram = histogram
     }
 
-    /// ReplayGain 2.0: the gain that brings the track to -18 LUFS, limited
-    /// by the peak so nothing clips. nil for silence.
+    /// The gain that brings the track to `ReplayGain.target`, limited by
+    /// the peak so nothing clips. nil for silence.
     public var gain: Double? {
-        loudness.map { ReplayGain.limited(ReplayGain.reference - $0, peak: peak) }
+        loudness.map { ReplayGain.limited(ReplayGain.target - $0, peak: peak) }
     }
 
     /// The album gain over several tracks' blocks and the loudest peak.
@@ -284,11 +284,19 @@ public struct TrackLoudness: Equatable, Sendable, Codable {
             histogram.merge(track.histogram)
             peak = max(peak, track.peak)
         }
-        return histogram.integratedLoudness.map { ReplayGain.limited(ReplayGain.reference - $0, peak: peak) }
+        return histogram.integratedLoudness.map { ReplayGain.limited(ReplayGain.target - $0, peak: peak) }
     }
 }
 
 extension ReplayGain {
-    /// ReplayGain 2.0's target: -18 LUFS, 5 dB above EBU R 128's -23.
-    public static let reference = -18.0
+    /// What Crate's own measurements level to: -16 LUFS, about where
+    /// Apple's Sound Check plays, 2 dB above ReplayGain 2.0's -18. At -18
+    /// the median music track played 3 dB down and a third of them 6 dB
+    /// or more, too quiet on headphones. -14 (the streaming services) was
+    /// rejected: they reach it with a limiter, Crate only lowers or raises
+    /// within the peak, and at -14 the peak capped 42 % of the music and
+    /// 85 % of the spoken word in a real collection (-16: 22 % and 39 %).
+    /// ReplayGain tags keep their own -18 reference: they are stored
+    /// already limited, without the peak, so 2 dB more could clip.
+    public static let target = -16.0
 }

@@ -7,6 +7,14 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+### Changed
+
+- Files Crate measures itself now play 2 dB louder: levelled to
+  -16 LUFS, about where Apple's Sound Check plays, instead of
+  ReplayGain's -18, which left music too quiet on headphones. The peak
+  still caps the gain, so nothing clips; nothing is measured again.
+  Files with ReplayGain tags play as their tags say.
+
 ## [0.14.0] - 2026-10-29
 
 ### Added

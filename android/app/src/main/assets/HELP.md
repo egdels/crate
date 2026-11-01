@@ -44,8 +44,8 @@ uploaded or changed.
   hold a track or an album for Play Next and Play Last.
 - Albums come out equally loud: files tagged with ReplayGain play at
   the level the tags describe, and files without are measured by Crate
-  while the app is open, after a scan (EBU R 128, the way ReplayGain
-  2.0 asks for it; the line under the grid counts along, the results
+  while the app is open, after a scan (EBU R 128, levelled to -16 LUFS,
+  2 dB above ReplayGain's level; the line under the grid counts along, the results
   are kept next to the library index, the files are not touched). Until
   a file is measured, its iTunes Sound Check tag counts, or it plays as
   it is. The system volume is on top of that. Playing an album, every

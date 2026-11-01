@@ -21,7 +21,7 @@ import Testing
         var loudness = Loudness()
         let track = makeTrack("a")
         loudness.set(measurement(-20), for: track)
-        #expect(loudness.trackGain(for: track) == 2)
+        #expect(loudness.trackGain(for: track) == 4)
         var changed = track
         changed.modified = Date(timeIntervalSince1970: 99)
         #expect(loudness.measurement(for: changed) == nil)
@@ -60,8 +60,8 @@ import Testing
         let result = await analyzer.run(tracks: tracks + [tagged]) { progress, _ in last = progress }
         #expect(last == LoudnessAnalyzer.Progress(done: 25, total: 25))
         #expect(result.count == 25)
-        #expect(result.trackGain(for: tracks[0]) == 2)
-        #expect(result.trackGain(for: tracks[10]) == -8)
+        #expect(result.trackGain(for: tracks[0]) == 4)
+        #expect(result.trackGain(for: tracks[10]) == -6)
         #expect(result.measurement(for: tagged) == nil)
         #expect(try store.load()?.count == 25)
         // A second run has nothing left to do.

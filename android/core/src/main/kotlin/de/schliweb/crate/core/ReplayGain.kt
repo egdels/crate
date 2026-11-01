@@ -20,8 +20,14 @@ object ReplayGain {
     const val MIN_DB = -24.0
     const val MAX_DB = 24.0
 
-    /** ReplayGain 2.0's target: -18 LUFS, 5 dB above EBU R 128's -23. */
-    const val REFERENCE = -18.0
+    /** What Crate's own measurements level to: -16 LUFS, about where
+     *  Apple's Sound Check plays, 2 dB above ReplayGain 2.0's -18 (too
+     *  quiet on headphones). Not -14: the streaming services reach that
+     *  with a limiter, and here the peak would cap most quiet files.
+     *  ReplayGain tags keep their own -18 reference: they are stored
+     *  already limited, without the peak, so 2 dB more could clip.
+     *  See ReplayGain.target in the Swift core. */
+    const val TARGET = -16.0
 
     /** "-6.50 dB", "+3.25 dB", "-6.5" → the number. */
     fun decibels(text: String): Double? {
