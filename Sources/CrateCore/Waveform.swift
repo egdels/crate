@@ -46,7 +46,10 @@ public struct Waveform: Equatable, Sendable {
             return Waveform(peaks: peaks, levels: peaks, duration: 0)
         }
         var position: AVAudioFramePosition = 0
-        while file.framePosition < file.length {
+        // Counted here, not asked of the file: `framePosition` raises an
+        // Objective-C exception (uncatchable, the app dies) on a damaged
+        // file whose client format could not be set; `read` throws.
+        while position < file.length {
             try Task.checkCancellation()
             try file.read(into: buffer)
             let frames = Int(buffer.frameLength)

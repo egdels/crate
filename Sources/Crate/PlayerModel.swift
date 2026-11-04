@@ -809,6 +809,10 @@ final class PlayerModel: ObservableObject {
 
     /// The id of the track the backend holds; nil when nothing is loaded.
     private var loadedID: String?
+    /// When the backend got the current file, and how many tracks in a
+    /// row finished right after their load (`trackFinished`).
+    private var loadedAt = Date.distantPast
+    private var quickFinishes = 0
 
     /// Next as pressed: moves on even under repeat one. At the end of
     /// the queue, back to the top of the last track, paused and loaded,
@@ -903,6 +907,7 @@ final class PlayerModel: ObservableObject {
             loadedID = nil
             try player.load(track.url, gain: gain(for: track))
             loadedID = track.id
+            loadedAt = Date()
             currentTime = 0
             pausedAt = nil
             lastError = nil
@@ -973,6 +978,24 @@ final class PlayerModel: ObservableObject {
     }
 
     private func trackFinished() {
+        // A damaged file can open and still hold no audio: the backend
+        // reports it finished at once, paused or not. Under Repeat All a
+        // queue of such files bounced between them forever ("playing",
+        // a third of a core), and a restored one did so from the launch.
+        // A finish within half a second of the load counts as quick; one
+        // while paused, or a whole queue of them in a row, stops there.
+        let quick = Date().timeIntervalSince(loadedAt) < 0.5
+        quickFinishes = quick ? quickFinishes + 1 : 0
+        if quick, !isPlaying || quickFinishes >= max(queue.count, 1) {
+            quickFinishes = 0
+            isPlaying = false
+            // Not loaded any more: Play loads it again instead of
+            // starting a node with nothing scheduled.
+            loadedID = nil
+            if let current { lastError = "Cannot play \(current.url.lastPathComponent): it holds no audio" }
+            syncNowPlaying()
+            return
+        }
         if let current { bookmarks.finish(current) }
         if queue.advance() != nil {
             loadCurrent(autoplay: true)
@@ -1238,6 +1261,7 @@ final class PlayerModel: ObservableObject {
         do {
             try player.load(currentTrack.url, gain: gain(for: currentTrack))
             loadedID = currentTrack.id
+            loadedAt = Date()
         } catch {
             queue.clear()
             return

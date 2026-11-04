@@ -14,12 +14,17 @@ extension LoudnessMeter {
         let channels = Int(format.channelCount)
         var meter = LoudnessMeter(sampleRate: format.sampleRate, channelCount: channels)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 65_536) else { return nil }
-        while file.framePosition < file.length {
+        // Counted here, not asked of the file: `framePosition` raises an
+        // Objective-C exception (uncatchable, the app dies) on a damaged
+        // file whose client format could not be set; `read` throws.
+        var position: AVAudioFramePosition = 0
+        while position < file.length {
             try Task.checkCancellation()
             try file.read(into: buffer)
             let frames = Int(buffer.frameLength)
             guard frames > 0, let data = buffer.floatChannelData else { break }
             meter.add(frames: frames, channels: (0..<channels).map { UnsafePointer(data[$0]) })
+            position += AVAudioFramePosition(frames)
         }
         return meter.finalResult
     }

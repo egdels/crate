@@ -44,6 +44,24 @@ import Testing
         #expect(waveform.maximum > 0 && waveform.maximumLevel > 0)
     }
 
+    /// Random bytes named .mp3: AVAudioFile opens some of them, then
+    /// cannot set its client format, and asking such a file for its
+    /// `framePosition` raises an Objective-C exception Swift cannot
+    /// catch. The app died in the waveform read and would have died in
+    /// the loudness analysis on every launch. Reading must throw or
+    /// return, never crash; about one in eight of these files did.
+    @Test func garbageNamedMP3NeverCrashesTheDecoders() throws {
+        let dir = try TemporaryDirectory()
+        var random = SeededGenerator(seed: 42)
+        for index in 0..<48 {
+            let bytes = (0..<50_000).map { _ in UInt8.random(in: 0...255, using: &random) }
+            let url = dir.url.appendingPathComponent("\(index).mp3")
+            try Data(bytes).write(to: url)
+            _ = try? Waveform.read(url, slices: 10)
+            _ = try? LoudnessMeter.measure(url)
+        }
+    }
+
     @Test func aShortFileGetsNoMoreSlicesThanFrames() throws {
         let dir = try TemporaryDirectory()
         let waveform = try Waveform.read(try dir.wav("t.wav", seconds: 0.0001) { _ in 1 }, slices: 1000)
