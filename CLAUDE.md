@@ -27,7 +27,7 @@ never sees it.
 
 ```sh
 swift build                    # whole package
-swift test                     # 175 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
+swift test                     # 176 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
 swift run crate-scan <folder>  # tag-reader check against real files, prints gaps
 swift run crate-scan <folder> --lyrics   # counts files with lyrics (USLT/SYLT, ©lyr, FLAC LYRICS, .lrc)
 swift run crate-scan <folder> --loudness # BS.1770 loudness, peak and gain per file, with the speed

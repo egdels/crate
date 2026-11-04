@@ -28,8 +28,9 @@ version's section from this file as the GitHub release notes.
   own, not with the queued album's gain.
 - Genres written as "(17)Rock" show as "Rock"; genres spelled
   "Hoerspiel" or "Hoerbuch" count as spoken word.
-- Mac: a file that cannot be played under Repeat no longer crashes the
-  app; Play after a launch with a restored track moves the clock; Next
+- Mac: a damaged file no longer crashes the app (while drawing its
+  waveform or measuring its loudness), and a queue of damaged files
+  under Repeat no longer crashes or spins forever; Play after a launch with a restored track moves the clock; Next
   on the last track leaves it loaded and paused; a broken favorites or
   history file no longer causes the other saved files to be overwritten;
   a folder added during a scan is scanned after it; covers a rescan
