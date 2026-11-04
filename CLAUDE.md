@@ -27,7 +27,7 @@ never sees it.
 
 ```sh
 swift build                    # whole package
-swift test                     # 156 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
+swift test                     # 175 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
 swift run crate-scan <folder>  # tag-reader check against real files, prints gaps
 swift run crate-scan <folder> --lyrics   # counts files with lyrics (USLT/SYLT, ©lyr, FLAC LYRICS, .lrc)
 swift run crate-scan <folder> --loudness # BS.1770 loudness, peak and gain per file, with the speed
@@ -67,7 +67,7 @@ Android, from `android/` (needs JDK 17+, Android SDK with platform 37;
 `ANDROID_HOME` is set on this machine, Gradle 9.7 via the wrapper):
 
 ```sh
-./gradlew :core:test             # 76 JVM tests, ~2 s
+./gradlew :core:test             # 139 JVM tests, ~2 s
 CRATE_MUSIC_DIRS=~/Music/Music/Media.localized ./gradlew :core:test --tests '*TagParserTest*' -i
                                  # also runs the MP3/MP4 parsers over real files (colon-separated dirs)
 ./gradlew :app:testDebugUnitTest # 4 JVM tests in the app module (GainProcessor), ~10 s

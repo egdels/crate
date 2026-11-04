@@ -7,6 +7,46 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Albums ripped into CD1/CD2 folders without disc tags play one disc
+  after the other instead of alternating between them, with a "Disc n"
+  line each; tracks lying in the album folder beside "Bonus 1" and
+  "Bonus 2" folders are no longer dropped from it.
+- Compilations sort under Various Artists, not under one of their
+  artists' sort names.
+- A subfolder that cannot be read during a rescan keeps its tracks,
+  one unreachable folder no longer stops the rescan of the others, and
+  a folder added inside one already in the library is not watched
+  twice.
+- Lyrics: `[offset:]` in an `.lrc` file moves the lines the right way,
+  "[Chorus]" lines in plain-text lyrics stay, and files with a byte
+  order mark or in Windows encoding show their first line and their
+  umlauts.
+- Silent or undecodable files are no longer measured again on every
+  launch; a song added with Play Next or Play Last is levelled on its
+  own, not with the queued album's gain.
+- Genres written as "(17)Rock" show as "Rock"; genres spelled
+  "Hoerspiel" or "Hoerbuch" count as spoken word.
+- Mac: a file that cannot be played under Repeat no longer crashes the
+  app; Play after a launch with a restored track moves the clock; Next
+  on the last track leaves it loaded and paused; a broken favorites or
+  history file no longer causes the other saved files to be overwritten;
+  a folder added during a scan is scanned after it; covers a rescan
+  finds show at once; error messages stay visible.
+- Android: media buttons resume playback after the app was closed,
+  with its loudness levelling; "Open with" on a library file plays its
+  album; long M4B audiobooks keep their tags and cover; files whose
+  size the provider does not report are read; playback errors stay
+  visible; ReplayGain and Sound Check in ID3v2.2 tags are read; "ß"
+  matches "ss" in search, and Ø, Æ and Ł sort like the Mac does.
+
+### Changed
+
+- Mac: the practice panel's waveform is read only while the panel is
+  open, and the lyrics pane opens at the line being sung.
+- Dragging the seek slider seeks and saves once, at the end of the drag.
+
 ## [0.15.0] - 2026-11-01
 
 ### Changed
