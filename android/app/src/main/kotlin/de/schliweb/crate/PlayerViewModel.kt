@@ -276,6 +276,26 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         searchText = SearchQuery.textForArtist(artist)
     }
 
+    /** Counts the calls to [showCurrentAlbum], so the grid scrolls to the
+     *  album even when it was already selected and only scrolled away. */
+    var revealCount by mutableIntStateOf(0)
+        private set
+
+    /** Selects the album the current track belongs to, as the tap on the
+     *  cover in the player bar asks (on a phone that opens its page). A
+     *  search that hides the album is cleared first, or the detail would
+     *  keep showing the results. Returns whether it cleared the search;
+     *  does nothing for a file outside the library. */
+    fun showCurrentAlbum(): Boolean {
+        val track = current ?: return false
+        val album = albums.firstOrNull { album -> album.tracks.any { it.id == track.id } } ?: return false
+        val cleared = searchText.isNotBlank() && filteredAlbums.none { it.id == album.id }
+        if (cleared) searchText = ""
+        selection = Selection.AlbumId(album.id)
+        revealCount++
+        return cleared
+    }
+
     // Favorites
 
     fun isFavorite(track: Track): Boolean = track in favorites

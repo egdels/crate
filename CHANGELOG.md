@@ -7,6 +7,12 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+### Added
+
+- A click or tap on the cover in the player bar shows the album that is
+  playing: on the Mac and in Android's two panes the grid scrolls to it,
+  on a phone its page opens. A search that hides the album is cleared.
+
 ### Fixed
 
 - Albums ripped into CD1/CD2 folders without disc tags play one disc

@@ -218,6 +218,7 @@ fun CrateScreen(model: PlayerViewModel) {
                 if (model.current != null) {
                     PlayerBar(
                         model,
+                        onShowAlbum = { if (model.showCurrentAlbum()) searching = false },
                         onShowUpNext = { showingUpNext = true },
                         onShowLyrics = { showingLyrics = true },
                         onShowPractice = { showingPractice = true },
@@ -459,15 +460,22 @@ private fun AlbumGrid(model: PlayerViewModel, state: LazyGridState, modifier: Mo
     // The kept scroll position is an item index; after a rotation the
     // viewport has another height, so the selected tile can end up cut off
     // or off screen. Bring it fully into view once the grid has a layout.
+    fun selectedIndex(): Int? = when (val selection = model.selection) {
+        Selection.AllTracks -> 0
+        Selection.Favorites -> 1
+        Selection.RecentlyAdded -> 2
+        Selection.RecentlyPlayed -> 3
+        is Selection.AlbumId -> model.filteredAlbums.indexOfFirst { it.id == selection.id }.takeIf { it >= 0 }?.plus(LIBRARY_TILES)
+        null -> null
+    }
+    // The player bar's cover asked for the current album: bring its tile
+    // into view (two panes; on a phone its page opens instead).
+    LaunchedEffect(model.revealCount) {
+        if (model.revealCount == 0) return@LaunchedEffect
+        selectedIndex()?.let { state.animateScrollToItem(it) }
+    }
     LaunchedEffect(Unit) {
-        val index = when (val selection = model.selection) {
-            Selection.AllTracks -> 0
-            Selection.Favorites -> 1
-            Selection.RecentlyAdded -> 2
-            Selection.RecentlyPlayed -> 3
-            is Selection.AlbumId -> albums.indexOfFirst { it.id == selection.id }.takeIf { it >= 0 }?.plus(LIBRARY_TILES)
-            null -> null
-        } ?: return@LaunchedEffect
+        val index = selectedIndex() ?: return@LaunchedEffect
         val layout = snapshotFlow { state.layoutInfo }.first { it.visibleItemsInfo.isNotEmpty() }
         val tile = layout.visibleItemsInfo.firstOrNull { it.index == index }
         if (tile == null || tile.offset.y < 0 || tile.offset.y + tile.size.height > layout.viewportEndOffset - layout.afterContentPadding) {
@@ -837,7 +845,7 @@ private fun FlatTrackList(model: PlayerViewModel, tracks: List<Track>, emptyText
 }
 
 @Composable
-private fun PlayerBar(model: PlayerViewModel, onShowUpNext: () -> Unit, onShowLyrics: () -> Unit, onShowPractice: () -> Unit) {
+private fun PlayerBar(model: PlayerViewModel, onShowAlbum: () -> Unit, onShowUpNext: () -> Unit, onShowLyrics: () -> Unit, onShowPractice: () -> Unit) {
     val track = model.current ?: return
     // A phone on its side has little height: one row instead of two, or
     // the list above shows a row and a half.
@@ -845,9 +853,11 @@ private fun PlayerBar(model: PlayerViewModel, onShowUpNext: () -> Unit, onShowLy
     Surface(tonalElevation = 3.dp) {
         // Below the bar is the system's gesture area; keep the slider out of it.
         val padding = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = if (compact) 4.dp else 8.dp)
+        // The cover leads to its album, as on the Mac.
+        val cover = Modifier.clip(RoundedCornerShape(4.dp)).clickable(onClickLabel = "Show album", onClick = onShowAlbum)
         if (compact) {
             Row(padding, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.size(40.dp).clip(RoundedCornerShape(4.dp))) { ArtworkImage(model.currentArtwork) }
+                Box(Modifier.size(40.dp).then(cover)) { ArtworkImage(model.currentArtwork) }
                 TrackTitle(track, Modifier.width(160.dp))
                 WaveRow(model, Modifier.weight(1f))
                 Transport(model, track)
@@ -856,7 +866,7 @@ private fun PlayerBar(model: PlayerViewModel, onShowUpNext: () -> Unit, onShowLy
         } else {
             Column(padding) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(Modifier.size(48.dp).clip(RoundedCornerShape(4.dp))) { ArtworkImage(model.currentArtwork) }
+                    Box(Modifier.size(48.dp).then(cover)) { ArtworkImage(model.currentArtwork) }
                     TrackTitle(track, Modifier.weight(1f))
                     Transport(model, track)
                 }
