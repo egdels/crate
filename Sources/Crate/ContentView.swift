@@ -207,6 +207,9 @@ struct AlbumGrid: View {
             .onChange(of: model.selection) { selection in
                 scroll(proxy, to: selection)
             }
+            .onChange(of: model.revealCount) { _ in
+                scroll(proxy, to: model.selection)
+            }
             .onAppear {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { scroll(proxy, to: model.selection) }
             }

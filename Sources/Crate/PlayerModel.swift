@@ -316,6 +316,24 @@ final class PlayerModel: ObservableObject {
         searchText = SearchQuery.text(forArtist: artist)
     }
 
+    /// Selects the album the current track belongs to, as the click on
+    /// the cover in the player bar asks. A search that hides the album is
+    /// cleared first, or the detail would keep showing the results.
+    func showCurrentAlbum() {
+        guard let track = current,
+              let album = albums.first(where: { album in album.tracks.contains { $0.id == track.id } })
+        else { return }
+        if !SearchQuery(searchText).isEmpty, !filteredAlbums.contains(where: { $0.id == album.id }) {
+            searchText = ""
+        }
+        selection = .album(album.id)
+        revealCount += 1
+    }
+
+    /// Counts the calls to `showCurrentAlbum`, so the grid scrolls to the
+    /// album even when it was already selected and only scrolled away.
+    @Published private(set) var revealCount = 0
+
     // MARK: - Favorites
 
     func isFavorite(_ track: Track) -> Bool { favorites.contains(track) }

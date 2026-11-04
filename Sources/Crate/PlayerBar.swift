@@ -31,8 +31,12 @@ struct PlayerBar: View {
             .disabled(model.current == nil)
 
             if model.current != nil {
+                // The cover leads to its album, as in the Music app.
                 ArtworkView(image: model.currentArtwork, cornerRadius: 4)
                     .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+                    .onTapGesture { model.showCurrentAlbum() }
+                    .help("Show Album")
             }
 
             VStack(spacing: 4) {
