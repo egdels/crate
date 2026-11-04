@@ -47,9 +47,12 @@ struct PlayerBar: View {
                 }
                 HStack(spacing: 8) {
                     Text(timeText(model.currentTime))
+                    // Seeks live while dragged, writes the position once
+                    // when let go rather than on every step.
                     Slider(
-                        value: Binding(get: { model.currentTime }, set: { model.seek(to: $0) }),
-                        in: 0...max(model.duration, 1)
+                        value: Binding(get: { model.currentTime }, set: { model.seek(to: $0, save: false) }),
+                        in: 0...max(model.duration, 1),
+                        onEditingChanged: { editing in if !editing { model.savePlayback() } }
                     )
                     .disabled(model.current == nil)
                     Text(timeText(model.duration))

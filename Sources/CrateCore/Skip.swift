@@ -20,8 +20,9 @@ public enum Skip {
     /// How far before the loop's end a jump forward inside it stops.
     static let loopEndMargin: TimeInterval = 1
 
-    /// Folded genre parts that mean spoken word, in English and German.
-    static let spokenGenres = ["audiobook", "audio book", "horbuch", "horspiel", "spoken", "speech", "podcast", "lesung"]
+    /// Folded genre parts that mean spoken word, in English and German
+    /// (also spelled without umlauts, as many German tags are).
+    static let spokenGenres = ["audiobook", "audio book", "horbuch", "horspiel", "hoerbuch", "hoerspiel", "spoken", "speech", "podcast", "lesung"]
 
     /// Whether the player bar offers the jumps for this track.
     public static func isOffered(for track: Track) -> Bool {

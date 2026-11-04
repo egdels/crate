@@ -204,4 +204,17 @@ import Testing
         #expect(queue.current == nil)
         #expect(queue.playbackOrder.isEmpty)
     }
+
+    @Test func nextByTheUserMovesOnUnderRepeatOne() {
+        var queue = PlayQueue()
+        let a = makeTrack("a"), b = makeTrack("b")
+        queue.replace(with: [a, b])
+        queue.repeatMode = .one
+        #expect(queue.advance() == a)  // the track ended: again
+        #expect(queue.advance(byUser: true) == b)
+        #expect(queue.advance(byUser: true) == nil)  // the end, as with repeat off
+        #expect(queue.current == b)
+        queue.repeatMode = .all
+        #expect(queue.advance(byUser: true) == a)
+    }
 }

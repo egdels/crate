@@ -22,7 +22,7 @@ public struct AVFoundationMetadataReader: MetadataReader {
     public func read(_ url: URL) async throws -> TrackMetadata {
         // FLAC goes through its own parser: AVFoundation on macOS 12 sees
         // none of its tags, and the file format is trivial to read.
-        if url.pathExtension.lowercased() == "flac", let flac = try? FLACMetadata.read(url) {
+        if url.pathExtension.lowercased() == "flac", let flac = try? FLACMetadata.read(url, pictures: false) {
             return Self.metadata(from: flac)
         }
         let asset = AVURLAsset(url: url)
@@ -314,8 +314,18 @@ public struct AVFoundationMetadataReader: MetadataReader {
         return nil
     }
 
+    /// "(17)Rock", the v2.3 refinement form, gives its text; "(17)(RX)"
+    /// the number's name. As Android's `TagText.genre`.
     static func genre(fromText text: String) -> String {
         let trimmed = text.trimmed
+        if trimmed.hasPrefix("("), let close = trimmed.firstIndex(of: ")") {
+            let number = trimmed[trimmed.index(after: trimmed.startIndex)..<close]
+            if (1...3).contains(number.count), number.allSatisfy({ $0.isASCII && $0.isNumber }) {
+                let rest = trimmed[trimmed.index(after: close)...].trimmingCharacters(in: .whitespaces)
+                if !rest.isEmpty && !rest.hasPrefix("(") { return rest }
+                if let name = ID3v1Genres.name(index: Int(number)!) { return name }
+            }
+        }
         let digits = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "()"))
         if let index = Int(digits), let name = ID3v1Genres.name(index: index) {
             return name

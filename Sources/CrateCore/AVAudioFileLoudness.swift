@@ -21,6 +21,6 @@ extension LoudnessMeter {
             guard frames > 0, let data = buffer.floatChannelData else { break }
             meter.add(frames: frames, channels: (0..<channels).map { UnsafePointer(data[$0]) })
         }
-        return meter.result
+        return meter.finalResult
     }
 }

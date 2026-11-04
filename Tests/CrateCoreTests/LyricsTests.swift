@@ -20,8 +20,11 @@ import Testing
     }
 
     @Test func offsetShiftsTheTimes() {
-        let lyrics = Lyrics.parse("[offset:-500]\n[00:01.00]a\n[00:02.00]b")
+        // LRC convention: a positive offset shows the lines sooner.
+        let lyrics = Lyrics.parse("[offset:500]\n[00:01.00]a\n[00:02.00]b")
         #expect(lyrics.lines.map { $0.time! } == [0.5, 1.5])
+        let later = Lyrics.parse("[offset:-500]\n[00:01.00]a\n[00:02.00]b")
+        #expect(later.lines.map { $0.time! } == [1.5, 2.5])
     }
 
     @Test func plainTextKeepsParagraphs() {
@@ -64,5 +67,24 @@ import Testing
         #expect(await source.lyrics(for: b)?.lines == [Lyrics.Line(text: "below")])
         #expect(await source.lyrics(for: c) == nil)
         #expect(await source.lyrics(for: d)?.lines == [Lyrics.Line(text: "plain text")])
+    }
+
+    @Test func plainTextKeepsSectionMarks() {
+        let lyrics = Lyrics.parse("[ti:Song]\n[Chorus]\n[Verse 2] We will\nrock you")
+        #expect(!lyrics.isTimed)
+        #expect(lyrics.lines.map(\.text) == ["[Chorus]", "[Verse 2] We will", "rock you"])
+
+        // In a timed file a mark without a stamp still goes.
+        let timed = Lyrics.parse("[Chorus]\n[00:01.00]a")
+        #expect(timed.lines.map(\.text) == ["a"])
+    }
+
+    @Test func byteOrderMarkAndWindows1252() {
+        let lyrics = Lyrics.parse("\u{FEFF}[00:12.34]first\n[00:13.00]second")
+        #expect(lyrics.lines.map(\.text) == ["first", "second"])
+
+        let latin = Data([0x47, 0x72, 0xFC, 0xDF, 0x65])  // "Grüße" in Windows-1252
+        #expect(FileLyricsSource.decode(latin) == "Grüße")
+        #expect(FileLyricsSource.decode(Data("Grüße".utf8)) == "Grüße")
     }
 }

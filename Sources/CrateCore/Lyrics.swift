@@ -42,9 +42,13 @@ public struct Lyrics: Equatable, Sendable {
     /// LRC when the text has time stamps ("[mm:ss.xx]", also the
     /// "[mm:ss:xx]" some files have), otherwise plain lines. LRC header
     /// tags ("[ti:...]", "[ar:...]") are dropped, "[offset:ms]" is
-    /// applied, a line with several stamps becomes several lines, and
-    /// the result is in time order.
+    /// applied (positive shows the lines sooner, as the LRC convention
+    /// has it), a line with several stamps becomes several lines, and
+    /// the result is in time order. Plain text keeps its "[Chorus]"
+    /// section marks; only lines of known LRC header tags go.
     public static func parse(_ text: String) -> Lyrics {
+        // A BOM (Windows tools write one) would hide the first stamp.
+        let text = text.hasPrefix("\u{FEFF}") ? String(text.dropFirst()) : text
         var timed: [Line] = []
         var plain: [Line] = []
         var offset: TimeInterval = 0
@@ -53,8 +57,10 @@ public struct Lyrics: Equatable, Sendable {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             var rest = Substring(line)
             var stamps: [TimeInterval] = []
+            var onlyHeaders = true
             while let (stamp, after) = Self.leadingTag(rest) {
                 rest = after
+                if !Self.isHeader(stamp) { onlyHeaders = false }
                 if let seconds = Self.seconds(of: stamp) {
                     stamps.append(seconds)
                 } else if stamp.lowercased().hasPrefix("offset:"), let ms = Double(stamp.dropFirst(7).trimmingCharacters(in: .whitespaces)) {
@@ -66,6 +72,10 @@ public struct Lyrics: Equatable, Sendable {
             if stamps.isEmpty {
                 if rest.count == line.count {
                     plain.append(Line(text: words))
+                } else if !(onlyHeaders && words.isEmpty) {
+                    // "[Chorus]", "[Chorus] We will": no stamp, no header.
+                    // Dropped later if the file turns out to be timed.
+                    plain.append(Line(text: line))
                 }
                 continue
             }
@@ -77,7 +87,7 @@ public struct Lyrics: Equatable, Sendable {
         if sawStamp {
             let sorted = timed.enumerated().sorted { a, b in
                 a.element.time! != b.element.time! ? a.element.time! < b.element.time! : a.offset < b.offset
-            }.map { Line(time: max(0, $0.element.time! + offset), text: $0.element.text) }
+            }.map { Line(time: max(0, $0.element.time! - offset), text: $0.element.text) }
             return Lyrics(lines: sorted)
         }
         // Plain text: keep single blank lines as paragraph breaks, not runs
@@ -88,6 +98,13 @@ public struct Lyrics: Equatable, Sendable {
         }
         while lines.last?.text.isEmpty == true { lines.removeLast() }
         return Lyrics(lines: lines)
+    }
+
+    /// The LRC header tags ("ti:Title", "offset:300").
+    private static func isHeader(_ tag: String) -> Bool {
+        guard let colon = tag.firstIndex(of: ":") else { return false }
+        let key = tag[..<colon].trimmingCharacters(in: .whitespaces).lowercased()
+        return ["ti", "ar", "al", "au", "by", "re", "ve", "length", "offset", "la", "lr", "#", "tool"].contains(key)
     }
 
     /// "[tag]" at the start, and what follows it.
@@ -159,15 +176,22 @@ public struct FileLyricsSource: LyricsSource {
         for ext in ["lrc", "txt"] {
             for place in folders {
                 guard let data = try? Data(contentsOf: place.appendingPathComponent(base + "." + ext)) else { continue }
-                return String(decoding: data, as: UTF8.self)
+                return Self.decode(data)
             }
         }
         return nil
     }
 
+    /// UTF-8, or Windows-1252 when the bytes are not valid UTF-8 (older
+    /// German .txt lyrics, whose umlauts became replacement characters).
+    static func decode(_ data: Data) -> String {
+        String(data: data, encoding: .utf8) ?? String(data: data, encoding: .windowsCP1252)
+            ?? String(decoding: data, as: UTF8.self)
+    }
+
     static func tagged(_ url: URL) async -> String? {
         if url.pathExtension.lowercased() == "flac" {
-            guard let flac = try? FLACMetadata.read(url) else { return nil }
+            guard let flac = try? FLACMetadata.read(url, pictures: false) else { return nil }
             return flac.value("LYRICS") ?? flac.value("UNSYNCEDLYRICS") ?? flac.value("UNSYNCED LYRICS")
         }
         let asset = AVURLAsset(url: url)

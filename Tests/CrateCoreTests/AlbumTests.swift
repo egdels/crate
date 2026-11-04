@@ -267,4 +267,88 @@ import Testing
         #expect(album.discs[0].number == 1)
         #expect(album.discs[0].tracks.count == 2)
     }
+
+    @Test func untaggedDiscFoldersPlayOneDiscAfterTheOther() {
+        // A rip without disc tags: CD1 and CD2 are one album, and their
+        // tracks must not interleave (CD1-01, CD2-01, CD1-02, ...).
+        let tracks = [
+            makeTrack("a1", artist: "A", album: "Live", track: 1, folder: "/m/live/CD1"),
+            makeTrack("b1", artist: "A", album: "Live", track: 1, folder: "/m/live/CD2"),
+            makeTrack("a2", artist: "A", album: "Live", track: 2, folder: "/m/live/CD1"),
+            makeTrack("b2", artist: "A", album: "Live", track: 2, folder: "/m/live/CD2"),
+        ]
+        let album = Album.group(tracks)[0]
+        #expect(album.tracks.map(\.title) == ["a1", "a2", "b1", "b2"])
+        #expect(album.discs.map(\.number) == [1, 2])
+
+        // The sibling merge ("soul_1", "soul_2") orders the same way.
+        let soul = [
+            makeTrack("1", artist: "VA", album: "Soul", track: 1, folder: "/m/soul/soul_1"),
+            makeTrack("3", artist: "VA", album: "Soul", track: 1, folder: "/m/soul/soul_2"),
+            makeTrack("2", artist: "VA", album: "Soul", track: 2, folder: "/m/soul/soul_1"),
+        ]
+        let merged = Album.group(soul)[0]
+        #expect(merged.tracks.map(\.title) == ["1", "2", "3"])
+        #expect(merged.discs.map(\.number) == [1, 2])
+
+        // A disc tag still wins over the folder.
+        var tagged = tracks
+        for i in tagged.indices { tagged[i].discNumber = tagged[i].title.hasPrefix("a") ? 2 : 1 }
+        #expect(Album.group(tagged)[0].tracks.map(\.title) == ["b1", "b2", "a1", "a2"])
+    }
+
+    @Test func siblingMergeKeepsTheParentsOwnTracks() {
+        let tracks = [
+            makeTrack("main", artist: "A", album: "Album", track: 1, folder: "/m/Album"),
+            makeTrack("x1", artist: "A", album: "Album", track: 1, folder: "/m/Album/Bonus 1"),
+            makeTrack("x2", artist: "A", album: "Album", track: 1, folder: "/m/Album/Bonus 2"),
+        ]
+        let albums = Album.group(tracks)
+        #expect(albums.count == 1)
+        #expect(albums[0].tracks.map(\.title) == ["main", "x1", "x2"])
+
+        // Two sibling groups with one title under one parent: neither
+        // loses its tracks.
+        let two = [
+            makeTrack("p1", artist: "P", album: "Soul", folder: "/m/s/soul_1"),
+            makeTrack("p2", artist: "P", album: "Soul", folder: "/m/s/soul_2"),
+            makeTrack("q1", artist: "Q", album: "Soul", folder: "/m/s/funk_1"),
+            makeTrack("q2", artist: "Q", album: "Soul", folder: "/m/s/funk_2"),
+        ]
+        #expect(Album.group(two).flatMap(\.tracks).count == 4)
+    }
+
+    @Test func compilationsSortAsVariousArtists() {
+        var tracks = [
+            makeTrack("1", artist: "The Beatles", album: "Hits", track: 1, folder: "/m/hits"),
+            makeTrack("2", artist: "Cream", album: "Hits", track: 2, folder: "/m/hits"),
+            makeTrack("3", artist: "The Doors", album: "Hits", track: 3, folder: "/m/hits"),
+        ]
+        tracks[0].artistSort = "Beatles, The"
+        tracks[1].artistSort = "Cream"
+        tracks[2].artistSort = "Doors, The"
+        let album = Album.group(tracks)[0]
+        #expect(album.artist == Album.variousArtists)
+        #expect(album.sortArtist == Album.variousArtists)
+
+        // Album artist sort tags that agree still count.
+        for i in tracks.indices { tracks[i].albumArtistSort = "Hits Collection" }
+        tracks[0].compilation = true; tracks[1].compilation = true
+        #expect(Album.group(tracks)[0].sortArtist == "Hits Collection")
+    }
+
+    /// One folder tagged by two tools, one writing decomposed (NFD)
+    /// umlauts: one album and one artist, as on Android.
+    @Test func composedAndDecomposedSpellingsAreOneAlbum() {
+        let nfc = "Bj\u{00F6}rk \u{00D6}dland", nfd = "Bjo\u{0308}rk O\u{0308}dland"
+        #expect(Array(nfc.unicodeScalars) != Array(nfd.unicodeScalars))
+        let tracks = [
+            makeTrack("1", artist: nfc, album: "\u{00DC}ber " + nfc, track: 1, folder: "/m/a"),
+            makeTrack("2", artist: nfd, album: "U\u{0308}ber " + nfd, track: 2, folder: "/m/a"),
+        ]
+        let albums = Album.group(tracks)
+        #expect(albums.count == 1)
+        #expect(albums[0].tracks.count == 2)
+        #expect(albums[0].artist != Album.variousArtists)
+    }
 }

@@ -12,6 +12,18 @@ import Testing
         makeTrack("Señorita", artist: "Río Trio", album: "Costa"),
     ]
 
+    /// ß matches "ss" both ways, as Android's folding does; Ø, Æ and Ł
+    /// are letters of their own for the search on both.
+    @Test func sharpSMatchesDoubleS() {
+        let track = makeTrack("Weiße Straße", artist: "Weiß")
+        #expect(SearchQuery("weisse strasse").matches(track))
+        #expect(SearchQuery("Straße").matches(track))
+        let index = SearchIndex(albums: Album.group([track]))
+        #expect(index.search(SearchQuery("weisse strasse")).tracks.count == 1)
+        #expect(index.search(SearchQuery("weiß")).tracks.count == 1)
+        #expect(!SearchQuery("oystein").matches(makeTrack("Øystein")))
+    }
+
     @Test func emptyQueryMatchesEverything() {
         let query = SearchQuery("   ")
         #expect(query.isEmpty)

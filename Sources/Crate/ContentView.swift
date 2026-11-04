@@ -246,7 +246,8 @@ struct AlbumTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             ArtworkView(image: image, placeholder: initials, cornerRadius: 8)
-                .task(id: album.id) { image = await model.artwork(for: album) }
+                // The generation: a rescan may have found a cover since.
+                .task(id: "\(album.id)#\(model.artworkGeneration)") { image = await model.artwork(for: album) }
                 .overlay(alignment: .bottomTrailing) {
                     if model.isFavorite(album) {
                         Image(systemName: "heart.fill")
@@ -468,6 +469,12 @@ struct LyricsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
             }
+            // A new track starts at the top, not at the last one's offset;
+            // a pane opened mid-song shows the line being sung.
+            .id(model.current?.id)
+            .onAppear {
+                if let current { proxy.scrollTo(current, anchor: .center) }
+            }
             .onChange(of: current) { index in
                 if let index { withAnimation { proxy.scrollTo(index, anchor: .center) } }
             }
@@ -512,7 +519,7 @@ struct TrackList: View {
                 HStack(spacing: 16) {
                     ArtworkView(image: image, cornerRadius: 6)
                         .frame(width: 96, height: 96)
-                        .task(id: album.id) {
+                        .task(id: "\(album.id)#\(model.artworkGeneration)") {
                             image = nil
                             image = await model.artwork(for: album)
                         }

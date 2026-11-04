@@ -57,6 +57,12 @@ func flacBytes(comments: [String], sampleRate: Int = 44_100, totalSamples: Int =
         #expect(flac.cover?.type == 3)
         #expect(flac.cover?.data == png)
 
+        // Without pictures: the same tags, the cover block skipped.
+        let tagsOnly = try FLACMetadata.read(file, pictures: false)
+        #expect(tagsOnly.pictures.isEmpty)
+        #expect(tagsOnly.value("title") == "My Baby")
+        #expect(abs(tagsOnly.duration - 90) < 0.001)
+
         let meta = AVFoundationMetadataReader.metadata(from: flac)
         #expect(meta.title == "My Baby")
         #expect(meta.album == "Songs")

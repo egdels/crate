@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 /// decodes a 2 MB cover twice. Keyed by album, not file: the first track
 /// that yields a picture decides the album's cover.
 ///
-/// Three layers: a dictionary for what this process has already decoded,
+/// Three layers: a memory cache for what this process has decoded lately,
 /// JPEG files under `directory` for what any run has decoded, and the
 /// `ArtworkReader` for everything else. An album with no cover is
 /// remembered too (empty marker file), otherwise every launch would
@@ -34,7 +34,16 @@ public actor ArtworkCache {
         case failed
     }
 
-    private var memory: [Album.ID: CGImage?] = [:]
+    /// Found covers, bounded: a 600 px bitmap is about 1.4 MB, and
+    /// scrolling through a few hundred albums kept them all resident.
+    /// The JPEG layer makes a miss cheap.
+    private let memory: NSCache<NSString, CGImage> = {
+        let cache = NSCache<NSString, CGImage>()
+        cache.totalCostLimit = 200 << 20
+        return cache
+    }()
+    /// Albums known to have no cover; a few bytes each.
+    private var withoutCover: Set<Album.ID> = []
     private var inFlight: [Album.ID: Task<Lookup, Never>] = [:]
 
     public init(directory: URL, reader: any ArtworkReader) {
@@ -53,8 +62,11 @@ public actor ArtworkCache {
     /// The album's thumbnail, or nil when none of its files carries one.
     /// Concurrent callers for the same album share one lookup.
     public func thumbnail(for album: Album) async -> CGImage? {
-        if let cached = memory[album.id] {
+        if let cached = memory.object(forKey: album.id as NSString) {
             return cached
+        }
+        if withoutCover.contains(album.id) {
+            return nil
         }
         if let task = inFlight[album.id] {
             if case .found(let image) = await task.value { return image }
@@ -66,10 +78,10 @@ public actor ArtworkCache {
         inFlight[album.id] = nil
         switch result {
         case .found(let image):
-            memory[album.id] = .some(image)
+            memory.setObject(image, forKey: album.id as NSString, cost: image.bytesPerRow * image.height)
             return image
         case .none:
-            memory[album.id] = .some(nil)
+            withoutCover.insert(album.id)
             return nil
         case .failed:
             return nil
@@ -79,7 +91,7 @@ public actor ArtworkCache {
     /// Drops the "no cover" markers so a rescan can pick up newly tagged
     /// albums. Found covers stay.
     public func forgetMissing() {
-        memory = memory.filter { $0.value != nil }
+        withoutCover = []
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else { return }
         for name in names where name.hasSuffix(Self.missingSuffix) {
             try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))

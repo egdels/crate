@@ -31,7 +31,8 @@ public struct Album: Identifiable, Hashable, Sendable {
     /// The folder the tracks lie in; disc subfolders ("CD 2") count as
     /// their parent.
     public var folder: URL
-    /// Sorted by disc number, then track number, then title.
+    /// Sorted by disc number (`discNumber(of:)`), then disc folder, then
+    /// track number, then title.
     public var tracks: [Track]
 
     public var duration: TimeInterval { tracks.reduce(0) { $0 + $1.duration } }
@@ -42,12 +43,12 @@ public struct Album: Identifiable, Hashable, Sendable {
         public let tracks: [Track]
     }
 
-    /// The tracks by disc, in order; untagged tracks count as disc 1. An
-    /// album page shows the disc numbers when there is more than one.
+    /// The tracks by disc, in order (`discNumber(of:)`). An album page
+    /// shows the disc numbers when there is more than one.
     public var discs: [Disc] {
         var discs: [Disc] = []
         for track in tracks {
-            let number = track.discNumber ?? 1
+            let number = discNumber(of: track)
             if let last = discs.last, last.number == number {
                 discs[discs.count - 1] = Disc(number: number, tracks: last.tracks + [track])
             } else {
@@ -57,12 +58,39 @@ public struct Album: Identifiable, Hashable, Sendable {
         return discs
     }
 
+    /// The track's disc: its disc tag, else the number of the subfolder
+    /// it lies in when that is not the album's own folder ("CD2",
+    /// "soul_2"), else 1. Rips without disc tags are common, and with
+    /// all of them on disc 1 the discs' tracks interleaved (CD1-01,
+    /// CD2-01, CD1-02, ...).
+    public func discNumber(of track: Track) -> Int {
+        Self.discNumber(of: track, in: folder)
+    }
+
+    static func discNumber(of track: Track, in albumFolder: URL) -> Int {
+        if let tagged = track.discNumber { return tagged }
+        let folder = track.url.deletingLastPathComponent()
+        guard folder.path.lowercased() != albumFolder.path.lowercased() else { return 1 }
+        let digits = String(looseKey(folder.lastPathComponent).reversed().prefix { $0.isASCII && $0.isNumber }.reversed())
+        return digits.isEmpty || digits.count > 4 ? 1 : Int(digits)!
+    }
+
     /// What the album sorts by: the tracks' sort tags when they have
     /// them ("Beatles, The"), otherwise the name without a leading
     /// "The". Album artist sort tags win over track artist ones, like
-    /// the names themselves.
+    /// the names themselves. A compilation sorts as "Various Artists":
+    /// its tracks' artist sort tags (Picard writes them on every track)
+    /// would file it among one of its artists' albums; only album
+    /// artist sort tags that all agree still count.
     public var sortArtist: String {
-        Self.mostCommon(tracks.compactMap { $0.albumArtistSort?.trimmed.nonEmpty })
+        if artist == Self.variousArtists {
+            let tags = tracks.compactMap { $0.albumArtistSort?.trimmed.nonEmpty }
+            if let first = tags.first, tags.allSatisfy({ Self.looseKey($0) == Self.looseKey(first) }) {
+                return first
+            }
+            return Self.sortName(artist)
+        }
+        return Self.mostCommon(tracks.compactMap { $0.albumArtistSort?.trimmed.nonEmpty })
             ?? Self.mostCommon(tracks.compactMap { $0.artistSort?.trimmed.nonEmpty })
             ?? Self.sortName(artist)
     }
@@ -119,15 +147,26 @@ public struct Album: Identifiable, Hashable, Sendable {
                            title: key.title, artist: looseKey(artist(of: buckets[key]!.tracks)),
                            stem: discStem(folder.lastPathComponent))
         }
-        for (sibling, keys) in siblings where keys.count > 1 && !sibling.stem.isEmpty {
-            let parent = buckets[keys[0]]!.folder.deletingLastPathComponent()
+        // The parent folder may hold tracks of the same album itself
+        // ("Album/" with "Bonus 1", "Bonus 2"): those join the merge. A
+        // second sibling group with the same title under the same parent
+        // (another artist or stem) stays apart rather than overwriting the
+        // first one's tracks. Sorted, so which group merges is stable.
+        var mergedKeys: Set<Key> = []
+        let groups = siblings.filter { $0.value.count > 1 && !$0.key.stem.isEmpty }
+            .sorted { ($0.key.parent, $0.key.title, $0.key.artist, $0.key.stem)
+                < ($1.key.parent, $1.key.title, $1.key.artist, $1.key.stem) }
+        for (sibling, keys) in groups {
             let merged = Key(folder: sibling.parent, title: sibling.title)
+            guard !mergedKeys.contains(merged) else { continue }
+            let parent = buckets[keys[0]]!.folder.deletingLastPathComponent()
             var tracks: [Track] = []
             for key in keys {
                 tracks.append(contentsOf: buckets[key]!.tracks)
                 buckets[key] = nil
             }
-            buckets[merged] = (parent, tracks)
+            buckets[merged, default: (parent, [])].tracks += tracks
+            mergedKeys.insert(merged)
         }
 
         let rootPaths = Set(roots.map { $0.standardizedFileURL.path.lowercased() })
@@ -142,7 +181,7 @@ public struct Album: Identifiable, Hashable, Sendable {
                 year: bucket.tracks.compactMap(\.year).min(),
                 genre: mostCommon(bucket.tracks.compactMap { $0.genre?.trimmed.nonEmpty }),
                 folder: bucket.folder,
-                tracks: bucket.tracks.sorted(by: trackOrder)
+                tracks: bucket.tracks.sorted { trackOrder($0, $1, in: bucket.folder) }
             )
         })
     }
@@ -337,9 +376,13 @@ public struct Album: Identifiable, Hashable, Sendable {
         }?.key
     }
 
-    private static func trackOrder(_ a: Track, _ b: Track) -> Bool {
-        let da = a.discNumber ?? 1, db = b.discNumber ?? 1
+    private static func trackOrder(_ a: Track, _ b: Track, in folder: URL) -> Bool {
+        let da = discNumber(of: a, in: folder), db = discNumber(of: b, in: folder)
         if da != db { return da < db }
+        // Same disc, different subfolders (no number to tell them apart):
+        // one folder after the other, not interleaved.
+        let fa = a.url.deletingLastPathComponent().path, fb = b.url.deletingLastPathComponent().path
+        if fa != fb { return fa.localizedStandardCompare(fb) == .orderedAscending }
         let ta = a.trackNumber ?? Int.max, tb = b.trackNumber ?? Int.max
         if ta != tb { return ta < tb }
         return a.title.localizedStandardCompare(b.title) == .orderedAscending

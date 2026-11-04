@@ -36,9 +36,26 @@ public struct LibraryScanner: Sendable {
         self.extensions = Set(extensions.map { $0.lowercased() })
     }
 
+    /// What a walk found, and the places it could not look into.
+    public struct Walk: Sendable {
+        public var files: [ScannedFile]
+        /// Directories (or files) the enumerator reported an error for: a
+        /// folder without read permission, or everything after a network
+        /// share dropped mid-walk. Known tracks under them are not gone.
+        public var unreadable: [URL]
+    }
+
     /// Regular files under `folder` whose extension matches, hidden files
     /// and package contents skipped, sorted by path so results are stable.
     public func scan(_ folder: URL) throws -> [ScannedFile] {
+        try walk(folder).files
+    }
+
+    /// `scan`, plus where the walk failed. The enumerator skips what it
+    /// cannot read without a word unless asked; a rescan that took the
+    /// silence for "deleted" pruned half a collection when an SMB share
+    /// hiccupped.
+    public func walk(_ folder: URL) throws -> Walk {
         // FileManager's enumerator stays silent on a missing folder and
         // simply yields nothing, which a caller could not tell apart from an
         // empty one, so check first.
@@ -47,10 +64,16 @@ public struct LibraryScanner: Sendable {
             throw CocoaError(.fileReadNoSuchFile, userInfo: [NSFilePathErrorKey: folder.path])
         }
         let keys: Set<URLResourceKey> = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
+        final class Failures: @unchecked Sendable { var urls: [URL] = [] }
+        let failures = Failures()
         guard let enumerator = FileManager.default.enumerator(
             at: folder,
             includingPropertiesForKeys: Array(keys),
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            options: [.skipsHiddenFiles, .skipsPackageDescendants],
+            errorHandler: { url, _ in
+                failures.urls.append(url.standardizedFileURL)
+                return true  // go on with the rest
+            }
         ) else {
             throw CocoaError(.fileReadNoSuchFile, userInfo: [NSFilePathErrorKey: folder.path])
         }
@@ -66,6 +89,6 @@ public struct LibraryScanner: Sendable {
                 modified: values.contentModificationDate ?? .distantPast
             ))
         }
-        return files.sorted { $0.url.path < $1.url.path }
+        return Walk(files: files.sorted { $0.url.path < $1.url.path }, unreadable: failures.urls)
     }
 }

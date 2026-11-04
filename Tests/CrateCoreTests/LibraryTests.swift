@@ -218,4 +218,95 @@ import Testing
         #expect(values.allSatisfy { $0.1 == 5 })
         #expect(values.map(\.0).max() == 5)
     }
+
+    @Test func unreadableSubfolderKeepsItsTracks() async throws {
+        let dir = try TemporaryDirectory()
+        let music = dir.url.appendingPathComponent("music")
+        try dir.file("music/a/x.mp3")
+        try dir.file("music/b/y.mp3")
+        let locked = dir.url.appendingPathComponent("music/b")
+        let library = makeLibrary(dir, reader: FakeMetadataReader())
+        try await library.addFolder(music)
+        #expect(await library.tracks.count == 2)
+
+        // A folder the walk cannot enter (or a share that dropped) is not
+        // a folder whose files were deleted.
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: locked.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path) }
+        let summary = try await library.rescan()
+        #expect(summary.removed == 0)
+        #expect(Set(await library.tracks.map(\.title)) == ["x", "y"])
+    }
+
+    @Test func nestedFoldersAreWatchedOnce() async throws {
+        let dir = try TemporaryDirectory()
+        let music = dir.url.appendingPathComponent("music")
+        let inner = dir.url.appendingPathComponent("music/books")
+        try dir.file("music/a.mp3")
+        try dir.file("music/books/b.mp3")
+        let library = makeLibrary(dir, reader: FakeMetadataReader())
+
+        try await library.addFolder(music)
+        try await library.addFolder(inner)
+        #expect(await library.folders == [music.standardizedFileURL])
+        #expect(await library.tracks.count == 2)
+
+        // A parent added later replaces the watched folder inside it.
+        let other = makeLibrary(try TemporaryDirectory(), reader: FakeMetadataReader())
+        try await other.addFolder(inner)
+        try await other.addFolder(music)
+        #expect(await other.folders == [music.standardizedFileURL])
+        #expect(await other.tracks.count == 2)
+    }
+
+    @Test func rescanGoesOnPastAnUnreachableFolder() async throws {
+        let dir = try TemporaryDirectory()
+        let nas = dir.url.appendingPathComponent("nas")
+        let local = dir.url.appendingPathComponent("local")
+        try dir.file("nas/a.mp3")
+        try dir.file("local/b.mp3")
+        let library = makeLibrary(dir, reader: FakeMetadataReader())
+        try await library.addFolder(nas)
+        try await library.addFolder(local)
+
+        try FileManager.default.removeItem(at: nas)  // not mounted
+        try dir.file("local/c.mp3")
+        await #expect(throws: (any Error).self) { try await library.rescan() }
+        // The local folder was still rescanned, the NAS's tracks kept.
+        #expect(Set(await library.tracks.map(\.title)) == ["a", "b", "c"])
+    }
+
+    /// The version-driven full re-read is done per folder: an unreachable
+    /// folder does not make the reachable ones be read again in full.
+    @Test func olderIndexRereadSkipsFoldersAlreadyReread() async throws {
+        let dir = try TemporaryDirectory()
+        let music = dir.url.appendingPathComponent("music")
+        let other = dir.url.appendingPathComponent("other")
+        try dir.file("music/a.mp3")
+        try dir.file("other/b.mp3")
+        let reader = FakeMetadataReader()
+        let first = makeLibrary(dir, reader: reader)
+        try await first.addFolder(music)
+        try await first.addFolder(other)
+        let store = JSONLibraryStore(fileURL: dir.url.appendingPathComponent("state/library.json"))
+        var snapshot = try store.load()!
+        snapshot.version = 1
+        try store.save(snapshot)
+        let away = dir.url.appendingPathComponent("music-away")
+        try FileManager.default.moveItem(at: music, to: away)
+
+        let reloaded = makeLibrary(dir, reader: reader)
+        try await reloaded.load()
+        await reader.resetReads()
+        await #expect(throws: (any Error).self) { try await reloaded.rescan() }
+        #expect(await reloaded.needsRescan, "the unreachable folder still needs its re-read")
+        #expect(await reader.reads.map { URL(fileURLWithPath: $0).lastPathComponent } == ["b.mp3"])
+
+        await reader.resetReads()
+        try FileManager.default.moveItem(at: away, to: music)
+        let summary = try await reloaded.rescan()
+        #expect(summary == Library.RescanSummary(updated: 1, unchanged: 1))
+        #expect(await reader.reads.map { URL(fileURLWithPath: $0).lastPathComponent } == ["a.mp3"])
+        #expect(await !reloaded.needsRescan)
+    }
 }

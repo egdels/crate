@@ -160,6 +160,12 @@ public final class AVAudioEngineBackend: AudioPlayer {
             return
         }
         stopNode()
+        // A file that fails to open leaves nothing loaded, so a later
+        // play() is a no-op rather than "playing" a node with nothing
+        // scheduled while the old file is still `current`.
+        current = nil
+        next = nil
+        announced = nil
         let file = try AVAudioFile(forReading: url)
         current = Segment(url: url, file: file, offset: 0, generation: generation, gain: gain, loop: nil)
         next = nil

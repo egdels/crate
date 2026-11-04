@@ -17,6 +17,17 @@ import Testing
         #expect(player.currentTime == 0)
     }
 
+    @Test func failedLoadLeavesNothingLoaded() throws {
+        let dir = try TemporaryDirectory()
+        let player = AVAudioEngineBackend()
+        try player.load(try dir.wav("a.wav", seconds: 2))
+        #expect(throws: (any Error).self) { try player.load(dir.url.appendingPathComponent("gone.wav")) }
+        // Not the old file: play() must not pretend to play anything.
+        #expect(player.duration == 0)
+        player.play()
+        #expect(!player.isPlaying)
+    }
+
     @Test func seekMovesThePositionAndPlaybackFinishes() async throws {
         let dir = try TemporaryDirectory()
         let player = AVAudioEngineBackend()

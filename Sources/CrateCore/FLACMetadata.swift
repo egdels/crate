@@ -36,7 +36,10 @@ public struct FLACMetadata: Sendable {
         pictures.first { $0.type == 3 } ?? pictures.first
     }
 
-    public static func read(_ url: URL) throws -> FLACMetadata {
+    /// `pictures: false` seeks past the PICTURE blocks: covers are often
+    /// megabytes, and the tag reader of a scan (on a network share, many
+    /// files at once) and the lyrics lookup never use them.
+    public static func read(_ url: URL, pictures: Bool = true) throws -> FLACMetadata {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         guard try handle.read(upToCount: 4) == Data("fLaC".utf8) else { throw NotFLAC() }
@@ -47,15 +50,14 @@ public struct FLACMetadata: Sendable {
             last = header[0] & 0x80 != 0
             let type = Int(header[0] & 0x7f)
             let length = Int(header[1]) << 16 | Int(header[2]) << 8 | Int(header[3])
-            switch type {
-            case 0, 4, 6:
+            if type == 0 || type == 4 || (type == 6 && pictures) {
                 guard let block = try handle.read(upToCount: length), block.count == length else { break }
                 switch type {
                 case 0: meta.duration = streamInfoDuration(block)
                 case 4: meta.comments += vorbisComments(block)
                 default: if let picture = picture(block) { meta.pictures.append(picture) }
                 }
-            default:
+            } else {
                 try handle.seek(toOffset: try handle.offset() + UInt64(length))
             }
         }

@@ -52,6 +52,10 @@ import Testing
         #expect(AVFoundationMetadataReader.genre(fromText: "(17)") == "Rock")
         #expect(AVFoundationMetadataReader.genre(fromText: "0") == "Blues")
         #expect(AVFoundationMetadataReader.genre(fromText: "(999)") == "(999)")
+        // ID3v2.3's refinement form: the text when there is one.
+        #expect(AVFoundationMetadataReader.genre(fromText: "(17)Hard Rock") == "Hard Rock")
+        #expect(AVFoundationMetadataReader.genre(fromText: "(17)(RX)") == "Rock")
+        #expect(AVFoundationMetadataReader.genre(fromText: "(101)Speech") == "Speech")
         #expect(ID3v1Genres.name(index: 0) == "Blues")
         #expect(ID3v1Genres.name(index: 147) == "Synthpop")
         #expect(ID3v1Genres.name(index: 148) == nil)

@@ -21,6 +21,10 @@ final class PlayerModel: ObservableObject {
     @Published private(set) var currentTime: TimeInterval = 0
     /// Cover of the album the current track belongs to, for the player bar.
     @Published private(set) var currentArtwork: CGImage?
+    /// Bumped after a rescan, which may have found covers for albums
+    /// that had none: the views' artwork tasks include it in their ids,
+    /// so they ask again (the album ids stay the same).
+    @Published private(set) var artworkGeneration = 0
     @Published private(set) var isScanning = false
     /// False until the saved library has been read; until then the views
     /// must not show the empty state as if there were no folder.
@@ -89,7 +93,15 @@ final class PlayerModel: ObservableObject {
     /// the sliders button opens it; the window keeps it across launches.
     /// The Practice menu works either way.
     @Published var showsPractice = UserDefaults.standard.bool(forKey: "showsPractice") {
-        didSet { UserDefaults.standard.set(showsPractice, forKey: "showsPractice") }
+        didSet {
+            UserDefaults.standard.set(showsPractice, forKey: "showsPractice")
+            // The outline is read only for the open panel.
+            if showsPractice, waveform == nil, let current {
+                loadWaveform(for: current)
+            } else if !showsPractice, waveform == nil {
+                waveformTask?.cancel()
+            }
+        }
     }
     @Published var volume: Float = 1 {
         didSet { player.volume = volume }
@@ -120,6 +132,11 @@ final class PlayerModel: ObservableObject {
     /// that plays on; nil once something else moved the playhead.
     private var pausedAt: Date?
     private var practiceBook = PracticeBook()
+    /// Stores whose file could not be read at launch. Their in-memory
+    /// value is empty, not the user's data, so they are never written
+    /// back: one broken file must not take the others' contents along.
+    private var unreadableStores: Set<Store> = []
+    private enum Store { case favorites, history, practice, bookmarks }
     private var practiceSaveTask: Task<Void, Never>?
     private var waveformTask: Task<Void, Never>?
     private var ticker: Timer?
@@ -284,6 +301,11 @@ final class PlayerModel: ObservableObject {
         recordedID = track.id
         history.record(track)
         listsChanged()
+        saveHistory()
+    }
+
+    private func saveHistory() {
+        guard !unreadableStores.contains(.history) else { return }
         try? historyStore.save(history)
     }
 
@@ -341,6 +363,7 @@ final class PlayerModel: ObservableObject {
     /// matters after two quick taps.
     private func favoritesChanged() {
         listsChanged()
+        guard !unreadableStores.contains(.favorites) else { return }
         do {
             try favoritesStore.save(favorites)
         } catch {
@@ -356,17 +379,42 @@ final class PlayerModel: ObservableObject {
     func start() async {
         if startTask == nil {
             startTask = Task {
+                // Each file on its own: in one block, a broken favorites
+                // file left practice and bookmarks unread, and their next
+                // save overwrote the intact files with almost nothing.
+                var errors: [String] = []
                 do {
                     try await library.load()
+                } catch {
+                    errors.append("Could not load the library: \(error.localizedDescription)")
+                }
+                do {
                     favorites = try favoritesStore.load() ?? Favorites()
+                } catch {
+                    unreadableStores.insert(.favorites)
+                    errors.append("Could not read the favorites: \(error.localizedDescription)")
+                }
+                do {
                     history = try historyStore.load() ?? History()
+                } catch {
+                    unreadableStores.insert(.history)
+                    errors.append("Could not read the history: \(error.localizedDescription)")
+                }
+                do {
                     practiceBook = try practiceStore.load() ?? PracticeBook()
+                } catch {
+                    unreadableStores.insert(.practice)
+                    errors.append("Could not read the practice settings: \(error.localizedDescription)")
+                }
+                do {
                     bookmarks = try bookmarksStore.load() ?? Bookmarks()
                     savedBookmarks = bookmarks
-                    await refresh()
                 } catch {
-                    lastError = "Could not load the library: \(error.localizedDescription)"
+                    unreadableStores.insert(.bookmarks)
+                    errors.append("Could not read the bookmarks: \(error.localizedDescription)")
                 }
+                lastError = errors.first
+                await refresh()
                 isLoaded = true
                 opensAudioFiles = DefaultApp.opensAudioFiles
                 loudness = await loudnessAnalyzer.load()
@@ -427,17 +475,22 @@ final class PlayerModel: ObservableObject {
             return
         }
         var tracks: [Track] = []
+        var failed: [String] = []
         for file in files {
             if let known = self.tracks.first(where: { $0.id == file.standardizedFileURL.path }) {
                 tracks.append(known)
             } else if let probed = try? await library.probe(file) {
                 tracks.append(probed)
             } else {
-                lastError = "Cannot open \(file.lastPathComponent)"
+                failed.append(file.lastPathComponent)
             }
         }
         if !tracks.isEmpty {
             play(tracks: tracks)
+        }
+        // After play: a successful load clears the error line.
+        if !failed.isEmpty {
+            lastError = "Cannot open \(failed.joined(separator: ", "))"
         }
     }
 
@@ -470,9 +523,9 @@ final class PlayerModel: ObservableObject {
         favorites.removeAll(under: url)
         favoritesChanged()
         history.removeAll(under: url)
-        try? historyStore.save(history)
+        saveHistory()
         practiceBook.removeAll(under: url)
-        try? practiceStore.save(practiceBook)
+        if !unreadableStores.contains(.practice) { try? practiceStore.save(practiceBook) }
         bookmarks.removeAll(under: url)
         saveBookmarks()
         analysisTask?.cancel()
@@ -489,6 +542,8 @@ final class PlayerModel: ObservableObject {
             preloadNext()
         }
         await refresh()
+        // Cancelled above; on with the tracks that are left.
+        startAnalysis()
     }
 
     func rescan() async {
@@ -496,6 +551,8 @@ final class PlayerModel: ObservableObject {
         // cover last time.
         await artworkCache.forgetMissing()
         await scanning { try await self.library.rescan(progress: self.progress) }
+        artworkGeneration += 1
+        if let current { loadArtwork(for: current) }
     }
 
     private var progress: Library.Progress {
@@ -517,8 +574,22 @@ final class PlayerModel: ObservableObject {
         await artworkCache.thumbnail(for: album)
     }
 
-    private func scanning(_ work: () async throws -> Library.RescanSummary) async {
-        guard !isScanning else { return }
+    /// The scan running or queued last. A scan asked for while one runs
+    /// (a folder picked or dropped on the Dock icon during the launch's
+    /// re-read) waits for it instead of being dropped without a word.
+    private var lastScanTask: Task<Void, Never>?
+
+    private func scanning(_ work: @escaping @MainActor () async throws -> Library.RescanSummary) async {
+        let previous = lastScanTask
+        let task = Task { @MainActor in
+            await previous?.value
+            await self.performScan(work)
+        }
+        lastScanTask = task
+        await task.value
+    }
+
+    private func performScan(_ work: @MainActor () async throws -> Library.RescanSummary) async {
         isScanning = true
         scanProgress = nil
         notice = nil
@@ -545,17 +616,23 @@ final class PlayerModel: ObservableObject {
     /// priority, a few at a time; results arrive every few files and the
     /// footer counts along. Cancelled by a scan or a folder removal and
     /// started again after, picking up where it was.
+    private var analysisRun = 0
+
     private func startAnalysis() {
         analysisTask?.cancel()
         let tracks = self.tracks
         let analyzer = loudnessAnalyzer
+        // A cancelled run's last report can arrive after the new run's
+        // first one and blank the footer; reports carry their run.
+        analysisRun += 1
+        let run = analysisRun
         // Built here, where self is strong, so the closure owns its own
         // weak reference instead of capturing the task's.
         let report: @Sendable (LoudnessAnalyzer.Progress?, Loudness?) -> Void = { [weak self] progress, snapshot in
             Task { @MainActor in
-                guard let self else { return }
-                self.analysisProgress = progress
+                guard let self, self.analysisRun == run else { return }
                 if let snapshot { self.loudness = snapshot }
+                self.analysisProgress = progress
             }
         }
         analysisTask = Task(priority: .utility) {
@@ -609,20 +686,30 @@ final class PlayerModel: ObservableObject {
     /// for listening to a record as a whole.
     func play(tracks: [Track], startingAt index: Int = 0, asAlbum: Bool = false) {
         queue.replace(with: tracks, startingAt: index)
-        queueIsAlbum = asAlbum
-        queueAlbumMean = asAlbum ? ReplayGain.albumMean(tracks) : nil
-        queueAlbumGain = asAlbum ? loudness.albumGain(for: tracks) : nil
+        setQueueAlbum(asAlbum ? tracks : nil)
         // An audiobook goes on where it was left.
         loadCurrent(autoplay: true, at: current.flatMap { bookmarks.position(for: $0) } ?? 0)
     }
 
     private var queueIsAlbum = false
+    /// The tracks of the queued album. Only they get its album gain:
+    /// a song added with Play Next or Play Last is levelled on its own,
+    /// not with another record's gain and peak.
+    private var queueAlbumIDs: Set<String> = []
     /// The mean of the queued album's track gains, for files that have
     /// only those (Sound Check); nil otherwise.
     private var queueAlbumMean: Double?
     /// The measured album gain of the queued album, when every track of
     /// it is measured; nil otherwise.
     private var queueAlbumGain: Double?
+
+    /// The album the queue plays as a record, or nil for loose tracks.
+    private func setQueueAlbum(_ tracks: [Track]?) {
+        queueIsAlbum = tracks != nil
+        queueAlbumIDs = Set((tracks ?? []).map(\.id))
+        queueAlbumMean = tracks.flatMap { ReplayGain.albumMean($0) }
+        queueAlbumGain = tracks.flatMap { loudness.albumGain(for: $0) }
+    }
 
     // MARK: - Up Next
 
@@ -650,8 +737,7 @@ final class PlayerModel: ObservableObject {
     private func queueGrew(from wasEmpty: Bool) {
         if wasEmpty {
             // Tracks from anywhere: each is levelled on its own.
-            queueIsAlbum = false
-            queueAlbumMean = nil
+            setQueueAlbum(nil)
             loadCurrent(autoplay: true)
         } else {
             preloadNext()
@@ -684,11 +770,12 @@ final class PlayerModel: ObservableObject {
     /// ReplayGain tags when it has them, else the measurement, else its
     /// Sound Check value, else nothing.
     func gain(for track: Track) -> Double {
+        let inAlbum = queueIsAlbum && queueAlbumIDs.contains(track.id)
         if track.albumGain == nil, let measured = loudness.measurement(for: track) {
-            if queueIsAlbum, let queueAlbumGain { return queueAlbumGain }
+            if inAlbum, let queueAlbumGain { return queueAlbumGain }
             return measured.gain ?? 0
         }
-        return ReplayGain.playbackGain(track, asAlbum: queueIsAlbum, albumMean: queueAlbumMean)
+        return ReplayGain.playbackGain(track, asAlbum: inAlbum, albumMean: inAlbum ? queueAlbumMean : nil)
     }
 
     private func preloadNext() {
@@ -704,17 +791,33 @@ final class PlayerModel: ObservableObject {
             pausedAt = Date()
             savePlayback()
         } else {
+            // Nothing loaded (a file that failed, the queue's end after
+            // a stop): load it again rather than claim to play silence.
+            guard loadedID == current?.id else {
+                loadCurrent(autoplay: true, at: currentTime)
+                return
+            }
             rewindAfterPause()
             player.play()
             isPlaying = true
             if let current { recordPlay(current) }
+            // A restored queue was loaded without the clock running.
+            startTicking()
         }
         syncNowPlaying()
     }
 
+    /// The id of the track the backend holds; nil when nothing is loaded.
+    private var loadedID: String?
+
+    /// Next as pressed: moves on even under repeat one. At the end of
+    /// the queue, back to the top of the last track, paused and loaded,
+    /// as when it plays to its end (a stop left the bar showing a track
+    /// that Play could not start).
     func next() {
-        guard queue.advance() != nil else {
-            stop()
+        guard queue.advance(byUser: true) != nil else {
+            isPlaying = false
+            loadCurrent(autoplay: false)
             return
         }
         loadCurrent(autoplay: isPlaying)
@@ -733,12 +836,14 @@ final class PlayerModel: ObservableObject {
         loadCurrent(autoplay: isPlaying)
     }
 
-    func seek(to time: TimeInterval) {
+    /// `save: false` while the slider is dragged; it saves once at the
+    /// end (`savePlayback`) instead of on every step.
+    func seek(to time: TimeInterval, save: Bool = true) {
         pausedAt = nil
         player.seek(to: time)
         currentTime = player.currentTime
         syncNowPlaying()
-        savePlayback()
+        if save { savePlayback() }
     }
 
     /// Whether the player bar shows the jumps for the track playing.
@@ -788,13 +893,16 @@ final class PlayerModel: ObservableObject {
         return reported > 0 ? reported : (current?.duration ?? 0)
     }
 
-    private func loadCurrent(autoplay: Bool, at position: TimeInterval = 0) {
+    /// `skipped` counts the broken files passed over in this call chain.
+    private func loadCurrent(autoplay: Bool, at position: TimeInterval = 0, skipped: Int = 0) {
         guard let track = current else {
             stop()
             return
         }
         do {
+            loadedID = nil
             try player.load(track.url, gain: gain(for: track))
+            loadedID = track.id
             currentTime = 0
             pausedAt = nil
             lastError = nil
@@ -816,12 +924,21 @@ final class PlayerModel: ObservableObject {
             preloadNext()
             savePlayback()
         } catch {
-            lastError = "Cannot play \(track.url.lastPathComponent): \(error.localizedDescription)"
+            let message = "Cannot play \(track.url.lastPathComponent): \(error.localizedDescription)"
+            lastError = message
             isPlaying = false
-            // Skip the broken file rather than stall the queue.
-            if queue.hasNext, queue.advance() != nil {
-                loadCurrent(autoplay: autoplay)
+            // Skip the broken file rather than stall the queue, but each
+            // entry once at most and never under repeat one: with the
+            // share gone, repeat one or all recursed until the stack
+            // overflowed. Nothing playable left: stopped, with the error.
+            if queue.repeatMode != .one, skipped + 1 < queue.count, queue.advance() != nil {
+                loadCurrent(autoplay: autoplay, skipped: skipped + 1)
+            } else {
+                stop()
             }
+            // A later file that loaded cleared the line; the skip should
+            // still say why.
+            if lastError == nil { lastError = message }
         }
     }
 
@@ -869,6 +986,7 @@ final class PlayerModel: ObservableObject {
 
     private func stop() {
         player.stop()
+        loadedID = nil
         isPlaying = false
         currentTime = 0
         currentArtwork = nil
@@ -919,11 +1037,21 @@ final class PlayerModel: ObservableObject {
         loadWaveform(for: track)
     }
 
+    /// Only while the practice panel is open (it is the only view of
+    /// the outline; opening it reads it): decoding every loaded file,
+    /// hours of an audiobook over the network, cost for nothing. The read
+    /// is cancelled with the task, so five quick Nexts stop four decodes.
     private func loadWaveform(for track: Track) {
         waveformTask?.cancel()
         waveform = nil
+        guard showsPractice else { return }
         waveformTask = Task { [weak self] in
-            let read = try? await Task.detached(priority: .userInitiated) { try Waveform.read(track.url) }.value
+            let reading = Task.detached(priority: .userInitiated) { try Waveform.read(track.url) }
+            let read = await withTaskCancellationHandler {
+                try? await reading.value
+            } onCancel: {
+                reading.cancel()
+            }
             guard let self, !Task.isCancelled, current?.id == track.id else { return }
             waveform = read
         }
@@ -963,6 +1091,7 @@ final class PlayerModel: ObservableObject {
     /// Also called on quit, so a change in the last half second stays.
     func savePractice() {
         practiceSaveTask?.cancel()
+        guard !unreadableStores.contains(.practice) else { return }
         do {
             try practiceStore.save(practiceBook)
         } catch {
@@ -1070,7 +1199,7 @@ final class PlayerModel: ObservableObject {
     /// Writes `bookmarks.json` when a mark changed: songs alone leave it
     /// untouched.
     private func saveBookmarks() {
-        guard bookmarks != savedBookmarks else { return }
+        guard bookmarks != savedBookmarks, !unreadableStores.contains(.bookmarks) else { return }
         do {
             try bookmarksStore.save(bookmarks)
             savedBookmarks = bookmarks
@@ -1097,11 +1226,18 @@ final class PlayerModel: ObservableObject {
         queue.replace(with: restored, startingAt: index)
         queue.repeatMode = state.repeatMode
         if state.isShuffled { queue.setShuffle(true) }
-        queueIsAlbum = state.asAlbum
-        queueAlbumMean = state.asAlbum ? ReplayGain.albumMean(restored) : nil
-        queueAlbumGain = state.asAlbum ? loudness.albumGain(for: restored) : nil
+        // The album the queue was started with is its first track's;
+        // tracks queued after it from elsewhere are not part of it.
+        if state.asAlbum, let first = restored.first,
+           let album = albums.first(where: { album in album.tracks.contains { $0.id == first.id } }) {
+            let ids = Set(album.tracks.map(\.id))
+            setQueueAlbum(restored.filter { ids.contains($0.id) })
+        } else {
+            setQueueAlbum(state.asAlbum ? restored : nil)
+        }
         do {
             try player.load(currentTrack.url, gain: gain(for: currentTrack))
+            loadedID = currentTrack.id
         } catch {
             queue.clear()
             return
@@ -1116,6 +1252,9 @@ final class PlayerModel: ObservableObject {
         pausedAt = bookmarks.entries[currentTrack.id].map { Date(timeIntervalSince1970: $0.saved) }
         loadArtwork(for: currentTrack)
         loadLyrics(for: currentTrack)
+        // The clock, the periodic save and the bookmark follow from here;
+        // tick() does nothing while paused.
+        startTicking()
         syncNowPlaying()
         preloadNext()
     }

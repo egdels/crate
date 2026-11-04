@@ -45,6 +45,10 @@ public actor Library {
     /// tracks lack fields a newer one reads: the next full rescan reads
     /// every file, not only the changed ones, and clears this.
     public private(set) var needsRescan = false
+    /// Folders already re-read in full for `needsRescan` in this session,
+    /// so a folder that was unreachable is the only one read again in
+    /// full on the next rescan.
+    private var reread: Set<URL> = []
 
     private let store: any LibraryStore
     private let reader: any MetadataReader
@@ -78,6 +82,7 @@ public actor Library {
         folders = snapshot.folders
         tracks = snapshot.tracks.sorted { $0.url.path < $1.url.path }
         needsRescan = snapshot.version < LibrarySnapshot.currentVersion
+        reread = []
     }
 
     public var albums: [Album] { Album.group(tracks, roots: folders) }
@@ -98,11 +103,16 @@ public actor Library {
         return Self.makeTrack(scanned, try await reader.read(file))
     }
 
-    /// Adds the folder (no-op when already watched) and scans it.
+    /// Adds the folder and scans it. A folder already watched, or inside
+    /// a watched one, is only rescanned; a folder that contains watched
+    /// ones replaces them. Nested folders were walked twice, and removing
+    /// the inner one dropped tracks (and their favorites, bookmarks,
+    /// practice settings) the outer one still covered.
     @discardableResult
     public func addFolder(_ url: URL, progress: Progress? = nil) async throws -> RescanSummary {
         let folder = url.standardizedFileURL
-        if !folders.contains(folder) {
+        if !folders.contains(where: { $0 == folder || Self.isUnder(folder, $0) }) {
+            folders.removeAll { Self.isUnder($0, folder) }
             folders.append(folder)
         }
         return try await rescan(folder: folder, progress: progress)
@@ -119,24 +129,36 @@ public actor Library {
         return before - tracks.count
     }
 
-    /// Rescans every watched folder.
+    /// Rescans every watched folder. One that cannot be reached (a NAS
+    /// not mounted) keeps its tracks and does not stop the others; the
+    /// first such error is thrown at the end, and a pending full re-read
+    /// (`needsRescan`) stays pending until every folder made it.
     @discardableResult
     public func rescan(progress: Progress? = nil) async throws -> RescanSummary {
         var total = RescanSummary()
+        var firstError: (any Error)?
         for folder in folders {
-            total = total + (try await rescan(folder: folder, progress: progress))
+            do {
+                total = total + (try await rescan(folder: folder, progress: progress))
+            } catch {
+                firstError = firstError ?? error
+            }
         }
-        if needsRescan {
+        if needsRescan && folders.allSatisfy(reread.contains) {
             needsRescan = false
+            reread = []
             try save()
         }
+        if let firstError { throw firstError }
         return total
     }
 
     @discardableResult
     public func rescan(folder url: URL, progress: Progress? = nil) async throws -> RescanSummary {
         let folder = url.standardizedFileURL
-        let scanned = try scanner.scan(folder)
+        let walk = try scanner.walk(folder)
+        let scanned = walk.files
+        let fullRead = needsRescan && !reread.contains(folder)
         let scannedPaths = Set(scanned.map(\.url.path))
         var existing = Dictionary(
             uniqueKeysWithValues: tracks.lazy.filter { Self.isUnder($0.url, folder) }.map { ($0.url.path, $0) })
@@ -144,7 +166,7 @@ public actor Library {
         var summary = RescanSummary()
         var toRead: [ScannedFile] = []
         for file in scanned {
-            if !needsRescan, let track = existing[file.url.path], Self.unchanged(track, file) {
+            if !fullRead, let track = existing[file.url.path], Self.unchanged(track, file) {
                 summary.unchanged += 1
             } else {
                 toRead.append(file)
@@ -163,7 +185,10 @@ public actor Library {
         }
         summary.failedFiles.sort { $0.path < $1.path }
 
-        let removedPaths = existing.keys.filter { !scannedPaths.contains($0) }
+        // Not seen is not deleted when the walk could not look there.
+        let removedPaths = existing.keys.filter { path in
+            !scannedPaths.contains(path) && !walk.unreadable.contains { path == $0.path || Self.isUnder(URL(fileURLWithPath: path), $0) }
+        }
         summary.removed = removedPaths.count
         for path in removedPaths {
             existing[path] = nil
@@ -172,6 +197,7 @@ public actor Library {
         tracks.removeAll { Self.isUnder($0.url, folder) }
         tracks.append(contentsOf: existing.values)
         tracks.sort { $0.url.path < $1.url.path }
+        if fullRead { reread.insert(folder) }
         try save()
         return summary
     }

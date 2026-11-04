@@ -121,6 +121,10 @@ public actor LoudnessAnalyzer {
     private let concurrency: Int
     public private(set) var loudness = Loudness()
     private var loaded = false
+    /// Files that could not be measured (undecodable), by id, with the
+    /// modification date they had: not tried again in this process
+    /// until the file changes.
+    private var unmeasurable: [String: Date] = [:]
 
     public init(store: any LoudnessStore, measure: @escaping Measure = LoudnessMeter.measure, concurrency: Int = 2) {
         self.store = store
@@ -144,7 +148,9 @@ public actor LoudnessAnalyzer {
 
     /// The tracks a run would measure.
     public func pending(in tracks: [Track]) -> [Track] {
-        tracks.filter { Loudness.needsMeasuring($0) && !loudness.isFresh($0) }
+        tracks.filter { track in
+            Loudness.needsMeasuring(track) && !loudness.isFresh(track) && unmeasurable[track.id] != track.modified
+        }
     }
 
     /// Measures the pending tracks. `progress` is called after every
@@ -158,20 +164,35 @@ public actor LoudnessAnalyzer {
         var done = 0
         var unsaved = 0
         let measure = self.measure
-        await withTaskGroup(of: (Track, TrackLoudness?).self) { group in
+        await withTaskGroup(of: (Track, TrackLoudness??).self) { group in
             var iterator = pending.makeIterator()
             func enqueue() {
                 guard !Task.isCancelled, let track = iterator.next() else { return }
                 group.addTask(priority: .utility) {
-                    let result = await Task.detached(priority: .utility) { try? measure(track.url) }.value
-                    return (track, Task.isCancelled ? nil : result)
+                    // Detached, off the actor, but cancelled with the run:
+                    // otherwise a cancelled run decoded its files to the end.
+                    let task = Task.detached(priority: .utility) { try measure(track.url) }
+                    let result = await withTaskCancellationHandler {
+                        await task.result
+                    } onCancel: {
+                        task.cancel()
+                    }
+                    // nil: cancelled, try again next run; .some(nil): this
+                    // file cannot be measured.
+                    if Task.isCancelled { return (track, nil) }
+                    return (track, .some(try? result.get()))
                 }
             }
             for _ in 0..<concurrency { enqueue() }
-            for await (track, result) in group {
-                if let result {
+            for await (track, outcome) in group {
+                switch outcome {
+                case .some(.some(let result)):
                     loudness.set(result, for: track)
                     unsaved += 1
+                case .some(.none):
+                    unmeasurable[track.id] = track.modified
+                case .none:
+                    break
                 }
                 done += 1
                 if unsaved >= 10 {

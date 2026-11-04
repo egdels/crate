@@ -98,6 +98,13 @@ public struct LoudnessMeter {
         return TrackLoudness(loudness: histogram.integratedLoudness, peak: Double(peak), histogram: histogram)
     }
 
+    /// The result of a file read to its end: silence (or under 0.4 s)
+    /// is a measurement too, with no loudness and so no gain, or the
+    /// file stayed pending and was decoded again on every launch.
+    public var finalResult: TrackLoudness {
+        result ?? TrackLoudness(loudness: nil, peak: Double(peak), histogram: LoudnessHistogram())
+    }
+
 }
 
 extension Array where Element == [Float] {

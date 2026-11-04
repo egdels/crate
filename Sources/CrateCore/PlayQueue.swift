@@ -159,10 +159,13 @@ public struct PlayQueue: Equatable, Sendable {
 
     /// Moves to the next entry and returns it. Returns nil, leaving the
     /// cursor on the last entry, when the end is reached with repeat off.
+    /// `byUser` is Next pressed rather than a track ending: repeat one
+    /// then counts as off and the queue moves on, as Media3 navigates
+    /// on Android; only playing to the end repeats the track.
     @discardableResult
-    public mutating func advance() -> Track? {
+    public mutating func advance(byUser: Bool = false) -> Track? {
         guard let position else { return nil }
-        switch repeatMode {
+        switch byUser && repeatMode == .one ? .off : repeatMode {
         case .one:
             return current
         case .all, .off:

@@ -89,4 +89,49 @@ import Testing
         #expect(result.count > 0)
         #expect(try store.load()?.count == result.count)
     }
+
+    @Test func silentAndUndecodableFilesAreNotPendingForever() async throws {
+        let (store, url) = store()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let silent = makeTrack("silent"), broken = makeTrack("broken")
+        struct Undecodable: Error {}
+        let analyzer = LoudnessAnalyzer(store: store, measure: { url in
+            if url.lastPathComponent.hasPrefix("broken") { throw Undecodable() }
+            return LoudnessMeter(sampleRate: 44_100, channelCount: 1).finalResult
+        })
+        let result = await analyzer.run(tracks: [silent, broken]) { _, _ in }
+        #expect(result.measurement(for: silent)?.loudness == nil)
+        #expect(result.isFresh(silent))
+        #expect(result.trackGain(for: silent) == nil)
+        #expect(await analyzer.pending(in: [silent, broken]).isEmpty)
+
+        // A changed file is tried again.
+        var changed = broken
+        changed.modified = Date(timeIntervalSince1970: 99)
+        #expect(await analyzer.pending(in: [changed]).count == 1)
+    }
+
+    @Test func cancellingReachesTheMeasurement() async throws {
+        let (store, url) = store()
+        defer { try? FileManager.default.removeItem(at: url) }
+        final class Flag: @unchecked Sendable { var started = false; var sawCancel = false }
+        let flag = Flag()
+        let analyzer = LoudnessAnalyzer(store: store, measure: { _ in
+            flag.started = true
+            for _ in 0..<500 {
+                if Task.isCancelled { flag.sawCancel = true; throw CancellationError() }
+                Thread.sleep(forTimeInterval: 0.01)
+            }
+            return nil
+        }, concurrency: 1)
+        let task = Task { await analyzer.run(tracks: [makeTrack("long")]) { _, _ in } }
+        for _ in 0..<500 where !flag.started {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        task.cancel()
+        _ = await task.value
+        #expect(flag.sawCancel)
+        // A cancelled file is not given up: the next run measures it.
+        #expect(await analyzer.pending(in: [makeTrack("long")]).count == 1)
+    }
 }

@@ -16,6 +16,8 @@ import Testing
         #expect(Skip.isOffered(for: track("Book.M4B")))
         #expect(Skip.isOffered(for: track("01.mp3", genre: "Hörbuch")))
         #expect(Skip.isOffered(for: track("01.mp3", genre: "HÖRSPIEL")))
+        #expect(Skip.isOffered(for: track("01.mp3", genre: "Hoerspiel")))
+        #expect(Skip.isOffered(for: track("01.mp3", genre: "Kinder-Hoerbuch")))
         #expect(Skip.isOffered(for: track("01.mp3", genre: "Audiobooks")))
         #expect(Skip.isOffered(for: track("01.mp3", genre: "Spoken Word")))
         #expect(Skip.isOffered(for: track("01.mp3", genre: "Podcast")))
