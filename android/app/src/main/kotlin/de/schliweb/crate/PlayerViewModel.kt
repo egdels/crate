@@ -805,6 +805,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun play(entry: QueueEntry) = withController { controller ->
         if (entry.index < controller.mediaItemCount) {
             controller.seekTo(entry.index, 0L)
+            recoverFromError(controller)
             controller.play()
         }
     }
@@ -836,11 +837,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun next() = withController { it.seekToNext() }
+    fun next() = withController { it.seekToNext(); recoverFromError(it) }
 
     /** Like every player: early in a track, go back a track; later,
      *  restart the one playing. The player draws that line at 3 s. */
-    fun previous() = withController { it.seekToPrevious() }
+    fun previous() = withController { it.seekToPrevious(); recoverFromError(it) }
+
+    /** After a file that cannot be played the player sits in IDLE with
+     *  the error: a move to another track would stay silent there and
+     *  keep the old track's error line, so it prepares again. */
+    private fun recoverFromError(controller: MediaController) {
+        if (controller.playerError == null) return
+        lastError = null
+        controller.prepare()
+    }
 
     fun seek(seconds: Double) {
         currentTime = seconds

@@ -39,7 +39,8 @@ version's section from this file as the GitHub release notes.
   with its loudness levelling; "Open with" on a library file plays its
   album; long M4B audiobooks keep their tags and cover; files whose
   size the provider does not report are read; playback errors stay
-  visible; ReplayGain and Sound Check in ID3v2.2 tags are read; "ß"
+  visible, and Next or Previous after a file that cannot be played
+  plays the next one instead of staying silent; ReplayGain and Sound Check in ID3v2.2 tags are read; "ß"
   matches "ss" in search, and Ø, Æ and Ł sort like the Mac does.
 
 ### Changed

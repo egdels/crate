@@ -67,7 +67,7 @@ Android, from `android/` (needs JDK 17+, Android SDK with platform 37;
 `ANDROID_HOME` is set on this machine, Gradle 9.7 via the wrapper):
 
 ```sh
-./gradlew :core:test             # 139 JVM tests, ~2 s
+./gradlew :core:test             # 140 JVM tests, ~2 s
 CRATE_MUSIC_DIRS=~/Music/Music/Media.localized ./gradlew :core:test --tests '*TagParserTest*' -i
                                  # also runs the MP3/MP4 parsers over real files (colon-separated dirs)
 ./gradlew :app:testDebugUnitTest # 4 JVM tests in the app module (GainProcessor), ~10 s

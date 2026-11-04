@@ -44,6 +44,25 @@ class PlaybackStateTest {
     }
 
     @Test
+    fun positionFileIsWrittenOnlyWhenThePositionChanges() {
+        // A seek arrives as two state changes with the same position.
+        val store = JsonPlaybackStateStore(dir.dir)
+        store.save(state)
+        store.save(state)
+        assertEquals(1, store.positionWrites)
+        store.save(state.copy(position = 60.0))
+        assertEquals(2, store.positionWrites)
+        val reopened = JsonPlaybackStateStore(dir.dir)
+        reopened.load()
+        reopened.save(state.copy(position = 60.0))
+        assertEquals(0, reopened.positionWrites)
+        store.clear()
+        store.save(state)
+        assertEquals(3, store.positionWrites)
+        assertEquals(state, store.load())
+    }
+
+    @Test
     fun staleIndexIsNull() {
         val store = JsonPlaybackStateStore(dir.dir)
         store.save(state.copy(currentIndex = 7))

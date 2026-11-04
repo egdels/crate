@@ -63,6 +63,15 @@ class JsonPlaybackStateStore(directory: File) : PlaybackStateStore {
     var queueWrites = 0
         private set
 
+    /** The position last written or read: the player reports a seek as
+     *  two state changes (buffering, ready) with the same position, and
+     *  each one saved, so a single seek wrote `position.json` twice. */
+    private var writtenPosition: PositionFile? = null
+
+    /** For tests: how often `position.json` was actually written. */
+    var positionWrites = 0
+        private set
+
     @Synchronized
     override fun load(): PlaybackState? {
         if (!queueFile.exists() || !positionFile.exists()) return null
@@ -70,6 +79,7 @@ class JsonPlaybackStateStore(directory: File) : PlaybackStateStore {
         val position = json.decodeFromString(PositionFile.serializer(), positionFile.readText())
         if (position.currentIndex !in queue.trackIds.indices) return null
         writtenQueue = queue
+        writtenPosition = position
         return PlaybackState(
             queue.trackIds, queue.asAlbum, position.currentIndex, position.position.coerceAtLeast(0.0),
             position.isShuffled, position.repeatMode,
@@ -89,7 +99,11 @@ class JsonPlaybackStateStore(directory: File) : PlaybackStateStore {
             currentIndex = state.currentIndex, position = state.position,
             isShuffled = state.isShuffled, repeatMode = state.repeatMode,
         )
-        replace(positionFile, json.encodeToString(PositionFile.serializer(), position))
+        if (position != writtenPosition) {
+            replace(positionFile, json.encodeToString(PositionFile.serializer(), position))
+            writtenPosition = position
+            positionWrites++
+        }
     }
 
     @Synchronized
@@ -97,6 +111,7 @@ class JsonPlaybackStateStore(directory: File) : PlaybackStateStore {
         queueFile.delete()
         positionFile.delete()
         writtenQueue = null
+        writtenPosition = null
     }
 
     /** Written to a sibling first and renamed into place, like the index. */
