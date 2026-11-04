@@ -1,0 +1,7 @@
+- Tap the cover in the player bar to open the album that is playing.
+- Damaged files no longer leave the player silent.
+- Albums in CD1/CD2 folders without disc tags play disc by disc.
+- Media buttons restart playback after the app was closed.
+- "Open with" on a library file plays its album.
+- Long M4B audiobooks keep their tags and cover.
+- Lyrics: [offset:] and "[Chorus]" lines handled correctly.

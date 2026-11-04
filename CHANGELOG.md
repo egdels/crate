@@ -9,51 +9,55 @@ version's section from this file as the GitHub release notes.
 
 ### Added
 
-- A click or tap on the cover in the player bar shows the album that is
-  playing: on the Mac and in Android's two panes the grid scrolls to it,
+- The cover in the player bar leads to the album that is playing: a
+  click (Mac) or tap (Android) selects it, the grid scrolls to it, and
   on a phone its page opens. A search that hides the album is cleared.
 
 ### Fixed
 
+- Damaged files no longer bring the player down. On the Mac such a
+  file could crash the app while its waveform was drawn or its
+  loudness measured, and a queue of them under Repeat crashed or
+  switched between them forever; now Crate stops with a message. On
+  Android, Next or Previous after a file that cannot be played plays
+  the next one instead of staying silent.
 - Albums ripped into CD1/CD2 folders without disc tags play one disc
-  after the other instead of alternating between them, with a "Disc n"
-  line each; tracks lying in the album folder beside "Bonus 1" and
-  "Bonus 2" folders are no longer dropped from it.
+  after the other, with a "Disc n" line each, instead of mixing their
+  tracks. Tracks lying in an album folder beside "Bonus 1" and "Bonus
+  2" folders are no longer dropped from the album.
 - Compilations sort under Various Artists, not under one of their
-  artists' sort names.
-- A subfolder that cannot be read during a rescan keeps its tracks,
-  one unreachable folder no longer stops the rescan of the others, and
-  a folder added inside one already in the library is not watched
-  twice.
-- Lyrics: `[offset:]` in an `.lrc` file moves the lines the right way,
-  "[Chorus]" lines in plain-text lyrics stay, and files with a byte
-  order mark or in Windows encoding show their first line and their
-  umlauts.
-- Silent or undecodable files are no longer measured again on every
-  launch; a song added with Play Next or Play Last is levelled on its
-  own, not with the queued album's gain.
-- Genres written as "(17)Rock" show as "Rock"; genres spelled
-  "Hoerspiel" or "Hoerbuch" count as spoken word.
-- Mac: a damaged file no longer crashes the app (while drawing its
-  waveform or measuring its loudness), and a queue of damaged files
-  under Repeat no longer crashes or spins forever; Play after a launch with a restored track moves the clock; Next
-  on the last track leaves it loaded and paused; a broken favorites or
-  history file no longer causes the other saved files to be overwritten;
-  a folder added during a scan is scanned after it; covers a rescan
-  finds show at once; error messages stay visible.
-- Android: media buttons resume playback after the app was closed,
-  with its loudness levelling; "Open with" on a library file plays its
-  album; long M4B audiobooks keep their tags and cover; files whose
-  size the provider does not report are read; playback errors stay
-  visible, and Next or Previous after a file that cannot be played
-  plays the next one instead of staying silent; ReplayGain and Sound Check in ID3v2.2 tags are read; "ß"
-  matches "ss" in search, and Ø, Æ and Ł sort like the Mac does.
+  artists.
+- Rescans: a subfolder that cannot be read keeps its tracks, one
+  folder that cannot be reached no longer stops the others, and a
+  folder added inside one already in the library is not added twice.
+- Lyrics: `[offset:]` in an `.lrc` file now moves the lines the way the
+  format means it, "[Chorus]" lines in plain-text lyrics stay, and
+  files saved with a byte order mark or in Windows encoding show their
+  first line and their umlauts.
+- Loudness: silent or undecodable files are no longer measured again
+  on every launch, and a song added with Play Next or Play Last is
+  levelled on its own, not with the queued album's gain.
+- Genres written as "(17)Rock" show as "Rock", and "Hoerspiel" or
+  "Hoerbuch" count as spoken word, so the jump buttons appear.
+- Mac: Play after a launch that restored a track keeps the clock
+  running; Next on the last track leaves it ready to play again; one
+  damaged favorites or history file no longer causes the other saved
+  files to be overwritten; a folder added during a scan is scanned
+  after it instead of being ignored; covers found by a rescan show at
+  once; error messages stay on screen until read.
+- Android: media buttons start playback again after the app was
+  closed, with its loudness levelling; "Open with" on a file of the
+  library plays its album; long M4B audiobooks keep their tags and
+  cover; files whose size the storage provider does not report are
+  read; playback errors stay on screen; ReplayGain and Sound Check in
+  old ID3v2.2 tags are read; "ss" finds "ß" in search, and Ø, Æ and Ł
+  sort as on the Mac.
 
 ### Changed
 
+- Dragging the seek slider saves the position once, when let go.
 - Mac: the practice panel's waveform is read only while the panel is
   open, and the lyrics pane opens at the line being sung.
-- Dragging the seek slider seeks and saves once, at the end of the drag.
 
 ## [0.15.0] - 2026-11-01
 
