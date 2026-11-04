@@ -211,6 +211,9 @@ internal object Id3v2 {
         "TT2" to "TIT2", "TP1" to "TPE1", "TP2" to "TPE2", "TAL" to "TALB", "TRK" to "TRCK",
         "TPA" to "TPOS", "TYE" to "TYER", "TCO" to "TCON", "TOR" to "TORY", "PIC" to "APIC",
         "TCM" to "TCOM", "TCP" to "TCMP", "TSP" to "TSOP", "TS2" to "TSO2", "TSA" to "TSOA", "ULT" to "USLT",
+        // v2.2 COM/TXX bodies are laid out as v2.3 COMM/TXXX; old iTunes wrote
+        // its Sound Check (iTunNORM) into COM.
+        "COM" to "COMM", "TXX" to "TXXX",
     )
     private val WANTED = setOf(
         "TIT2", "TPE1", "TPE2", "TALB", "TRCK", "TPOS", "TYER", "TDRC", "TDOR", "TORY", "TCON", "APIC",

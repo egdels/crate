@@ -27,8 +27,11 @@ class LyricsTest {
 
     @Test
     fun offsetShiftsTheTimes() {
-        val lyrics = Lyrics.parse("[offset:-500]\n[00:01.00]a\n[00:02.00]b")
+        // LRC convention: a positive offset shows the lines sooner.
+        val lyrics = Lyrics.parse("[offset:500]\n[00:01.00]a\n[00:02.00]b")
         assertEquals(listOf(0.5, 1.5), lyrics.lines.map { it.time })
+        val later = Lyrics.parse("[offset:-500]\n[00:01.00]a\n[00:02.00]b")
+        assertEquals(listOf(1.5, 2.5), later.lines.map { it.time })
     }
 
     @Test
@@ -52,5 +55,29 @@ class LyricsTest {
     fun emptyTextIsEmpty() {
         assertTrue(Lyrics.parse("").isEmpty)
         assertTrue(Lyrics.parse("[ti:only a header]").isEmpty)
+    }
+
+    @Test
+    fun plainTextKeepsSectionMarks() {
+        val lyrics = Lyrics.parse("[ti:Song]\n[Chorus]\n[Verse 2] We will\nrock you")
+        assertFalse(lyrics.isTimed)
+        assertEquals(listOf("[Chorus]", "[Verse 2] We will", "rock you"), lyrics.lines.map { it.text })
+
+        // In a timed file a mark without a stamp still goes.
+        val timed = Lyrics.parse("[Chorus]\n[00:01.00]a")
+        assertEquals(listOf("a"), timed.lines.map { it.text })
+    }
+
+    @Test
+    fun byteOrderMarkIsIgnored() {
+        val lyrics = Lyrics.parse("\uFEFF[00:12.34]first\n[00:13.00]second")
+        assertEquals(listOf("first", "second"), lyrics.lines.map { it.text })
+    }
+
+    @Test
+    fun windows1252IsTheFallback() {
+        val latin = byteArrayOf(0x47, 0x72, 0xFC.toByte(), 0xDF.toByte(), 0x65) // "Grüße" in Windows-1252
+        assertEquals("Grüße", Lyrics.decode(latin))
+        assertEquals("Grüße", Lyrics.decode("Grüße".toByteArray()))
     }
 }

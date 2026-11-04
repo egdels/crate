@@ -154,4 +154,30 @@ class LoudnessTest {
         assertNull(result.measurement(tracks[0]))
         assertEquals(listOf(tracks[0]), analyzer.pending(tracks))
     }
+
+    @Test
+    fun silentAndUndecodableFilesAreNotPendingForever() = runBlocking {
+        val store = JsonLoudnessStore(dir.file("silent.json").also { it.delete() })
+        val silent = makeTrack("silent")
+        val broken = makeTrack("broken")
+        val empty = makeTrack("empty")
+        val analyzer = LoudnessAnalyzer(store, measure = { track ->
+            when (track.title) {
+                "broken" -> throw IllegalStateException("undecodable")
+                "empty" -> null
+                else -> LoudnessMeter(44_100.0, 1).finalResult
+            }
+        })
+        val tracks = listOf(silent, broken, empty)
+        val result = analyzer.run(tracks) { _, _ -> }
+        assertNull(result.measurement(silent)!!.loudness)
+        assertTrue(result.isFresh(silent))
+        assertNull(result.trackGain(silent))
+        assertTrue(analyzer.pending(tracks).isEmpty())
+        // The silent file's entry survives the store.
+        assertTrue(JsonLoudnessStore(store.file).load()!!.isFresh(silent))
+
+        // A changed file is tried again.
+        assertEquals(1, analyzer.pending(listOf(broken.copy(modified = 99))).size)
+    }
 }

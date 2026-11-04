@@ -25,7 +25,8 @@ data class Album(
     /** The folder the tracks lie in; disc subfolders ("CD 2") count as
      *  their parent. */
     val folder: String,
-    /** Sorted by disc number, then track number, then title. */
+    /** Sorted by disc number ([discNumber]), then disc folder, then
+     *  track number, then title. */
     val tracks: List<Track>,
 ) {
     /** Folder, artist and title: two folders with an identically tagged
@@ -35,13 +36,13 @@ data class Album(
     /** One disc of the album: its number and its tracks, in order. */
     data class Disc(val number: Int, val tracks: List<Track>)
 
-    /** The tracks by disc, in order; untagged tracks count as disc 1. An
-     *  album page shows the disc numbers when there is more than one. */
+    /** The tracks by disc, in order ([discNumber]). An album page shows
+     *  the disc numbers when there is more than one. */
     val discs: List<Disc>
         get() {
             val discs = mutableListOf<Disc>()
             for (track in tracks) {
-                val number = track.discNumber ?: 1
+                val number = discNumber(track)
                 val last = discs.lastOrNull()
                 if (last != null && last.number == number) {
                     discs[discs.size - 1] = Disc(number, last.tracks + track)
@@ -52,16 +53,34 @@ data class Album(
             return discs
         }
 
+    /** The track's disc: its disc tag, else the number of the subfolder
+     *  it lies in when that is not the album's own folder ("CD2",
+     *  "soul_2"), else 1. Rips without disc tags are common, and with
+     *  all of them on disc 1 the discs' tracks interleaved (CD1-01,
+     *  CD2-01, CD1-02, ...). */
+    fun discNumber(track: Track): Int = discNumber(track, folder)
+
     val duration: Double get() = tracks.sumOf { it.duration }
 
     /** What the album sorts by: the tracks' sort tags when they have
      *  them ("Beatles, The"), otherwise the name without a leading
      *  "The". Album artist sort tags win over track artist ones, like
-     *  the names themselves. */
+     *  the names themselves. A compilation sorts as "Various Artists":
+     *  its tracks' artist sort tags (Picard writes them on every track)
+     *  would file it among one of its artists' albums; only album
+     *  artist sort tags that all agree still count. */
     val sortArtist: String
-        get() = mostCommon(tracks.mapNotNull { it.albumArtistSort.trimmedOrNull() })
-            ?: mostCommon(tracks.mapNotNull { it.artistSort.trimmedOrNull() })
-            ?: sortName(artist)
+        get() {
+            if (artist == VARIOUS_ARTISTS) {
+                val tags = tracks.mapNotNull { it.albumArtistSort.trimmedOrNull() }
+                val first = tags.firstOrNull()
+                if (first != null && tags.all { looseKey(it) == looseKey(first) }) return first
+                return sortName(artist)
+            }
+            return mostCommon(tracks.mapNotNull { it.albumArtistSort.trimmedOrNull() })
+                ?: mostCommon(tracks.mapNotNull { it.artistSort.trimmedOrNull() })
+                ?: sortName(artist)
+        }
 
     val sortTitle: String
         get() = mostCommon(tracks.mapNotNull { it.albumSort.trimmedOrNull() }) ?: sortName(title)
@@ -114,15 +133,27 @@ data class Album(
                     stem = discStem(Paths.lastComponent(folder)),
                 )
             }
-            for ((sibling, keys) in siblings) {
-                if (keys.size < 2 || sibling.stem.isEmpty()) continue
+            // The parent folder may hold tracks of the same album itself
+            // ("Album/" with "Bonus 1", "Bonus 2"): those join the merge. A
+            // second sibling group with the same title under the same parent
+            // (another artist or stem) stays apart rather than joining the
+            // first one. Sorted, so which group merges is stable.
+            val mergedKeys = HashSet<Key>()
+            val groups = siblings.entries.filter { it.value.size >= 2 && it.key.stem.isNotEmpty() }
+                .sortedWith(compareBy({ it.key.parent }, { it.key.title }, { it.key.artist }, { it.key.stem }))
+            for ((sibling, keys) in groups) {
+                val mergedKey = Key(sibling.parent, sibling.title)
+                if (mergedKey in mergedKeys) continue
                 val parent = Paths.parent(buckets.getValue(keys[0]).folder)
                 val merged = mutableListOf<Track>()
                 for (key in keys) {
                     merged.addAll(buckets.getValue(key).tracks)
                     buckets.remove(key)
                 }
-                buckets[Key(sibling.parent, sibling.title)] = Bucket(parent, merged)
+                // Tracks of the same album lying in the parent itself already
+                // hold this key: join them instead of replacing them.
+                buckets.getOrPut(mergedKey) { Bucket(parent, mutableListOf()) }.tracks.addAll(merged)
+                mergedKeys.add(mergedKey)
             }
 
             val rootPaths = roots.map { it.trimEnd('/').lowercase() }.toSet()
@@ -137,7 +168,7 @@ data class Album(
                     year = bucket.tracks.mapNotNull { it.year }.minOrNull(),
                     genre = mostCommon(bucket.tracks.mapNotNull { it.genre.trimmedOrNull() }),
                     folder = bucket.folder,
-                    tracks = bucket.tracks.sortedWith(TRACK_ORDER),
+                    tracks = bucket.tracks.sortedWith(trackOrder(bucket.folder)),
                 )
             }.let(::sorted)
         }
@@ -282,9 +313,12 @@ data class Album(
         internal fun discStem(name: String): String = looseKey(name).trimEnd { it.isDigit() }
 
         /** Lowercased, letters and digits only: "Winter-Works" and
-         *  "Winterworks" compare equal, as do "Band" and "Band;". */
+         *  "Winterworks" compare equal, as do "Band" and "Band;". NFC
+         *  first: a decomposed "ö" is "o" plus a combining mark, which the
+         *  filter would drop, so "Björk" from two taggers would split
+         *  (Swift compares the two forms as equal). */
         internal fun looseKey(text: String): String =
-            text.lowercase().filter { it.isLetterOrDigit() }
+            java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFC).lowercase().filter { it.isLetterOrDigit() }
 
         /** The parent folder, or the grandparent when the parent is a
          *  disc folder like "CD1", "Disc 2" or "Disk02". */
@@ -310,9 +344,22 @@ data class Album(
             return best?.key
         }
 
-        private val TRACK_ORDER = Comparator<Track> { a, b ->
-            val byDisc = (a.discNumber ?: 1).compareTo(b.discNumber ?: 1)
+        internal fun discNumber(track: Track, albumFolder: String): Int {
+            track.discNumber?.let { return it }
+            val folder = Paths.parent(track.path)
+            if (folder.lowercase() == albumFolder.lowercase()) return 1
+            val digits = looseKey(Paths.lastComponent(folder)).takeLastWhile { it in '0'..'9' }
+            return if (digits.isEmpty() || digits.length > 4) 1 else digits.toInt()
+        }
+
+        private fun trackOrder(folder: String) = Comparator<Track> { a, b ->
+            val byDisc = discNumber(a, folder).compareTo(discNumber(b, folder))
             if (byDisc != 0) return@Comparator byDisc
+            // Same disc, different subfolders (no number to tell them apart):
+            // one folder after the other, not interleaved.
+            val fa = Paths.parent(a.path)
+            val fb = Paths.parent(b.path)
+            if (fa != fb) return@Comparator naturalCompare(fa, fb)
             val byTrack = (a.trackNumber ?: Int.MAX_VALUE).compareTo(b.trackNumber ?: Int.MAX_VALUE)
             if (byTrack != 0) return@Comparator byTrack
             naturalCompare(a.title, b.title)

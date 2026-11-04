@@ -17,6 +17,8 @@ class SkipTest {
         assertTrue(Skip.isOffered(track("Book.M4B")))
         assertTrue(Skip.isOffered(track("01.mp3", genre = "Hörbuch")))
         assertTrue(Skip.isOffered(track("01.mp3", genre = "HÖRSPIEL")))
+        assertTrue(Skip.isOffered(track("01.mp3", genre = "Hoerspiel")))
+        assertTrue(Skip.isOffered(track("01.mp3", genre = "Kinder-Hoerbuch")))
         assertTrue(Skip.isOffered(track("01.mp3", genre = "Audiobooks")))
         assertTrue(Skip.isOffered(track("01.mp3", genre = "Spoken Word")))
         assertTrue(Skip.isOffered(track("01.mp3", genre = "Podcast")))

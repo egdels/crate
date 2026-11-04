@@ -29,6 +29,10 @@ class TagTextTest {
         assertEquals("Rock", TagText.genre("(17)"))
         assertEquals("Rock", TagText.genre("17"))
         assertEquals("Shoegaze", TagText.genre(" Shoegaze "))
+        // ID3v2.3's refinement form: the text when there is one.
+        assertEquals("Hard Rock", TagText.genre("(17)Hard Rock"))
+        assertEquals("Rock", TagText.genre("(17)(RX)"))
+        assertEquals("Speech", TagText.genre("(101)Speech"))
         assertEquals("Synthpop", Id3v1Genres.name(147))
         assertNull(Id3v1Genres.name(148))
     }

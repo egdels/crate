@@ -53,7 +53,7 @@ class SafLyricsSource(private val context: Context) : LyricsSource {
             val id = if (parent.isEmpty()) name else "$parent/$name"
             val text = runCatching {
                 val sibling = DocumentsContract.buildDocumentUriUsingTree(uri, id)
-                context.contentResolver.openInputStream(sibling)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                context.contentResolver.openInputStream(sibling)?.use { Lyrics.decode(it.readBytes()) }
             }.getOrNull()
             if (text != null) return text
         }

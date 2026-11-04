@@ -47,8 +47,25 @@ fun String.foldedForSearch(): String =
     Normalizer.normalize(this, Normalizer.Form.NFD)
         .replace(COMBINING_MARKS, "")
         .lowercase()
+        // ß has no decomposition; Foundation's comparison matches it with
+        // "ss" ("Weiß" contains "weiss" on the Mac).
+        .replace("ß", "ss")
 
 private val COMBINING_MARKS = Regex("\\p{M}+")
+
+/** [foldedForSearch] plus the letters without a decomposition that the
+ *  Mac's collation sorts as their base letters ("Øystein" under O,
+ *  "Æther" as "ae", "Łódź" under L). Only for sorting: the Mac's search
+ *  does not match "oystein" with "Øystein" either. */
+private fun String.foldedForSorting(): String {
+    val folded = foldedForSearch()
+    if (folded.none { it in SORT_FOLDS }) return folded
+    val out = StringBuilder(folded.length + 2)
+    for (c in folded) out.append(SORT_FOLDS[c] ?: c)
+    return out.toString()
+}
+
+private val SORT_FOLDS = mapOf('ø' to "o", 'æ' to "ae", 'œ' to "oe", 'ł' to "l", 'đ' to "d")
 
 /**
  * Case-insensitive, diacritic-insensitive, and runs of digits compare by
@@ -56,8 +73,8 @@ private val COMBINING_MARKS = Regex("\\p{M}+")
  * falls back to the plain comparison, so the order stays total.
  */
 fun naturalCompare(a: String, b: String): Int {
-    val x = a.foldedForSearch()
-    val y = b.foldedForSearch()
+    val x = a.foldedForSorting()
+    val y = b.foldedForSorting()
     var i = 0
     var j = 0
     while (i < x.length && j < y.length) {

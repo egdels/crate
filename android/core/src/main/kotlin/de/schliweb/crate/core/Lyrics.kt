@@ -29,10 +29,14 @@ data class Lyrics(val lines: List<Line>) {
     companion object {
         /** LRC when the text has time stamps ("[mm:ss.xx]", also the
          *  "[mm:ss:xx]" some files have), otherwise plain lines. LRC
-         *  header tags are dropped, "[offset:ms]" is applied, a line with
-         *  several stamps becomes several lines, and the result is in
-         *  time order. */
-        fun parse(text: String): Lyrics {
+         *  header tags are dropped, "[offset:ms]" is applied (positive
+         *  shows the lines sooner, as the LRC convention has it), a line
+         *  with several stamps becomes several lines, and the result is
+         *  in time order. Plain text keeps its "[Chorus]" section marks;
+         *  only lines of known LRC header tags go. */
+        fun parse(source: String): Lyrics {
+            // A BOM (Windows tools write one) would hide the first stamp.
+            val text = source.removePrefix("\uFEFF")
             val timed = mutableListOf<Line>()
             val plain = mutableListOf<Line>()
             var offset = 0.0
@@ -41,9 +45,11 @@ data class Lyrics(val lines: List<Line>) {
                 val line = raw.trim()
                 var rest = line
                 val stamps = mutableListOf<Double>()
+                var onlyHeaders = true
                 while (true) {
                     val (tag, after) = leadingTag(rest) ?: break
                     rest = after
+                    if (!isHeader(tag)) onlyHeaders = false
                     val seconds = seconds(tag)
                     when {
                         seconds != null -> stamps += seconds
@@ -52,14 +58,20 @@ data class Lyrics(val lines: List<Line>) {
                 }
                 val words = rest.trim()
                 if (stamps.isEmpty()) {
-                    if (rest.length == line.length) plain += Line(null, words)
+                    if (rest.length == line.length) {
+                        plain += Line(null, words)
+                    } else if (!(onlyHeaders && words.isEmpty())) {
+                        // "[Chorus]", "[Chorus] We will": no stamp, no header.
+                        // Dropped later if the file turns out to be timed.
+                        plain += Line(null, line)
+                    }
                     continue
                 }
                 sawStamp = true
                 if (words.isNotEmpty()) for (stamp in stamps) timed += Line(stamp, words)
             }
             if (sawStamp) {
-                return Lyrics(timed.sortedBy { it.time }.map { Line(maxOf(0.0, it.time!! + offset), it.text) })
+                return Lyrics(timed.sortedBy { it.time }.map { Line(maxOf(0.0, it.time!! - offset), it.text) })
             }
             val lines = mutableListOf<Line>()
             for (line in plain) {
@@ -68,6 +80,28 @@ data class Lyrics(val lines: List<Line>) {
             }
             while (lines.lastOrNull()?.text?.isEmpty() == true) lines.removeAt(lines.size - 1)
             return Lyrics(lines)
+        }
+
+        /** A lyrics file's bytes as text: UTF-8, or Windows-1252 when
+         *  they are not valid UTF-8 (older German .txt lyrics, whose
+         *  umlauts became replacement characters). As the Mac's
+         *  `FileLyricsSource.decode`. */
+        fun decode(bytes: ByteArray): String = try {
+            Charsets.UTF_8.newDecoder()
+                .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+                .decode(java.nio.ByteBuffer.wrap(bytes)).toString()
+        } catch (e: java.nio.charset.CharacterCodingException) {
+            String(bytes, charset("windows-1252"))
+        }
+
+        private val HEADERS = setOf("ti", "ar", "al", "au", "by", "re", "ve", "length", "offset", "la", "lr", "#", "tool")
+
+        /** The LRC header tags ("ti:Title", "offset:300"). */
+        private fun isHeader(tag: String): Boolean {
+            val colon = tag.indexOf(':')
+            if (colon < 0) return false
+            return tag.substring(0, colon).trim().lowercase() in HEADERS
         }
 
         /** "[tag]" at the start, and what follows it. */

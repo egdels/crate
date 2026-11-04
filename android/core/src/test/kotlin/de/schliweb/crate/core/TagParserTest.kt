@@ -140,6 +140,21 @@ class TagParserTest {
         assertEquals(7, meta.trackNumber)
     }
 
+    /** Old iTunes wrote ID3v2.2 with Sound Check in a COM frame and user
+     *  values in TXX: laid out as COMM and TXXX. */
+    @Test
+    fun id3v22CommentAndUserFramesCarryGains() {
+        val com = "COM" to (byteArrayOf(0) + "eng".toByteArray() + "iTunNORM".toByteArray() + byteArrayOf(0) +
+            " 00001070 0000120F 00008A1B 000082AF 00023568 000234CB 00008000 00007E5F 00000000 00000000".toByteArray())
+        val tag = id3v2(2, listOf("TT2" to text(0, "Old"), com))
+        val checked = Mp3Metadata.read(ArrayByteSource(tag + mp3Frame())).metadata
+        assertTrue(kotlin.math.abs(checked.trackGain!! - (-10 * kotlin.math.log10(4623.0 / 1000))) < 0.001)
+
+        val txx = "TXX" to (text(0, "replaygain_album_gain") + byteArrayOf(0) + "-7.25 dB".toByteArray())
+        val withGain = Mp3Metadata.read(ArrayByteSource(id3v2(2, listOf("TT2" to text(0, "Old"), txx)) + mp3Frame())).metadata
+        assertEquals(-7.25, withGain.albumGain)
+    }
+
     @Test
     fun unsynchronisedTagIsRestored() {
         // A frame body with 0xFF 0x00 pairs inserted by unsynchronisation.
@@ -262,6 +277,28 @@ class TagParserTest {
         val meta = Mp4Metadata.read(ArrayByteSource(mp4(true, atom("©gen", data(1, "Shoegaze".toByteArray()))))).metadata
         assertEquals("Shoegaze", meta.genre)
         assertNull(meta.title)
+    }
+
+    /** A long book's sample tables (trak) come before udta and can be
+     *  larger than any sensible buffer: the tags must still be found,
+     *  and the sample tables not read at all. */
+    @Test
+    fun mp4TagsAfterAHugeTrakAreRead() {
+        val mvhd = atom("mvhd", ByteArray(12), be32(1000), be32(90_500), ByteArray(80))
+        val trak = atom("trak", ByteArray(20 * 1024 * 1024))
+        val udta = atom("udta", atom("meta", ByteArray(4), atom("ilst", atom("©nam", data(1, "Book".toByteArray())))))
+        val bytes = atom("ftyp", "M4B ".toByteArray(), be32(0)) + atom("moov", mvhd, trak, udta) + atom("mdat", ByteArray(100))
+        var read = 0L
+        val source = object : ByteSource {
+            val inner = ArrayByteSource(bytes)
+            override val size get() = inner.size
+            override fun read(offset: Long, length: Int): ByteArray = inner.read(offset, length).also { read += it.size }
+            override fun close() {}
+        }
+        val meta = Mp4Metadata.read(source).metadata
+        assertEquals("Book", meta.title)
+        assertEquals(90.5, meta.duration, 0.001)
+        assertTrue(read < 4096, "read $read bytes")
     }
 
     @Test

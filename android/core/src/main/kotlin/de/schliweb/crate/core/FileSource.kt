@@ -14,7 +14,8 @@ import java.io.FileNotFoundException
 data class Folder(val uri: String, val path: String, val name: String)
 
 /** A file the scanner found, with the two facts that decide whether it
- *  has to be re-read: size and modification time. */
+ *  has to be re-read: size (-1 when the provider does not know it) and
+ *  modification time. */
 data class ScannedFile(val uri: String, val path: String, val fileSize: Long, val modified: Long)
 
 /**
@@ -27,8 +28,17 @@ interface FileSource {
     /** Regular files under [folder] whose extension matches, hidden files
      *  skipped, sorted by path so results are stable. Throws when the
      *  folder cannot be listed. */
-    suspend fun scan(folder: Folder): List<ScannedFile>
+    suspend fun scan(folder: Folder): List<ScannedFile> = walk(folder).files
+
+    /** [scan], plus the paths of the subfolders that could not be
+     *  listed: known tracks under them are not gone. A rescan that took
+     *  the silence for "deleted" pruned what a provider hiccup hid.
+     *  Throws when [folder] itself cannot be listed. */
+    suspend fun walk(folder: Folder): Walk
 }
+
+/** What a [FileSource.walk] found, and the folders it could not look into. */
+data class Walk(val files: List<ScannedFile>, val unreadable: List<String> = emptyList())
 
 /** What Android decodes without help. Unlike the Mac, Ogg Vorbis and
  *  Opus are included: the platform plays them. Audiobooks (m4b, an M4A
@@ -45,18 +55,20 @@ fun isAudioFileName(name: String, extensions: Set<String> = DEFAULT_EXTENSIONS):
 /** java.io.File implementation: `Folder.uri` is a `file:` URI or a
  *  plain path, `Folder.path` the directory's path. */
 class LocalFileSource(private val extensions: Set<String> = DEFAULT_EXTENSIONS) : FileSource {
-    override suspend fun scan(folder: Folder): List<ScannedFile> {
+    override suspend fun walk(folder: Folder): Walk {
         val root = File(folder.path)
         if (!root.isDirectory) throw FileNotFoundException(folder.path)
         val files = mutableListOf<ScannedFile>()
+        val unreadable = mutableListOf<String>()
         root.walkTopDown()
             .onEnter { !it.name.startsWith(".") || it == root }
+            .onFail { dir, _ -> unreadable.add(dir.path) }
             .forEach { file ->
                 if (file.isFile && isAudioFileName(file.name, extensions)) {
                     files.add(ScannedFile(file.toURI().toString(), file.path, file.length(), file.lastModified()))
                 }
             }
-        return files.sortedBy { it.path }
+        return Walk(files.sortedBy { it.path }, unreadable)
     }
 
     companion object {

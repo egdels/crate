@@ -55,6 +55,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.guava.future
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 import java.io.IOException
 
 /**
@@ -160,10 +161,15 @@ class PlaybackService : MediaSessionService() {
                 updateButtons()
                 recordPlay(player)
                 applyPractice(player)
-                // A playlist set up paused is the restore after a restart:
-                // paused since its mark was set.
+                // A playlist set up paused at its mark is the restore after
+                // a restart: paused since the mark was set. A deliberate
+                // start (a tile, a row) also arrives paused, the controller
+                // sends play separately, but at Bookmarks.position, which
+                // has already gone back by Skip.rewind: not again here.
                 pausedAtMillis = if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED && !player.playWhenReady) {
-                    mediaItem?.mediaId?.let { bookmarks.current.entries[it] }?.let { (it.saved * 1000).toLong() }
+                    mediaItem?.mediaId?.let { bookmarks.current.entries[it] }
+                        ?.takeIf { abs(player.currentPosition / 1000.0 - it.position) < 1 }
+                        ?.let { (it.saved * 1000).toLong() }
                 } else {
                     null
                 }
@@ -354,6 +360,8 @@ class PlaybackService : MediaSessionService() {
             val app = application as CrateApplication
             val state = withContext(Dispatchers.IO) {
                 if (app.library.tracks.isEmpty()) app.library.load()
+                // The measured gains, which mediaItems reads.
+                runCatching { app.loudness.load() }
                 app.playback.load()
             } ?: throw IllegalStateException("nothing to resume")
             val byId = app.library.tracks.associateBy { it.id }

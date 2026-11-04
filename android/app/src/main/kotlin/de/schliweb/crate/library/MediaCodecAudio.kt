@@ -81,7 +81,9 @@ object MediaCodecAudio {
                     meter?.add(planar, frames)
                     builder?.add(planar, frames)
                 }
-                override val result: Measured get() = Measured(meter?.result, builder?.result())
+                // Read to the end: silence is a measurement too (no gain),
+                // or the file would be decoded again on every launch.
+                override val result: Measured get() = Measured(meter?.finalResult, builder?.result())
             })
         } catch (e: TimeoutCancellationException) {
             Log.w(TAG, "gave up: ${track.title} took longer than it plays")

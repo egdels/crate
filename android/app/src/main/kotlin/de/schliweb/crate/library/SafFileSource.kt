@@ -11,6 +11,7 @@ import de.schliweb.crate.core.FileSource
 import de.schliweb.crate.core.Folder
 import de.schliweb.crate.core.Paths
 import de.schliweb.crate.core.ScannedFile
+import de.schliweb.crate.core.Walk
 import de.schliweb.crate.core.isAudioFileName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -20,6 +21,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.FileNotFoundException
 import java.io.IOException
+import java.util.Collections
 
 /**
  * Lists a document tree the user picked with the system folder picker.
@@ -41,17 +43,25 @@ class SafFileSource(
     private val context: Context,
     private val extensions: Set<String> = DEFAULT_EXTENSIONS,
 ) : FileSource {
-    override suspend fun scan(folder: Folder): List<ScannedFile> = withContext(Dispatchers.IO) {
+    override suspend fun walk(folder: Folder): Walk = withContext(Dispatchers.IO) {
         val tree = Uri.parse(folder.uri)
         val permits = Semaphore(QUERIES_IN_FLIGHT)
-        val files = coroutineScope { walk(tree, DocumentsContract.getTreeDocumentId(tree), folder.path, permits) }
-        files.sortedBy { it.path }
+        val unreadable = Collections.synchronizedList(mutableListOf<String>())
+        val files = coroutineScope { walk(tree, DocumentsContract.getTreeDocumentId(tree), folder.path, permits, unreadable) }
+        Walk(files.sortedBy { it.path }, unreadable.toList())
     }
 
     /** The audio files under one folder, subfolders listed concurrently.
      *  The root's listing fails loudly (no access, folder gone); a
-     *  subfolder that cannot be listed is skipped, as a hidden one is. */
-    private suspend fun walk(tree: Uri, documentId: String, path: String, permits: Semaphore): List<ScannedFile> = coroutineScope {
+     *  subfolder that cannot be listed is skipped and its path noted in
+     *  [unreadable], so the library keeps the tracks it knew there. */
+    private suspend fun walk(
+        tree: Uri,
+        documentId: String,
+        path: String,
+        permits: Semaphore,
+        unreadable: MutableList<String>,
+    ): List<ScannedFile> = coroutineScope {
         val files = mutableListOf<ScannedFile>()
         val subfolders = mutableListOf<Pair<String, String>>()
         permits.withPermit {
@@ -74,7 +84,10 @@ class SafFileSource(
                             ScannedFile(
                                 uri = DocumentsContract.buildDocumentUriUsingTree(tree, id).toString(),
                                 path = Paths.join(path, name),
-                                fileSize = it.getLong(3),
+                                // Null means unknown (some network providers):
+                                // -1, not getLong's 0, which reads as an
+                                // empty file and fails without a try.
+                                fileSize = if (it.isNull(3)) -1 else it.getLong(3),
                                 modified = it.getLong(4),
                             ),
                         )
@@ -85,8 +98,9 @@ class SafFileSource(
         val nested = subfolders.map { (id, subPath) ->
             async {
                 try {
-                    walk(tree, id, subPath, permits)
+                    walk(tree, id, subPath, permits, unreadable)
                 } catch (e: IOException) {
+                    unreadable.add(subPath)
                     emptyList()
                 }
             }

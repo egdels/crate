@@ -40,14 +40,22 @@ object TagText {
     }
 
     /** Plain text, or ID3v2.3's "(17)" / "17" referring to the ID3v1
-     *  list (0-based). */
+     *  list (0-based). "(17)Rock", the v2.3 refinement form, gives its
+     *  text; "(17)(RX)" the number's name. */
     fun genre(text: String): String {
         val trimmed = text.trim()
+        REFINED.matchEntire(trimmed)?.let { match ->
+            val rest = match.groupValues[2].trim()
+            if (rest.isNotEmpty() && !rest.startsWith("(")) return rest
+            Id3v1Genres.name(match.groupValues[1].toInt())?.let { return it }
+        }
         val digits = trimmed.trim('(', ')')
         val index = digits.toIntOrNull()
         if (index != null) Id3v1Genres.name(index)?.let { return it }
         return trimmed
     }
+
+    private val REFINED = Regex("""^\((\d{1,3})\)(.*)$""")
 }
 
 /**

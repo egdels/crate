@@ -30,15 +30,48 @@ object Mp4Metadata {
             }
             if (seen == 0 && type != "ftyp") throw NotMp4()
             if (size < headerSize) break
-            if (type == "moov") {
-                val moov = source.read(offset + headerSize, (size - headerSize).coerceAtMost(16L * 1024 * 1024).toInt())
-                return parseMoov(moov)
-            }
+            if (type == "moov") return parseMoov(moovParts(source, offset + headerSize, offset + size))
             offset += size
             seen++
         }
         return ParsedTags(TrackMetadata(), emptyList())
     }
+
+    /** Only the `mvhd` and `udta` children of the `moov` body between
+     *  [from] and [to], each read whole (header included) and joined, so
+     *  [parseMoov] sees them as siblings. The `trak` atoms in between
+     *  hold the sample tables, about 600 KB per hour of audio (`stsz`),
+     *  and come before `udta` in iTunes' and ffmpeg's order: reading
+     *  moov whole cost megabytes per audiobook, and a cap cut a long
+     *  book's tags off. */
+    private fun moovParts(source: ByteSource, from: Long, to: Long): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        var offset = from
+        val end = minOf(to, source.size)
+        while (offset + 8 <= end) {
+            val header = source.read(offset, 16)
+            if (header.size < 8) break
+            var size = header.u32(0)
+            val type = String(header, 4, 4, Charsets.ISO_8859_1)
+            var headerSize = 8
+            if (size == 1L && header.size >= 16) {
+                size = header.u64(8)
+                headerSize = 16
+            } else if (size == 0L) {
+                size = end - offset
+            }
+            if (size < headerSize || offset + size > end) break
+            // udta is small apart from the cover; the cap only guards
+            // against a damaged size field.
+            if ((type == "mvhd" || type == "udta") && size <= MAX_PART) {
+                out.write(source.read(offset, size.toInt()))
+            }
+            offset += size
+        }
+        return out.toByteArray()
+    }
+
+    private const val MAX_PART = 16L * 1024 * 1024
 
     private class Atom(val type: String, val start: Int, val end: Int)
 

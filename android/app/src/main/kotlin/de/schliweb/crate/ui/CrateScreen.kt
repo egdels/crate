@@ -910,10 +910,20 @@ private fun WaveRow(model: PlayerViewModel, modifier: Modifier) {
             }
         }
         val duration = model.duration
-        Text(timeText(model.currentTime), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // Seek once, when the finger lets go: a seek per drag frame
+        // flushed the renderers (stutter) and rewrote an audiobook's mark
+        // each time. While dragging, the slider and the time show the
+        // finger, not the 250 ms ticker.
+        var dragged by remember(model.current?.id) { mutableStateOf<Float?>(null) }
+        val shown = dragged?.toDouble() ?: model.currentTime
+        Text(timeText(shown), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Slider(
-            value = model.currentTime.toFloat().coerceIn(0f, maxOf(duration, 1.0).toFloat()),
-            onValueChange = { model.seek(it.toDouble()) },
+            value = shown.toFloat().coerceIn(0f, maxOf(duration, 1.0).toFloat()),
+            onValueChange = { dragged = it },
+            onValueChangeFinished = {
+                dragged?.let { model.seek(it.toDouble()) }
+                dragged = null
+            },
             valueRange = 0f..maxOf(duration, 1.0).toFloat(),
             modifier = Modifier.weight(1f),
         )

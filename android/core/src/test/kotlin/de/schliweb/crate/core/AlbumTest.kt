@@ -83,6 +83,38 @@ class AlbumTest {
         assertEquals("/m/soul_1-2", merged.folder)
     }
 
+    /** Numbered sibling folders merge into the parent's key; tracks of
+     *  the same album lying in the parent itself must stay in it. */
+    @Test
+    fun siblingDiscsJoinTracksInTheParentFolder() {
+        val tracks = listOf(
+            makeTrack("1", artist = "Band", album = "X", track = 1, folder = "/m/X"),
+            makeTrack("2", artist = "Band", album = "X", track = 2, folder = "/m/X"),
+            makeTrack("3", artist = "Band", album = "X", track = 3, folder = "/m/X/Bonus 1"),
+            makeTrack("4", artist = "Band", album = "X", track = 4, folder = "/m/X/Bonus 2"),
+        )
+        val albums = Album.group(tracks)
+        assertEquals(1, albums.size)
+        assertEquals(listOf("1", "2", "3", "4"), albums[0].tracks.map { it.title })
+    }
+
+    /** One folder tagged by two tools, one writing decomposed (NFD)
+     *  umlauts: one album and one artist, as on the Mac. */
+    @Test
+    fun composedAndDecomposedSpellingsAreOneAlbum() {
+        val nfc = java.text.Normalizer.normalize("Björk Ödland", java.text.Normalizer.Form.NFC)
+        val nfd = java.text.Normalizer.normalize(nfc, java.text.Normalizer.Form.NFD)
+        assertTrue(nfc != nfd)
+        val tracks = listOf(
+            makeTrack("1", artist = nfc, album = "Über $nfc", track = 1, folder = "/m/a"),
+            makeTrack("2", artist = nfd, album = java.text.Normalizer.normalize("Über $nfc", java.text.Normalizer.Form.NFD), track = 2, folder = "/m/a"),
+        )
+        val albums = Album.group(tracks)
+        assertEquals(1, albums.size)
+        assertEquals(2, albums[0].tracks.size)
+        assertTrue(albums[0].artist != Album.VARIOUS_ARTISTS)
+    }
+
     @Test
     fun compilationWithoutAlbumArtistIsOneAlbumByVariousArtists() {
         val tracks = listOf(
@@ -277,6 +309,13 @@ class AlbumTest {
         assertEquals(listOf("Track 2", "Track 10", "track 11"), listOf("track 11", "Track 10", "Track 2").sortedWith(::naturalCompare))
         assertTrue(naturalCompare("a", "B") < 0)
         assertTrue(naturalCompare("Éa", "eb") < 0)
+        // As the Mac's collation: Ø, Æ, Ł sort with their base letters.
+        assertTrue(naturalCompare("Ølsen", "Pa") < 0)
+        assertTrue(naturalCompare("Ølsen", "Olr") > 0)
+        assertTrue(naturalCompare("Ærø", "Af") < 0)
+        assertTrue(naturalCompare("Ærø", "Adz") > 0)
+        assertTrue(naturalCompare("Łaba", "Lac") < 0)
+        assertTrue(naturalCompare("Łaba", "Laa") > 0)
     }
 
     @Test
@@ -299,5 +338,65 @@ class AlbumTest {
         assertEquals(1, album.discs.size)
         assertEquals(1, album.discs[0].number)
         assertEquals(2, album.discs[0].tracks.size)
+    }
+
+    @Test
+    fun untaggedDiscFoldersPlayOneDiscAfterTheOther() {
+        // A rip without disc tags: CD1 and CD2 are one album, and their
+        // tracks must not interleave (CD1-01, CD2-01, CD1-02, ...).
+        val tracks = listOf(
+            makeTrack("a1", artist = "A", album = "Live", track = 1, folder = "/m/live/CD1"),
+            makeTrack("b1", artist = "A", album = "Live", track = 1, folder = "/m/live/CD2"),
+            makeTrack("a2", artist = "A", album = "Live", track = 2, folder = "/m/live/CD1"),
+            makeTrack("b2", artist = "A", album = "Live", track = 2, folder = "/m/live/CD2"),
+        )
+        val album = Album.group(tracks)[0]
+        assertEquals(listOf("a1", "a2", "b1", "b2"), album.tracks.map { it.title })
+        assertEquals(listOf(1, 2), album.discs.map { it.number })
+
+        // The sibling merge ("soul_1", "soul_2") orders the same way.
+        val soul = listOf(
+            makeTrack("1", artist = "VA", album = "Soul", track = 1, folder = "/m/soul/soul_1"),
+            makeTrack("3", artist = "VA", album = "Soul", track = 1, folder = "/m/soul/soul_2"),
+            makeTrack("2", artist = "VA", album = "Soul", track = 2, folder = "/m/soul/soul_1"),
+        )
+        val merged = Album.group(soul)[0]
+        assertEquals(listOf("1", "2", "3"), merged.tracks.map { it.title })
+        assertEquals(listOf(1, 2), merged.discs.map { it.number })
+
+        // A disc tag still wins over the folder.
+        val tagged = tracks.map { it.copy(discNumber = if (it.title.startsWith("a")) 2 else 1) }
+        assertEquals(listOf("b1", "b2", "a1", "a2"), Album.group(tagged)[0].tracks.map { it.title })
+    }
+
+    @Test
+    fun twoSiblingGroupsWithOneTitleStayApart() {
+        val tracks = listOf(
+            makeTrack("p1", artist = "P", album = "Soul", folder = "/m/s/soul_1"),
+            makeTrack("p2", artist = "P", album = "Soul", folder = "/m/s/soul_2"),
+            makeTrack("q1", artist = "Q", album = "Soul", folder = "/m/s/funk_1"),
+            makeTrack("q2", artist = "Q", album = "Soul", folder = "/m/s/funk_2"),
+        )
+        val albums = Album.group(tracks)
+        assertEquals(4, albums.sumOf { it.tracks.size })
+        // As on the Mac: the first group (by stem) merges, the other's
+        // folders stay albums of their own.
+        assertEquals(3, albums.size)
+    }
+
+    @Test
+    fun compilationsSortAsVariousArtists() {
+        val tracks = listOf(
+            makeTrack("1", artist = "The Beatles", album = "Hits", track = 1, folder = "/m/hits").copy(artistSort = "Beatles, The"),
+            makeTrack("2", artist = "Cream", album = "Hits", track = 2, folder = "/m/hits").copy(artistSort = "Cream"),
+            makeTrack("3", artist = "The Doors", album = "Hits", track = 3, folder = "/m/hits").copy(artistSort = "Doors, The"),
+        )
+        val album = Album.group(tracks)[0]
+        assertEquals(Album.VARIOUS_ARTISTS, album.artist)
+        assertEquals(Album.VARIOUS_ARTISTS, album.sortArtist)
+
+        // Album artist sort tags that agree still count.
+        val sorted = tracks.mapIndexed { i, t -> t.copy(albumArtistSort = "Hits Collection", compilation = i < 2) }
+        assertEquals("Hits Collection", Album.group(sorted)[0].sortArtist)
     }
 }

@@ -98,6 +98,12 @@ class LoudnessMeter(val sampleRate: Double, val channelCount: Int) {
     /** What was measured so far; null before the first full block. */
     val result: TrackLoudness?
         get() = if (histogram.blockCount > 0) TrackLoudness(histogram.integratedLoudness, peak.toDouble(), histogram.copy()) else null
+
+    /** The result of a file read to its end: silence (or under 0.4 s)
+     *  is a measurement too, with no loudness and so no gain, or the
+     *  file stayed pending and was decoded again on every launch. */
+    val finalResult: TrackLoudness
+        get() = result ?: TrackLoudness(null, peak.toDouble(), LoudnessHistogram())
 }
 
 /** The two BS.1770 biquads: a high shelf of about +4 dB above 1.5 kHz
@@ -245,7 +251,7 @@ class LoudnessHistogram(bins: Map<Int, Bin> = emptyMap()) {
  *  track that never rises above -70 LUFS), the sample peak as a linear
  *  factor, and the blocks for album gating. */
 @Serializable
-data class TrackLoudness(val loudness: Double?, val peak: Double, val histogram: LoudnessHistogram) {
+data class TrackLoudness(val loudness: Double? = null, val peak: Double, val histogram: LoudnessHistogram) {
     /** The gain that brings the track to [ReplayGain.TARGET], limited
      *  by the peak so nothing clips. null for silence. */
     val gain: Double? get() = loudness?.let { ReplayGain.limited(ReplayGain.TARGET - it, peak) }
@@ -334,7 +340,8 @@ class JsonLoudnessStore(val file: File) : LoudnessStore {
  * finish, so one long file holds up one slot and not the count; a file
  * that takes longer than its own playing time (and at least
  * [minTimeoutMillis]) is given up as unmeasured and tried again on the
- * next run.
+ * next run. A file that cannot be decoded (the measurement fails or
+ * gives nothing) is not tried again in this process until it changes.
  */
 class LoudnessAnalyzer(
     private val store: LoudnessStore,
@@ -350,6 +357,10 @@ class LoudnessAnalyzer(
         private set
     private var loaded = false
 
+    /** Files that could not be measured, by id, with the modification
+     *  time they had. */
+    private val unmeasurable = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     /** Reads the file once. */
     fun load(): Loudness {
         if (!loaded) {
@@ -364,7 +375,9 @@ class LoudnessAnalyzer(
         runCatching { store.save(loudness) }
     }
 
-    fun pending(tracks: List<Track>): List<Track> = tracks.filter { Loudness.needsMeasuring(it) && !loudness.isFresh(it) }
+    fun pending(tracks: List<Track>): List<Track> = tracks.filter {
+        Loudness.needsMeasuring(it) && !loudness.isFresh(it) && unmeasurable[it.id] != it.modified
+    }
 
     /** Measures the pending tracks; [progress] gets the count after every
      *  file and the measurements every few files and at the end. Returns
@@ -379,14 +392,14 @@ class LoudnessAnalyzer(
         try {
             withContext(dispatcher) {
                 coroutineScope {
-                    val results = Channel<Pair<Track, TrackLoudness?>>(Channel.UNLIMITED)
+                    val results = Channel<Pair<Track, Outcome>>(Channel.UNLIMITED)
                     val semaphore = Semaphore(concurrency)
                     launch {
                         for (track in pending) {
                             semaphore.acquire()
                             launch {
                                 try {
-                                    results.send(track to measureOrNull(track))
+                                    results.send(track to measureOutcome(track))
                                 } finally {
                                     semaphore.release()
                                 }
@@ -394,8 +407,12 @@ class LoudnessAnalyzer(
                         }
                     }
                     repeat(total) {
-                        val (track, result) = results.receive()
-                        if (result != null) { loudness = loudness.set(result, track); unsaved++ }
+                        val (track, outcome) = results.receive()
+                        when (outcome) {
+                            is Outcome.Measured -> { loudness = loudness.set(outcome.loudness, track); unsaved++ }
+                            Outcome.Unmeasurable -> unmeasurable[track.id] = track.modified
+                            Outcome.TimedOut -> Unit
+                        }
                         done++
                         if (unsaved >= 10) {
                             runCatching { store.save(loudness) }
@@ -416,15 +433,28 @@ class LoudnessAnalyzer(
         return loudness
     }
 
-    /** null when the file fails or takes longer than it plays. */
-    private suspend fun measureOrNull(track: Track): TrackLoudness? {
+    private sealed interface Outcome {
+        class Measured(val loudness: TrackLoudness) : Outcome
+        /** Failed or gave nothing: not tried again until the file changes. */
+        data object Unmeasurable : Outcome
+        /** Took longer than it plays: tried again on the next run. */
+        data object TimedOut : Outcome
+    }
+
+    private suspend fun measureOutcome(track: Track): Outcome {
         val limit = max(minTimeoutMillis, (track.duration * 1000).toLong())
         return try {
-            withTimeoutOrNull(limit) { measure(track) }
+            var finished = false
+            val result = withTimeoutOrNull(limit) { measure(track).also { finished = true } }
+            when {
+                !finished -> Outcome.TimedOut
+                result == null -> Outcome.Unmeasurable
+                else -> Outcome.Measured(result)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            null
+            Outcome.Unmeasurable
         }
     }
 }

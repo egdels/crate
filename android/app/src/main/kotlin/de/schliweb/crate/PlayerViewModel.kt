@@ -9,6 +9,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.util.Log
 import androidx.compose.runtime.getValue
@@ -326,6 +327,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             if (scan.updated > 0) parts.add("${scan.updated} updated")
             if (scan.removed > 0) parts.add("${scan.removed} removed")
             if (scan.failed > 0) parts.add("${scan.failed} unreadable")
+            if (scan.unreachableFolders.isNotEmpty()) parts.add("${countText(scan.unreachableFolders.size, "folder")} unreachable")
             val change = if (parts.isEmpty()) "Nothing changed" else parts.joinToString(", ")
             return "$change · $librarySize"
         }
@@ -460,7 +462,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun open(uri: Uri) {
         viewModelScope.launch {
             started.await()
-            val known = tracks.firstOrNull { it.uri == uri.toString() }
+            val known = libraryTrack(uri)
             if (known != null) {
                 val album = albums.firstOrNull { album -> album.tracks.any { it.id == known.id } }
                 if (album != null) {
@@ -478,13 +480,30 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /** The library's track for a handed-over URI. The library holds
+     *  tree-based document URIs; the Files app hands over the plain
+     *  document URI of the same file, so equal strings are rare: same
+     *  provider and document id is the same file. */
+    private fun libraryTrack(uri: Uri): Track? {
+        val text = uri.toString()
+        tracks.firstOrNull { it.uri == text }?.let { return it }
+        if (uri.scheme != "content") return null
+        val documentId = runCatching { DocumentsContract.getDocumentId(uri) }.getOrNull() ?: return null
+        return tracks.firstOrNull { track ->
+            val candidate = Uri.parse(track.uri)
+            candidate.authority == uri.authority &&
+                runCatching { DocumentsContract.getDocumentId(candidate) }.getOrNull() == documentId
+        }
+    }
+
     private fun describe(uri: Uri): ScannedFile {
         if (uri.scheme == "file") {
             val file = File(uri.path ?: "")
             return ScannedFile(uri.toString(), file.path, file.length(), file.lastModified())
         }
         var name = uri.lastPathSegment ?: "track"
-        var size = 0L
+        // Unknown (-1) unless the provider says: 0 would read as empty.
+        var size = -1L
         runCatching {
             app.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use {
                 if (it.moveToFirst()) {
@@ -493,7 +512,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
         }
-        return ScannedFile(uri.toString(), name, size, 0)
+        // The URI keeps the id apart from every other file called
+        // "01.mp3" (favorites, practice and marks are keyed by it); the
+        // name at its end keeps the title fallback and the extension.
+        return ScannedFile(uri.toString(), "$uri/$name", size, 0)
     }
 
     // Playback
@@ -562,8 +584,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             loadArtwork(track)
             loadLyrics(track)
             loadWaveform(track)
+            // Another track plays: an earlier failure is over. Not on
+            // every sync: the error itself moves the player to IDLE, and
+            // that state change arrives right after onPlayerError.
+            if (track != null && controller.playerError == null) lastError = null
         }
-        if (track != null) lastError = null
         updateUpcoming(controller)
         savePlayback(controller)
     }
@@ -911,8 +936,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             if (offset == state.currentIndex) index = restored.size
             restored += track
         }
-        queueIsAlbum = state.asAlbum
         val items = withContext(Dispatchers.Default) { mediaItems(app, restored, albums, state.asAlbum) }
+        // Something was started while this read the state ("open with" on
+        // a cold start): that wins over the last session's queue.
+        if (controller.mediaItemCount > 0) return
+        queueIsAlbum = state.asAlbum
         queued = restored.associateBy { it.id }
         controller.setMediaItems(items, index, (state.position * 1000).toLong())
         controller.repeatMode = state.repeatMode

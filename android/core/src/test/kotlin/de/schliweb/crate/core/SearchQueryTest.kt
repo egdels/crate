@@ -15,6 +15,15 @@ class SearchQueryTest {
         makeTrack("Señorita", artist = "Río Trio", album = "Costa"),
     )
 
+    /** Foundation matches ß with "ss"; the folding does the same. */
+    @Test
+    fun sharpSMatchesDoubleS() {
+        val track = makeTrack("Weiße Straße", artist = "Weiß")
+        assertTrue(SearchQuery("weisse strasse").matches(track))
+        assertTrue(SearchQuery("Straße").matches(track))
+        assertTrue(naturalCompare("Strasse 2", "Straße 10") < 0)
+    }
+
     @Test
     fun emptyQueryMatchesEverything() {
         val query = SearchQuery("   ")

@@ -99,6 +99,97 @@ class LibraryTest {
         assertTrue(reader.reads.isEmpty())
     }
 
+    /** A watched folder that cannot be listed (a card unplugged) is
+     *  reported and keeps its tracks; the folders after it are scanned. */
+    @Test
+    fun unreachableFolderDoesNotStopTheOthers() = runTest {
+        dir.file("music/a.mp3")
+        val other = File(dir.dir, "other")
+        library.addFolder(folder)
+        other.mkdirs()
+        library.addFolder(LocalFileSource.folder(other)) // empty so far
+        dir.file("other/b.mp3")
+        music.deleteRecursively()
+
+        val summary = library.rescan()
+        assertEquals(Library.RescanSummary(added = 1, unreachableFolders = listOf(folder.name)), summary)
+        assertEquals(listOf("a", "b"), library.tracks.map { it.title })
+    }
+
+    /** The version-driven full re-read is done per folder: an unreachable
+     *  folder does not make the reachable ones be read again in full. */
+    @Test
+    fun olderIndexRereadSkipsFoldersAlreadyReread() = runTest {
+        dir.file("music/a.mp3")
+        val other = File(dir.dir, "other")
+        dir.file("other/b.mp3")
+        library.addFolder(folder)
+        library.addFolder(LocalFileSource.folder(other))
+        val written = storeFile.readText()
+        storeFile.writeText(written.replace(Regex("\"version\": ${LibrarySnapshot.CURRENT_VERSION},?\\s*"), ""))
+        val moved = File(dir.dir, "music-away")
+        assertTrue(music.renameTo(moved))
+
+        val reopened = Library(JsonLibraryStore(storeFile), reader, LocalFileSource(), concurrency = 2)
+        reopened.load()
+        assertTrue(reopened.needsRescan)
+        reader.reads.clear()
+        assertEquals(Library.RescanSummary(updated = 1, unreachableFolders = listOf(folder.name)), reopened.rescan())
+        assertTrue(reopened.needsRescan, "the unreachable folder still needs its re-read")
+        assertEquals(listOf(File(other, "b.mp3").path), reader.reads)
+
+        reader.reads.clear()
+        assertTrue(moved.renameTo(music))
+        assertEquals(Library.RescanSummary(updated = 1, unchanged = 1), reopened.rescan())
+        assertEquals(listOf(File(music, "a.mp3").path), reader.reads)
+        assertFalse(reopened.needsRescan)
+    }
+
+    /** A subfolder the walk cannot enter (or a provider that dropped)
+     *  is not a folder whose files were deleted. */
+    @Test
+    fun unreadableSubfolderKeepsItsTracks() = runTest {
+        dir.file("music/a/x.mp3")
+        dir.file("music/b/y.mp3")
+        val locked = File(music, "b")
+        library.addFolder(folder)
+        assertEquals(2, library.tracks.size)
+
+        assertTrue(locked.setReadable(false, false) && locked.setExecutable(false, false))
+        try {
+            val summary = library.rescan()
+            assertEquals(0, summary.removed)
+            assertEquals(setOf("x", "y"), library.tracks.map { it.title }.toSet())
+        } finally {
+            locked.setReadable(true, false)
+            locked.setExecutable(true, false)
+        }
+    }
+
+    @Test
+    fun nestedFoldersAreWatchedOnce() = runTest {
+        dir.file("music/a.mp3")
+        dir.file("music/books/b.mp3")
+        val inner = LocalFileSource.folder(File(music, "books"))
+
+        library.addFolder(folder)
+        library.addFolder(inner)
+        assertEquals(listOf(folder), library.folders)
+        assertEquals(2, library.tracks.size)
+
+        // A parent added later replaces the watched folder inside it.
+        val otherDir = TemporaryDirectory()
+        try {
+            val other = Library(JsonLibraryStore(File(otherDir.dir, "library.json")), reader, LocalFileSource())
+            other.addFolder(inner)
+            other.addFolder(folder)
+            assertEquals(listOf(folder), other.folders)
+            assertEquals(2, other.tracks.size)
+        } finally {
+            otherDir.delete()
+        }
+    }
+
     @Test
     fun unreadableFilesAreCountedAndKeepTheirOldEntry() = runTest {
         val a = dir.file("music/a.mp3")
@@ -140,6 +231,7 @@ class LibraryTest {
         library.addFolder(folder)
         library.addFolder(LocalFileSource.folder(other))
         assertEquals(2, library.tracks.size)
+        assertEquals("a", library.track(File(music, "a.mp3").path)?.title)
         assertEquals(1, library.removeFolder(folder))
         assertEquals(listOf("b"), library.tracks.map { it.title })
         assertEquals(1, library.folders.size)
@@ -148,7 +240,8 @@ class LibraryTest {
 
     @Test
     fun missingFolderThrows() = runTest {
-        assertFailsWith<java.io.FileNotFoundException> { library.addFolder(folder) }
+        val e = assertFailsWith<Library.FolderUnreachable> { library.addFolder(folder) }
+        assertTrue(e.cause is java.io.FileNotFoundException)
         // The folder stays registered; a share that is offline is not forgotten.
         assertEquals(listOf(folder), library.folders)
     }

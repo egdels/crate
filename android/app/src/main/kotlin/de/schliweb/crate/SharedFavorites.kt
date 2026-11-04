@@ -46,7 +46,16 @@ class SharedFavorites(private val store: FavoritesStore) {
     suspend fun load() {
         loading.withLock {
             if (loaded) return
-            val saved = withContext(Dispatchers.IO) { store.load() }
+            // A damaged file must not crash the service (its scope has no
+            // handler) or keep the view model from showing the library.
+            val saved = withContext(Dispatchers.IO) {
+                try {
+                    store.load()
+                } catch (e: Exception) {
+                    _errors.tryEmit("Could not read the favorites: ${e.message}")
+                    null
+                }
+            }
             if (saved != null) _state.value = saved
             loaded = true
         }

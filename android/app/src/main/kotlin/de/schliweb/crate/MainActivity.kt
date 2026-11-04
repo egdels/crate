@@ -26,7 +26,11 @@ class MainActivity : ComponentActivity() {
                 CrateScreen(model)
             }
         }
-        handle(intent)
+        // Only a fresh launch: a recreated activity (after process death,
+        // or reopened from Recents) gets the original VIEW intent again,
+        // whose file has played already and whose grant may be gone.
+        val fromHistory = intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
+        if (savedInstanceState == null && !fromHistory) handle(intent)
     }
 
     override fun onNewIntent(intent: Intent) {

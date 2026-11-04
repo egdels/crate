@@ -54,5 +54,17 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+
+        <!-- A headset or Bluetooth Play after the process was gone: Media3
+             starts the service, which resumes through
+             onPlaybackResumption. Without this receiver the button never
+             reaches the app. -->
+        <receiver
+            android:name="androidx.media3.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

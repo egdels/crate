@@ -25,8 +25,11 @@ object Skip {
     /** How far before the loop's end a jump forward inside it stops. */
     private const val LOOP_END_MARGIN = 1.0
 
-    /** Folded genre parts that mean spoken word, in English and German. */
-    private val SPOKEN_GENRES = listOf("audiobook", "audio book", "horbuch", "horspiel", "spoken", "speech", "podcast", "lesung")
+    /** Folded genre parts that mean spoken word, in English and German
+     *  (also spelled without umlauts, as many German tags are). */
+    private val SPOKEN_GENRES = listOf(
+        "audiobook", "audio book", "horbuch", "horspiel", "hoerbuch", "hoerspiel", "spoken", "speech", "podcast", "lesung",
+    )
 
     /** Whether the player bar offers the jumps for this track. */
     fun isOffered(track: Track): Boolean {
