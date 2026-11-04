@@ -7,6 +7,8 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-04
+
 ### Added
 
 - The cover in the player bar leads to the album that is playing: a
