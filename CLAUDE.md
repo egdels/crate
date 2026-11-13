@@ -222,6 +222,44 @@ developer's Pixel 7a (Android 17, wireless adb): install, folder pick,
 scan of the library, rescan, "open with" chooser. Not yet tested:
 output switching, playback on the phone by ear.
 
+## Linux prototype
+
+`linux/` (in the repository since 2026-11-13): a Compose Desktop window
+over GStreamer, Kotlin/JVM. Its own Gradle build, but `:core` is
+`android/core`, compiled from the same sources with the same version
+catalog (`linux/settings.gradle.kts`); the build output stays under
+`linux/build`. A prototype: grid, album page, transport, volume, no
+search, favorites, lyrics or practice yet, and no packaging.
+
+```sh
+cd linux
+./gradlew :app:build           # compiles on the Mac too
+./gradlew :app:run             # needs GStreamer 1.16+ (good, bad, libav) and JDK 17
+./gradlew :app:run --args="/path/to/music"   # folders given are added to the library
+```
+
+```
+linux/app/  de.schliweb.crate.linux: Main (GStreamer init, data in
+            $XDG_DATA_HOME/crate, zenity or Swing folder dialog, GNOME's
+            dark style), PlayerModel (the only UI state), CrateWindow
+            (grid + album page + player bar), GstPlayer (playbin, gain
+            as a volume element), LinuxMetadataReader (the core's
+            parsers first, GStreamer's discoverer for the rest), Artwork
+```
+
+Clicks follow the Mac: `Modifier.clicks` in CrateWindow.kt runs the
+click at once and takes a second one within the desktop's double-click
+time (`awt.multiClickInterval`, else 500 ms) as the double click;
+`combinedClickable` held the click back that long. A clicked track row
+is marked. Verified with xdotool on Ubuntu 24.04 (X11) and started on
+Debian 13, both arm64 VMs, with software rendering (Skiko finds no GL
+context there and falls back). Debian 13 has no JDK 17 package; the
+toolchain wants one (`org.gradle.java.installations.paths`). The
+window's WM_CLASS is `java-lang-Thread`, which a .desktop file needs as
+StartupWMClass. On a VM's VirtIO sound card PipeWire needs the
+pro-audio profile, a large buffer and the capture node off, or
+playback stutters: a VM matter, not the app's.
+
 ## Test material
 
 - The Music app's media folder: a few M4A and MP3 files, tags verified
