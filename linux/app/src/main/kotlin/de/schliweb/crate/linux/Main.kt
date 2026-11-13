@@ -32,6 +32,7 @@ fun main(args: Array<String>) {
     val model = PlayerModel(library)
     model.start(args.map { File(it).absoluteFile }.filter { it.isDirectory })
     val dark = prefersDark()
+    nameWindowClass()
 
     application {
         Window(
@@ -45,6 +46,23 @@ fun main(args: Array<String>) {
         }
     }
 }
+
+/**
+ * The window class a desktop matches against its menu entries. AWT on X11
+ * derives it from the thread that started the toolkit ("java-lang-Thread"
+ * here), so the dock showed a nameless second icon beside the pinned one.
+ * The installed entry is `crate-Crate.desktop` (jpackage: package-launcher).
+ * A private field of the X11 toolkit; where it is missing or closed off
+ * the class simply stays what it was.
+ */
+private fun nameWindowClass() {
+    runCatching {
+        val toolkit = java.awt.Toolkit.getDefaultToolkit()
+        toolkit.javaClass.getDeclaredField("awtAppClassName").apply { isAccessible = true }.set(toolkit, WINDOW_CLASS)
+    }
+}
+
+private const val WINDOW_CLASS = "crate-Crate"
 
 /** `$XDG_DATA_HOME/crate`, the index and everything else next to it. */
 private fun dataDirectory(): File {

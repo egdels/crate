@@ -1,9 +1,11 @@
 name: Linux
 
-# Builds the Linux prototype on every push that touches it or what it is
-# compiled from: its library is android/core, with the Android build's
-# version catalog, so a change there can break this build without touching
-# linux/. Compiling needs no GStreamer; the app loads it when it starts.
+# Builds the Linux prototype and its packages on every push that touches
+# it or what it is compiled from: its library is android/core, with the
+# Android build's version catalog, so a change there can break this build
+# without touching linux/. Compiling needs no GStreamer; the app loads it
+# when it starts. The packages are artifacts of the run, for trying out;
+# nothing here goes into a release.
 
 on:
   push:
@@ -11,29 +13,48 @@ on:
       - 'linux/**'
       - 'android/core/**'
       - 'android/gradle/libs.versions.toml'
+      - 'android/gradle.properties'
+      - 'scripts/linux-packages.sh'
+      - 'Packaging/AppIcon-256.png'
       - '.github/workflows/linux.yml'
   pull_request:
     paths:
       - 'linux/**'
       - 'android/core/**'
       - 'android/gradle/libs.versions.toml'
+      - 'android/gradle.properties'
+      - 'scripts/linux-packages.sh'
+      - 'Packaging/AppIcon-256.png'
       - '.github/workflows/linux.yml'
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: linux
+  packages:
+    name: Build & package (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-      # 17 is the toolchain the build asks for (jvmToolchain(17)).
+      # 17 is the toolchain the build asks for (jvmToolchain(17)); its
+      # jpackage makes the .deb and the .rpm.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      - name: Build
-        run: ./gradlew :app:build
+      - name: Install the packaging tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fakeroot binutils rpm
+      - name: Build the packages
+        run: scripts/linux-packages.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Crate-linux-${{ matrix.arch }}
+          path: linux/build/dist/*
+          if-no-files-found: error

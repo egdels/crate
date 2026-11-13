@@ -229,13 +229,14 @@ over GStreamer, Kotlin/JVM. Its own Gradle build, but `:core` is
 `android/core`, compiled from the same sources with the same version
 catalog (`linux/settings.gradle.kts`); the build output stays under
 `linux/build`. A prototype: grid, album page, transport, volume, no
-search, favorites, lyrics or practice yet, and no packaging.
+search, favorites, lyrics or practice yet.
 
 ```sh
 cd linux
 ./gradlew :app:build           # compiles on the Mac too
 ./gradlew :app:run             # needs GStreamer 1.16+ (good, bad, libav) and JDK 17
 ./gradlew :app:run --args="/path/to/music"   # folders given are added to the library
+../scripts/linux-packages.sh   # on Linux: .deb, .rpm, AppImage, tar.gz and jar -> linux/build/dist
 ```
 
 ```
@@ -246,6 +247,26 @@ linux/app/  de.schliweb.crate.linux: Main (GStreamer init, data in
             as a volume element), LinuxMetadataReader (the core's
             parsers first, GStreamer's discoverer for the rest), Artwork
 ```
+
+Packages (2026-11-13): `nativeDistributions` in linux/app/build.gradle.kts
+(jpackage: .deb and .rpm with their own runtime of three modules, the
+version read from android/gradle.properties) and
+`scripts/linux-packages.sh`, which adds the uber jar, a tar.gz of the
+plain folder and an AppImage made from that folder with appimagetool
+(fetched when not installed; run with APPIMAGE_EXTRACT_AND_RUN, so no
+FUSE). For the machine it runs on only; `linux.yml` runs it on an
+x86_64 and an arm64 runner and keeps the files as artifacts of the run,
+not of a release. The app is "Crate" (menu entry, launcher
+/opt/crate/bin/Crate), the package "crate". The window class is set to
+`crate-Crate`, the id of jpackage's menu entry, through a private field
+of AWT's X11 toolkit (`nameWindowClass` in Main.kt, needs the
+`--add-opens` among the jvmArgs): AWT's own was `java-lang-Thread`, and
+the dock showed a second, nameless icon. Verified on Debian 13 arm64:
+all five built, the app started from the installed .deb, the tar.gz,
+the jar and the AppImage; the .rpm was only inspected (`rpm -qip`), not
+installed anywhere. Open: no package names GStreamer as a dependency
+(Compose's DSL has no field for it), a start without it ends with a
+line on stderr nobody sees, and the .deb's maintainer is "Unknown".
 
 Clicks follow the Mac: `Modifier.clicks` in CrateWindow.kt runs the
 click at once and takes a second one within the desktop's double-click
