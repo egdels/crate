@@ -1,0 +1,39 @@
+name: Linux
+
+# Builds the Linux prototype on every push that touches it or what it is
+# compiled from: its library is android/core, with the Android build's
+# version catalog, so a change there can break this build without touching
+# linux/. Compiling needs no GStreamer; the app loads it when it starts.
+
+on:
+  push:
+    paths:
+      - 'linux/**'
+      - 'android/core/**'
+      - 'android/gradle/libs.versions.toml'
+      - '.github/workflows/linux.yml'
+  pull_request:
+    paths:
+      - 'linux/**'
+      - 'android/core/**'
+      - 'android/gradle/libs.versions.toml'
+      - '.github/workflows/linux.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: linux
+    steps:
+      - uses: actions/checkout@v4
+      # 17 is the toolchain the build asks for (jvmToolchain(17)).
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build
+        run: ./gradlew :app:build
