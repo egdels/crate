@@ -168,13 +168,25 @@ extension AVAudioEngineBackendTests {
         let player = AVAudioEngineBackend()
         var finished = 0
         player.onFinished = { finished += 1 }
-        try player.load(try dir.wav("a.wav", seconds: 0.5))
+        try player.load(try dir.wav("a.wav", seconds: 1))
         player.setTempo(0.5, pitch: 0)
         player.play()
-        try await Task.sleep(nanoseconds: 700_000_000)
-        #expect(finished == 0, "half speed: 0.5 s of audio takes a second")
-        #expect(player.currentTime > 0.25 && player.currentTime < 0.5)
-        try await Task.sleep(nanoseconds: 600_000_000)
+        // Not against the wall clock from play(): a slow runner's engine
+        // took over 0.4 s to start once, and the test failed in CI with
+        // the engine doing nothing wrong. Wait until the clock runs, then
+        // measure how fast it does.
+        for _ in 0..<200 where player.currentTime < 0.02 {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let position = player.currentTime
+        let clock = Date()
+        try await Task.sleep(nanoseconds: 400_000_000)
+        let rate = (player.currentTime - position) / Date().timeIntervalSince(clock)
+        #expect(rate > 0.3 && rate < 0.7, "half speed, measured \(rate)")
+        #expect(finished == 0, "half speed: a second of audio takes two")
+        for _ in 0..<300 where finished == 0 {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
         #expect(finished == 1)
         player.stop()
     }
