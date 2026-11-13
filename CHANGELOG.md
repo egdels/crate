@@ -7,6 +7,12 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+### Changed
+
+- Mac: a click selects an album at once instead of after the
+  double-click time, and a click on a track marks its row. A double
+  click plays, as before.
+
 ## [0.16.0] - 2026-11-04
 
 ### Added

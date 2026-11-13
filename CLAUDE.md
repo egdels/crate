@@ -376,6 +376,20 @@ yet; bring a build copy forward through System Events' process.
 Errors: the red line (`lastError`) is dismissed by a click or after
 eight seconds (`task(id:)`), since some failures have no later success
 that would clear them.
+Clicks (Mac, 2026-11-13): `clicks(_:double:)` in ContentView.swift puts
+the single click on a view as a simultaneous gesture beside
+`onTapGesture(count: 2)`; as a second `onTapGesture` it waited for the
+double-click time before a tile was selected. The single action also
+runs on the first click of a double click, so it only selects. Track
+rows and Up Next rows mark the clicked row with `rowSelected` (a
+`listRowBackground` in the tiles' colour, state in the view), not a
+native List selection: the accent-coloured speaker of the playing row
+would vanish on it. A Button inside the row (heart, ×) takes its
+clicks alone: neither the mark nor the double click fires. Verified
+with real clicks on macOS 27 and in the Monterey VM. Mouse events
+posted to the process alone (`CGEvent.postToPid`) do not reach a
+background SwiftUI window; a test needs the pointer, and the window's
+frame read right before each click (one went into the app behind).
 Help: `HelpWindow.swift` replaces SwiftUI's default "Crate Help" item
 (which otherwise shows "Help isn't available") with a plain NSWindow
 holding one page of SwiftUI text, kept in a static and reused; no Apple

@@ -168,32 +168,25 @@ struct AlbumGrid: View {
             ScrollViewReader { proxy in
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 16) {
-                    // Double tap first: a single-tap modifier applied before
-                    // it would claim every click and the double tap never fires.
                     LibraryTile(
                         title: "All Tracks", count: model.filteredTracks.count, systemImage: "music.note.list",
                         selected: model.selection == .allTracks)
-                        .onTapGesture(count: 2) { model.play(tracks: model.filteredTracks) }
-                        .onTapGesture { model.selection = .allTracks }
+                        .clicks { model.selection = .allTracks } double: { model.play(tracks: model.filteredTracks) }
                     LibraryTile(
                         title: "Favorites", count: model.favoriteTracks.count, systemImage: "heart",
                         selected: model.selection == .favorites)
-                        .onTapGesture(count: 2) { model.play(tracks: model.favoriteTracks) }
-                        .onTapGesture { model.selection = .favorites }
+                        .clicks { model.selection = .favorites } double: { model.play(tracks: model.favoriteTracks) }
                     LibraryTile(
                         title: "Recently Added", count: model.recentlyAddedTracks.count, systemImage: "sparkles",
                         selected: model.selection == .recentlyAdded)
-                        .onTapGesture(count: 2) { model.play(tracks: model.recentlyAddedTracks) }
-                        .onTapGesture { model.selection = .recentlyAdded }
+                        .clicks { model.selection = .recentlyAdded } double: { model.play(tracks: model.recentlyAddedTracks) }
                     LibraryTile(
                         title: "Recently Played", count: model.recentlyPlayedTracks.count, systemImage: "clock.arrow.circlepath",
                         selected: model.selection == .recentlyPlayed)
-                        .onTapGesture(count: 2) { model.play(tracks: model.recentlyPlayedTracks) }
-                        .onTapGesture { model.selection = .recentlyPlayed }
+                        .clicks { model.selection = .recentlyPlayed } double: { model.play(tracks: model.recentlyPlayedTracks) }
                     ForEach(model.filteredAlbums) { album in
                         AlbumTile(album: album, selected: model.selection == .album(album.id))
-                            .onTapGesture(count: 2) { model.play(album: album) }
-                            .onTapGesture { model.selection = .album(album.id) }
+                            .clicks { model.selection = .album(album.id) } double: { model.play(album: album) }
                             .albumContextMenu(album)
                             .id(album.id)
                     }
@@ -319,6 +312,7 @@ struct FlatTrackList: View {
     let tracks: [Track]
     let title: String
     var emptyText: String? = nil
+    @State private var selected: Track.ID?
 
     var body: some View {
         Group {
@@ -331,8 +325,9 @@ struct FlatTrackList: View {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                         FlatTrackRow(track: track, playing: track.id == model.current?.id)
                             .contentShape(Rectangle())
-                            .onTapGesture(count: 2) { model.play(tracks: tracks, startingAt: index) }
+                            .clicks { selected = track.id } double: { model.play(tracks: tracks, startingAt: index) }
                             .trackContextMenu(track)
+                            .rowSelected(selected == track.id)
                     }
                 }
                 .listStyle(.inset)
@@ -392,6 +387,21 @@ struct HeartButton: View {
 }
 
 extension View {
+    /// A click and a double click on the same view. The single click is a
+    /// simultaneous gesture: as a second `onTapGesture` it would wait for
+    /// the double-click time to pass before it selects anything. It also
+    /// runs on the first click of a double click, so it should only select.
+    func clicks(_ single: @escaping () -> Void, double: @escaping () -> Void) -> some View {
+        onTapGesture(count: 2, perform: double)
+            .simultaneousGesture(TapGesture().onEnded(single))
+    }
+
+    /// The mark of a clicked list row, in the grid tiles' colour.
+    func rowSelected(_ selected: Bool) -> some View {
+        listRowBackground(
+            selected ? RoundedRectangle(cornerRadius: 5).fill(Color.accentColor.opacity(0.15)).padding(.horizontal, 10) : nil)
+    }
+
     /// Right-click on a row: queue the track, or the same as the heart.
     func trackContextMenu(_ track: Track) -> some View {
         modifier(TrackContextMenu(track: track))
@@ -515,6 +525,7 @@ struct ArtworkView: View {
 struct TrackList: View {
     @EnvironmentObject private var model: PlayerModel
     @State private var image: CGImage?
+    @State private var selected: Track.ID?
 
     var body: some View {
         if let album = model.selectedAlbum {
@@ -593,10 +604,11 @@ struct TrackList: View {
         ForEach(tracks, id: \.id) { track in
             TrackRow(track: track, playing: track.id == model.current?.id)
                 .contentShape(Rectangle())
-                .onTapGesture(count: 2) {
+                .clicks { selected = track.id } double: {
                     model.play(album: album, startingAt: album.tracks.firstIndex { $0.id == track.id } ?? 0)
                 }
                 .trackContextMenu(track)
+                .rowSelected(selected == track.id)
         }
     }
 

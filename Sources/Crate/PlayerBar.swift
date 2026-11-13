@@ -126,6 +126,7 @@ struct PlayerBar: View {
 /// is not in it: the bar already shows that.
 struct UpNextView: View {
     @EnvironmentObject private var model: PlayerModel
+    @State private var selected: PlayQueue.Entry.ID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -149,13 +150,14 @@ struct UpNextView: View {
                     ForEach(model.upcoming) { entry in
                         UpNextRow(entry: entry)
                             .contentShape(Rectangle())
-                            .onTapGesture(count: 2) { model.play(entry: entry) }
+                            .clicks { selected = entry.id } double: { model.play(entry: entry) }
                             .contextMenu {
                                 Button("Play Now") { model.play(entry: entry) }
                                 Button("Remove") { model.remove(entry: entry) }
                                 Divider()
                                 Button("Show in Finder") { model.showInFinder(entry.track) }
                             }
+                            .rowSelected(selected == entry.id)
                     }
                 }
                 .listStyle(.inset)
