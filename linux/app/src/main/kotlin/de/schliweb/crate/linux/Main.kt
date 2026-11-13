@@ -13,10 +13,13 @@ import androidx.compose.ui.window.rememberWindowState
 import de.schliweb.crate.core.JsonLibraryStore
 import de.schliweb.crate.core.Library
 import de.schliweb.crate.core.LocalFileSource
+import org.freedesktop.gstreamer.ElementFactory
 import org.freedesktop.gstreamer.Gst
 import org.freedesktop.gstreamer.Version
 import java.io.File
 import javax.swing.JFileChooser
+import javax.swing.JOptionPane
+import javax.swing.JTextArea
 import kotlin.system.exitProcess
 
 /** `crate [folder...]`: folders given are added to the library, which is
@@ -24,8 +27,11 @@ import kotlin.system.exitProcess
 fun main(args: Array<String>) {
     try {
         Gst.init(Version(1, 16), "Crate")
+        // The library alone plays nothing: playbin is in plugins-base.
+        checkNotNull(ElementFactory.find("playbin")) { "no playbin element" }
     } catch (e: Throwable) {
         System.err.println("Crate needs GStreamer 1.16 or later: ${e.message}")
+        showMissingGStreamer()
         exitProcess(1)
     }
     val library = Library(JsonLibraryStore(File(dataDirectory(), "library.json")), LinuxMetadataReader(), LocalFileSource())
@@ -46,6 +52,35 @@ fun main(args: Array<String>) {
         }
     }
 }
+
+/**
+ * Says what is missing in a window: started from the menu, nobody reads
+ * stderr. The .deb and the .rpm bring GStreamer as a dependency, the
+ * AppImage, the tar.gz and the jar rely on the machine's. The commands can
+ * be selected and copied. Without a display the line on stderr stays all
+ * there is.
+ */
+private fun showMissingGStreamer() {
+    val text = JTextArea(MISSING_GSTREAMER).apply {
+        isEditable = false
+        isOpaque = false
+    }
+    runCatching { JOptionPane.showMessageDialog(null, text, "Crate", JOptionPane.ERROR_MESSAGE) }
+}
+
+private val MISSING_GSTREAMER = """
+    Crate plays through GStreamer 1.16 or later, which was not found on this computer.
+    Install it with the plugins and start Crate again:
+
+    Debian, Ubuntu:
+      sudo apt install gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
+    Fedora:
+      sudo dnf install gstreamer1-plugins-good gstreamer1-plugins-bad-free gstreamer1-plugin-libav
+    openSUSE:
+      sudo zypper install gstreamer-plugins-good gstreamer-plugins-bad gstreamer-plugins-libav
+    Arch:
+      sudo pacman -S gst-plugins-good gst-plugins-bad gst-libav
+""".trimIndent()
 
 /**
  * The window class a desktop matches against its menu entries. AWT on X11

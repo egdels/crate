@@ -248,25 +248,38 @@ linux/app/  de.schliweb.crate.linux: Main (GStreamer init, data in
             parsers first, GStreamer's discoverer for the rest), Artwork
 ```
 
-Packages (2026-11-13): `nativeDistributions` in linux/app/build.gradle.kts
-(jpackage: .deb and .rpm with their own runtime of three modules, the
-version read from android/gradle.properties) and
-`scripts/linux-packages.sh`, which adds the uber jar, a tar.gz of the
-plain folder and an AppImage made from that folder with appimagetool
-(fetched when not installed; run with APPIMAGE_EXTRACT_AND_RUN, so no
-FUSE). For the machine it runs on only; `linux.yml` runs it on an
-x86_64 and an arm64 runner and keeps the files as artifacts of the run,
-not of a release. The app is "Crate" (menu entry, launcher
-/opt/crate/bin/Crate), the package "crate". The window class is set to
-`crate-Crate`, the id of jpackage's menu entry, through a private field
-of AWT's X11 toolkit (`nameWindowClass` in Main.kt, needs the
-`--add-opens` among the jvmArgs): AWT's own was `java-lang-Thread`, and
-the dock showed a second, nameless icon. Verified on Debian 13 arm64:
-all five built, the app started from the installed .deb, the tar.gz,
-the jar and the AppImage; the .rpm was only inspected (`rpm -qip`), not
-installed anywhere. Open: no package names GStreamer as a dependency
-(Compose's DSL has no field for it), a start without it ends with a
-line on stderr nobody sees, and the .deb's maintainer is "Unknown".
+Packages (2026-11-13): Gradle makes the plain folder with its own
+runtime of three modules (`createDistributable`, jpackage underneath,
+the version read from android/gradle.properties) and the uber jar;
+`scripts/linux-packages.sh` makes everything else from the folder: the
+.deb and the .rpm by calling jpackage itself (`--app-image`), because
+Compose's DSL has no field for dependencies and both name GStreamer
+(the .rpm as alternatives, `(gstreamer1-plugins-good or
+gstreamer-plugins-good)`, since Fedora and openSUSE name the packages
+differently), a tar.gz, and an AppImage made with appimagetool (fetched
+when not installed; run with APPIMAGE_EXTRACT_AND_RUN, so no FUSE). The
+package's description, menu group and licence are therefore in the
+script, not in build.gradle.kts. For the machine it runs on only;
+`linux.yml` runs it on an x86_64 and an arm64 runner and keeps the files
+as artifacts of the run, not of a release. The app is "Crate" (menu
+entry, launcher /opt/crate/bin/Crate), the package "crate". The window
+class is set to `crate-Crate`, the id of jpackage's menu entry, through
+a private field of AWT's X11 toolkit (`nameWindowClass` in Main.kt,
+needs the `--add-opens` among the jvmArgs): AWT's own was
+`java-lang-Thread`, and the dock showed a second, nameless icon.
+Without GStreamer, or without its playbin, the app shows a window with
+the install commands of four distributions and quits
+(`showMissingGStreamer`; test it with `GST_PLUGIN_SYSTEM_PATH=/nonexistent
+GST_REGISTRY=/tmp/none`). Verified on Debian 13 arm64: all five built,
+the app started from the installed .deb, the tar.gz, the jar and the
+AppImage. The .rpm was installed with dnf in a Fedora container and with
+zypper in an openSUSE Tumbleweed one (podman in the Debian VM); both
+pulled their GStreamer packages, and the app started from the Fedora
+container on the VM's display. Not checked on an rpm desktop: the menu
+entry (in the containers `xdg-desktop-menu` put it under
+/usr/local/share/applications on Fedora and failed in openSUSE's %post,
+exit 3, with no desktop installed there). Open: the .deb's maintainer is
+"Unknown", and the x86_64 packages CI builds were never started.
 
 Clicks follow the Mac: `Modifier.clicks` in CrateWindow.kt runs the
 click at once and takes a second one within the desktop's double-click
@@ -275,9 +288,7 @@ time (`awt.multiClickInterval`, else 500 ms) as the double click;
 is marked. Verified with xdotool on Ubuntu 24.04 (X11) and started on
 Debian 13, both arm64 VMs, with software rendering (Skiko finds no GL
 context there and falls back). Debian 13 has no JDK 17 package; the
-toolchain wants one (`org.gradle.java.installations.paths`). The
-window's WM_CLASS is `java-lang-Thread`, which a .desktop file needs as
-StartupWMClass. On a VM's VirtIO sound card PipeWire needs the
+toolchain wants one (`org.gradle.java.installations.paths`). On a VM's VirtIO sound card PipeWire needs the
 pro-audio profile, a large buffer and the capture node off, or
 playback stutters: a VM matter, not the app's.
 

@@ -35,27 +35,20 @@ compose.desktop {
         // Main names the window class after the menu entry (see windowClass there).
         jvmArgs += "--add-opens=java.desktop/sun.awt.X11=ALL-UNNAMED"
         nativeDistributions {
-            // .deb and .rpm come from jpackage (packageDeb, packageRpm; the
-            // latter needs rpmbuild). createDistributable makes the plain
-            // folder the tar.gz and the AppImage are packed from, and
-            // packageUberJarForCurrentOS the single jar.
-            targetFormats(TargetFormat.Deb, TargetFormat.Rpm)
-            // "Crate" is what the menu shows and the launcher is called;
-            // the package itself is lower case (linux.packageName).
+            // Gradle makes the plain folder (createDistributable) and the
+            // single jar (packageUberJarForCurrentOS); every package is
+            // made from the folder by scripts/linux-packages.sh, which
+            // calls jpackage itself for the .deb and the .rpm: this DSL
+            // has no field for a package's dependencies, and they need
+            // GStreamer. The format here only switches packaging on.
+            targetFormats(TargetFormat.Deb)
+            // "Crate" is what the menu shows and the launcher is called.
             packageName = "Crate"
             packageVersion = appVersion
-            description = "Music player for a folder of albums"
-            vendor = "Crate"
-            licenseFile.set(rootDir.resolve("../LICENSE"))
             // Swing/Compose, JNA (GStreamer) and the logging gst1-java-core uses.
             modules("java.desktop", "java.logging", "jdk.unsupported")
             linux {
-                packageName = "crate"
                 iconFile.set(rootDir.resolve("../Packaging/AppIcon-256.png"))
-                menuGroup = "AudioVideo;Audio;Player"
-                appCategory = "sound"
-                shortcut = true
-                rpmLicenseType = "GPL-3.0-or-later"
             }
         }
     }

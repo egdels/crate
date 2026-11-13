@@ -9,8 +9,10 @@
 #   crate-<version>-linux-<arch>.jar  needs a Java 17 on the machine
 #
 # All but the jar carry their own Java runtime; all of them need GStreamer
-# 1.16 or later (good, bad, libav) on the machine. Runs on Linux only: needs
-# a JDK 17 with jpackage, dpkg-deb and fakeroot, rpmbuild, and, for the
+# 1.16 or later (good, bad, libav) on the machine. The .deb and the .rpm
+# name it as a dependency, the others cannot; the app says what is missing
+# when it starts without. Runs on Linux only: needs a JDK 17 (JAVA_HOME or
+# the PATH) with jpackage, dpkg-deb and fakeroot, rpmbuild, and, for the
 # AppImage, appimagetool on the PATH or the network to fetch it.
 set -eu
 cd "$(dirname "$0")/../linux"
@@ -23,13 +25,30 @@ esac
 
 # Nothing from an earlier run, or two jars answer to one pattern below.
 rm -rf app/build/compose
-./gradlew :app:packageDeb :app:packageRpm :app:packageUberJarForCurrentOS :app:createDistributable
+./gradlew :app:packageUberJarForCurrentOS :app:createDistributable
 
 BIN=app/build/compose/binaries/main
 DIST=build/dist
 rm -rf "$DIST"
 mkdir -p "$DIST"
-cp "$BIN"/deb/*.deb "$BIN"/rpm/*.rpm "$DIST"/
+
+# The .deb and the .rpm: jpackage wraps the folder Gradle just made. Called
+# here and not through Compose's packageDeb/packageRpm, whose DSL has no
+# field for dependencies. The .rpm's are alternatives, since Fedora and
+# openSUSE name the same packages differently.
+DEB_DEPS="libgstreamer1.0-0 (>= 1.16), gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-libav"
+RPM_DEPS="(gstreamer1-plugins-base or gstreamer-plugins-base), (gstreamer1-plugins-good or gstreamer-plugins-good), (gstreamer1-plugins-bad-free or gstreamer-plugins-bad), (gstreamer1-plugin-libav or gstreamer1-libav or gstreamer-plugins-libav)"
+package() { # type, dependencies
+    "${JAVA_HOME:+$JAVA_HOME/bin/}jpackage" --type "$1" --dest "$DIST" \
+        --app-image "$BIN/app/Crate" --name Crate --app-version "$VERSION" \
+        --description "Music player for a folder of albums" --vendor Crate \
+        --license-file ../LICENSE --icon ../Packaging/AppIcon-256.png \
+        --linux-package-name crate --linux-shortcut \
+        --linux-menu-group "AudioVideo;Audio;Player" --linux-app-category sound \
+        --linux-rpm-license-type GPL-3.0-or-later --linux-package-deps "$2"
+}
+package deb "$DEB_DEPS"
+package rpm "$RPM_DEPS"
 cp app/build/compose/jars/*.jar "$DIST/crate-$VERSION-linux-$ARCH.jar"
 tar -czf "$DIST/crate-$VERSION-linux-$ARCH.tar.gz" -C "$BIN/app" Crate
 
