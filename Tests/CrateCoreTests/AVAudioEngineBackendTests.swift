@@ -129,7 +129,12 @@ import Testing
         #expect(player.currentTime < 0.05)
         #expect(abs(player.duration - 0.5) < 0.01)
         player.play()
-        try await Task.sleep(nanoseconds: 750000000)
+        // Not a fixed wait: a loaded runner's engine took longer than the
+        // 0.75 s this test once allowed to play the half second.
+        for _ in 0..<100 where finished == 0 {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)
         #expect(finished == 1, "only the second file finishes; the first was stopped")
     }
 
