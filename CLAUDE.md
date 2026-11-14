@@ -261,7 +261,9 @@ when not installed; run with APPIMAGE_EXTRACT_AND_RUN, so no FUSE). The
 package's description, menu group and licence are therefore in the
 script, not in build.gradle.kts. For the machine it runs on only;
 `linux.yml` runs it on an x86_64 and an arm64 runner and keeps the files
-as artifacts of the run, not of a release. The app is "Crate" (menu
+as artifacts of the run; `release.yml` has the same two jobs (`linux`)
+and attaches the ten files to the release (2026-11-14, not yet run on
+a tag). The app is "Crate" (menu
 entry, launcher /opt/crate/bin/Crate), the package "crate". The window
 class is set to `crate-Crate`, the id of jpackage's menu entry, through
 a private field of AWT's X11 toolkit (`nameWindowClass` in Main.kt,

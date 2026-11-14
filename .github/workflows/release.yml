@@ -14,8 +14,12 @@ name: Release
 # launch goes through right-click > Open), one APK signed with the
 # release key from the repository secrets, the same identity the
 # developer's other Android apps use, and the AAB from the same build
-# and key for the Play Console upload. Idempotent: re-pushing the tag
-# updates the notes and replaces the assets instead of failing.
+# and key for the Play Console upload. The Linux prototype's packages
+# (.deb, .rpm, AppImage, tar.gz, jar) come from scripts/linux-packages.sh,
+# once on an x86_64 and once on an arm64 runner, since the script
+# packages for the machine it runs on; they are not signed. Idempotent:
+# re-pushing the tag updates the notes and replaces the assets instead
+# of failing.
 
 on:
   push:
@@ -179,3 +183,43 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "${{ github.ref_name }}" "Crate-${{ needs.create-release.outputs.version }}.apk" "Crate-${{ needs.create-release.outputs.version }}.aab" --clobber --repo "${{ github.repository }}"
+
+  linux:
+    name: Build the Linux packages (${{ matrix.arch }})
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # 17 is the toolchain the build asks for (jvmToolchain(17)); its
+      # jpackage makes the .deb and the .rpm.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install the packaging tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fakeroot binutils rpm
+
+      - name: Build the packages
+        run: scripts/linux-packages.sh
+
+      # Five files per architecture, each with the architecture in its
+      # name, so the two jobs never write the same asset.
+      - name: Upload the packages to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l linux/build/dist
+          test "$(ls linux/build/dist | wc -l)" -eq 5
+          gh release upload "${{ github.ref_name }}" linux/build/dist/* --clobber --repo "${{ github.repository }}"

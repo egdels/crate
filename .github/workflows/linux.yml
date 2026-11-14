@@ -5,7 +5,7 @@ name: Linux
 # Android build's version catalog, so a change there can break this build
 # without touching linux/. Compiling needs no GStreamer; the app loads it
 # when it starts. The packages are artifacts of the run, for trying out;
-# nothing here goes into a release.
+# a release gets its own from release.yml, built the same way.
 
 on:
   push:
