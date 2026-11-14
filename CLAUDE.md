@@ -278,8 +278,9 @@ pulled their GStreamer packages, and the app started from the Fedora
 container on the VM's display. Not checked on an rpm desktop: the menu
 entry (in the containers `xdg-desktop-menu` put it under
 /usr/local/share/applications on Fedora and failed in openSUSE's %post,
-exit 3, with no desktop installed there). Open: the .deb's maintainer is
-"Unknown", and the x86_64 packages CI builds were never started.
+exit 3, with no desktop installed there). The .deb's maintainer is the
+address the developer gave for it (in the script). Open: the x86_64
+packages CI builds were never started.
 
 Clicks follow the Mac: `Modifier.clicks` in CrateWindow.kt runs the
 click at once and takes a second one within the desktop's double-click

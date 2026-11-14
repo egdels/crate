@@ -38,16 +38,19 @@ mkdir -p "$DIST"
 # openSUSE name the same packages differently.
 DEB_DEPS="libgstreamer1.0-0 (>= 1.16), gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-libav"
 RPM_DEPS="(gstreamer1-plugins-base or gstreamer-plugins-base), (gstreamer1-plugins-good or gstreamer-plugins-good), (gstreamer1-plugins-bad-free or gstreamer-plugins-bad), (gstreamer1-plugin-libav or gstreamer1-libav or gstreamer-plugins-libav)"
-package() { # type, dependencies
-    "${JAVA_HOME:+$JAVA_HOME/bin/}jpackage" --type "$1" --dest "$DIST" \
+package() { # type, dependencies, further options
+    type=$1 deps=$2
+    shift 2
+    "${JAVA_HOME:+$JAVA_HOME/bin/}jpackage" --type "$type" --dest "$DIST" \
         --app-image "$BIN/app/Crate" --name Crate --app-version "$VERSION" \
         --description "Music player for a folder of albums" --vendor Crate \
         --license-file ../LICENSE --icon ../Packaging/AppIcon-256.png \
         --linux-package-name crate --linux-shortcut \
         --linux-menu-group "AudioVideo;Audio;Player" --linux-app-category sound \
-        --linux-rpm-license-type GPL-3.0-or-later --linux-package-deps "$2"
+        --linux-rpm-license-type GPL-3.0-or-later --linux-package-deps "$deps" "$@"
 }
-package deb "$DEB_DEPS"
+# The address is the .deb's Maintainer field, shown as "Crate <address>".
+package deb "$DEB_DEPS" --linux-deb-maintainer Christian.Kierdorf@schliweb.de
 package rpm "$RPM_DEPS"
 cp app/build/compose/jars/*.jar "$DIST/crate-$VERSION-linux-$ARCH.jar"
 tar -czf "$DIST/crate-$VERSION-linux-$ARCH.tar.gz" -C "$BIN/app" Crate
