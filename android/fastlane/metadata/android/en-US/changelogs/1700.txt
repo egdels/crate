@@ -1,0 +1,1 @@
+- No changes on Android in this version; it brings a Linux desktop app and a quicker click on the Mac.

@@ -7,6 +7,17 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-14
+
+### Added
+
+- Linux: a first version of Crate for the Linux desktop, as .deb, .rpm,
+  AppImage, tar.gz and jar for x86_64 and arm64. It is a prototype:
+  album grid, album page, playback and volume, without search,
+  favorites, lyrics or practice yet. It needs GStreamer 1.16 or later;
+  the .deb and the .rpm install it, and the app says what is missing
+  when it starts without.
+
 ### Changed
 
 - Mac: a click selects an album at once instead of after the
