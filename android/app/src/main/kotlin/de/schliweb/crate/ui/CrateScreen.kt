@@ -109,11 +109,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
@@ -672,20 +677,28 @@ private fun TrackList(model: PlayerViewModel, album: Album) {
                 Box(Modifier.size(96.dp).clip(RoundedCornerShape(6.dp))) { Artwork(model, album) }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(album.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Row {
-                        // The artist view: the name fills the search field
-                        // with "artist:" and the grid narrows to that
-                        // artist's albums.
-                        Text(
-                            album.artist,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = if (album.artist == Album.VARIOUS_ARTISTS) Modifier else Modifier.clickable { model.showAlbumsOfArtist(album.artist) },
-                        )
-                        val rest = listOfNotNull(album.year?.toString(), album.genre)
-                        if (rest.isNotEmpty()) {
-                            Text(" · " + rest.joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
+                    // One text, so a long artist wraps as a line of words
+                    // and year and genre follow it: as a second Text in a
+                    // Row they got the few dp left and stood one letter
+                    // per line. The artist's name is the artist view: it
+                    // fills the search field with "artist:" and the grid
+                    // narrows to that artist's albums.
+                    val rest = listOfNotNull(album.year?.toString(), album.genre)
+                    Text(
+                        buildAnnotatedString {
+                            if (album.artist == Album.VARIOUS_ARTISTS) {
+                                append(album.artist)
+                            } else {
+                                withLink(
+                                    LinkAnnotation.Clickable("artist", TextLinkStyles(SpanStyle())) {
+                                        model.showAlbumsOfArtist(album.artist)
+                                    },
+                                ) { append(album.artist) }
+                            }
+                            if (rest.isNotEmpty()) append(" · " + rest.joinToString(" · "))
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     Text(
                         "${countText(album.tracks.size, "track")} · ${lengthText(album.duration)}",
                         style = MaterialTheme.typography.bodySmall,
