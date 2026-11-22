@@ -7,6 +7,15 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-11-22
+
+### Fixed
+
+- Android: searching while an album page is open on a phone shows the
+  grid with the result again. The page stayed where it was, so an
+  "artist:" search typed there, or the artist's name tapped with the
+  search field open, seemed to find one album only.
+
 ## [0.17.1] - 2026-11-22
 
 ### Fixed

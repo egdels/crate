@@ -1,0 +1,1 @@
+- Searching while an album page is open shows the grid with the result again; an "artist:" search there seemed to find one album only.
