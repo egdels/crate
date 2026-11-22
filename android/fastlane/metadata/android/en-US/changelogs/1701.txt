@@ -1,0 +1,1 @@
+- Album page: year and genre no longer stand one letter per line beside a long artist name.

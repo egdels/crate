@@ -7,6 +7,14 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-11-22
+
+### Fixed
+
+- Android: on an album page, year and genre no longer stand one letter
+  per line beside a long artist name; they follow the name as running
+  text.
+
 ## [0.17.0] - 2026-11-14
 
 ### Added
