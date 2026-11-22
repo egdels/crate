@@ -95,6 +95,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -148,14 +149,23 @@ fun CrateScreen(model: PlayerViewModel) {
             uri?.let(model::addFolder)
         }
         var searching by remember { mutableStateOf(false) }
-        // Opened from a header or a long press: the field shows the
-        // "artist:" text and, on a phone, the grid comes back filtered.
+        // The search is the grid's. On a phone an album page hides the
+        // grid, so a changed search text brings the grid back, whether
+        // the artist's name was tapped or the text typed over the album
+        // (which showed nothing of the result). The flat lists follow
+        // the search themselves and stay, unless an "artist:" text opens
+        // the search field: that came from a row's menu and means the
+        // artist's albums.
+        val phone by rememberUpdatedState(!wide)
         LaunchedEffect(Unit) {
+            var last = model.searchText
             snapshotFlow { model.searchText }.collect { text ->
-                if (text.startsWith(SearchQuery.ARTIST_PREFIX) && !searching) {
-                    searching = true
-                    if (!wide) model.selection = null
+                val opened = text.startsWith(SearchQuery.ARTIST_PREFIX) && !searching
+                if (opened) searching = true
+                if (phone && text != last && text.isNotBlank() && (opened || model.selection is Selection.AlbumId)) {
+                    model.selection = null
                 }
+                last = text
             }
         }
         var showingPrivacyPolicy by rememberSaveable { mutableStateOf(false) }
