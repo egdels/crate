@@ -27,7 +27,7 @@ never sees it.
 
 ```sh
 swift build                    # whole package
-swift test                     # 176 tests, Swift Testing, needs Xcode (macro plugins); ~5 s, plays silence
+swift test                     # 181 tests, Swift Testing, needs Xcode (macro plugins); ~13 s, plays silence
 swift run crate-scan <folder>  # tag-reader check against real files, prints gaps
 swift run crate-scan <folder> --lyrics   # counts files with lyrics (USLT/SYLT, ©lyr, FLAC LYRICS, .lrc)
 swift run crate-scan <folder> --loudness # BS.1770 loudness, peak and gain per file, with the speed
@@ -67,7 +67,7 @@ Android, from `android/` (needs JDK 17+, Android SDK with platform 37;
 `ANDROID_HOME` is set on this machine, Gradle 9.7 via the wrapper):
 
 ```sh
-./gradlew :core:test             # 140 JVM tests, ~2 s
+./gradlew :core:test             # 147 JVM tests, ~2 s
 CRATE_MUSIC_DIRS=~/Music/Music/Media.localized ./gradlew :core:test --tests '*TagParserTest*' -i
                                  # also runs the MP3/MP4 parsers over real files (colon-separated dirs)
 ./gradlew :app:testDebugUnitTest # 4 JVM tests in the app module (GainProcessor), ~10 s
@@ -103,6 +103,10 @@ Sources/CrateCore/    UI-free library: Track, Album, LibraryScanner,
                       PracticeSettings (+PracticeBook, PracticeStore,
                       JSON impl), Waveform, Skip, Bookmarks
                       (+BookmarksStore, JSON impl)
+Sources/CrateDecoders/ C target: minimp3 and dr_flac behind crate_mp3_open/
+                      crate_flac_open/crate_decoder_read, for the loudness
+                      analysis; the two headers are included from
+                      android/app/src/main/cpp (one copy in the repository)
 Sources/Crate/        SwiftUI app: CrateApp, PlayerModel (@Observable,
                       the only UI state), ContentView (album grid + track
                       list + empty state), PlayerBar
@@ -171,7 +175,8 @@ android/core/   Kotlin/JVM, package de.schliweb.crate.core: Track (uri +
                 (+LyricsSource; SafLyricsSource lives in the app),
                 History (+JsonHistoryStore, recentlyAdded()), Loudness
                 (meter, histogram, store, analyzer; MediaCodecAudio
-                in the app decodes), PracticeSettings, Waveform
+                in the app decodes), WavAudio (PCM straight from a
+                WAV), PracticeSettings, Waveform
                 (+WaveformBuilder, FileWaveformCache)
 android/app/    de.schliweb.crate: CrateApplication (owns Library and
                 ArtworkCache), PlayerViewModel (the only UI state),
@@ -180,6 +185,10 @@ android/app/    de.schliweb.crate: CrateApplication (owns Library and
                 library/SafFileSource (DocumentsContract walk),
                 library/AndroidMetadataReader (MediaMetadataRetriever,
                 FLAC via FlacMetadata), library/ArtworkCache (+reader),
+                library/NativeDecoders (Mp3Decoder = minimp3,
+                FlacDecoder = dr_flac, NativeAnalysis = analysis.c,
+                through JNI; src/main/cpp, libcrateaudio: the app's
+                one piece of native code, NDK 28 + CMake),
                 playback/PlaybackService (MediaSessionService + ExoPlayer,
                 ArtworkBitmapLoader resolves crate://album/<key>)
 ```
@@ -201,7 +210,18 @@ duration. On the Pixel 7a, a few thousand files: full scan 26 s with the
 parsers at 16 in flight (the retriever path took over two minutes); a
 no-change rescan is the folder walk alone, 8.1 s sequential and 3.4 s
 with 8 folder queries in flight (`SafFileSource.QUERIES_IN_FLIGHT`);
-emulator with about 900 files: 610 ms to 277 ms. Zero-byte files (an
+emulator with about 900 files: 610 ms to 277 ms. The scan is at the
+document provider's limit (probe build on the Pixel 7a,
+a few thousand files, full scan 15.6 s, of it the walk 3.7 s): opening a
+document costs about 4 ms and the provider serves the opens one after
+the other, so 4, 16, 32 and 64 files in flight took 20, 16, 15 and
+15 s, and the tag reading itself is 3 s of slot time. A
+ContentProviderClient kept open changed nothing; 16 or 32 folder
+queries in flight left the walk at 3.7 s. With READ_MEDIA_AUDIO and
+plain file paths the opens took a third (full scan about 10 s with MP3
+and M4A direct), but walking the folders through java.io.File took
+15 s (a FUSE stat per attribute); not adopted: a permission dialog
+for five seconds of a first scan. Zero-byte files (an
 interrupted copy leaves them) count as unreadable and are failed without
 a round trip.
 Android decisions: the track's `path` is built from document display
@@ -543,7 +563,7 @@ fewer for music than for speech). Mac: `PlayerModel.startAnalysis` after
 load and after every scan, cancelled by scans and folder removal,
 footer "Measuring loudness… x of y"; about six files a second with two
 in flight (125x realtime per thread), 150% CPU, so a large collection
-takes about an hour; `gain(for:)` prefers tags, then the
+took about an hour (before the own decoders, see below); `gain(for:)` prefers tags, then the
 measurement (album gain only when the whole queued album is measured),
 then Sound Check. Android: `MediaCodecLoudness` (MediaExtractor +
 MediaCodec, 16-bit or float PCM to planar floats), the analyzer and
@@ -568,6 +588,105 @@ library order, which once kept the Pixel 7a's footer at "0 of n" for
 minutes, and gives up a file that takes longer than it plays
 (`minTimeoutMillis` floor two minutes); half the cores, two to four,
 run at once. Each file logs one line under the tag `Loudness`.
+Own readers: on the Pixel 7a the analysis managed about
+one file a second, and a probe build showed where the time went with
+four files at once: 52 % waiting for the decoder process, 26 % in the
+extractor (a binder call per MP3 frame), 15 % the meter, 7 % waveform
+and conversion. So MP3s go through minimp3 in the app's process
+(`Mp3Decoder`, `mp3.c`: pread in pieces, not mmap, 16-bit output like
+the platform's), FLACs through dr_flac (`FlacDecoder`, `flac.c`, a
+64 KB read buffer) and WAVs through `WavAudio` in the core; M4A, Ogg
+and whatever those give up on (`decodeFile` falls back) stay with
+MediaCodec. A file named .mp3 that starts like an MP4, RIFF, Ogg or
+FLAC is not tried, and a result not as long as the tags say (2 s or
+5 %) is thrown away for the platform's: other bytes can pass for a few
+frames. Measured there per slot: MP3 82x real time -> 428x, WAV 141x
+-> 386x, FLAC 104x -> 350x (same values on every file compared), M4A and Ogg
+stay near 50x; a mixed library 83 -> 252 files a minute with MP3 and
+WAV, 319 with FLAC too; LUFS and peak equal to the platform's on every file compared (0.1 LU on
+8 s test files, where the encoder delay counts). The one fallback in
+the first run was a damaged MP3 that ffmpeg also reads only 40 s of. On
+another damaged MP3 the platform's decoder turned the broken frames
+into full-scale noise (peak 0.0 dBFS); minimp3 and ffmpeg both say
+-5.9. Damaged MP3s are what the length check sends back to the
+platform (a handful in a run, all with hundreds of ffmpeg errors), so
+those keep the value they had before; not changed, the check is there
+for wrong formats. FLAC through dr_flac: same LUFS and peak as the platform's on
+the emulator's files. The
+measurements are saved at most every 30 s (`saveIntervalMillis`), not
+every ten files: each save writes the whole file. The footer counts
+over the whole library (`LoudnessAnalyzer.measured`); counted from zero
+per run it looked like starting over after every launch. Both also on
+the Mac (`saveInterval`), where a save of a large library's file (20 MB) took
+1.8 s in a debug build, on the actor, with no new file started
+meanwhile: about as long as measuring the ten files before it. No background
+service for the analysis: asked again and declined. Probe
+builds for this: temporary `applicationId` and debug signing on the
+release build type, `log.tag.<name>` properties as switches
+(`Log.isLoggable`), `adb shell input keyevent KEYCODE_WAKEUP` every 20 s
+against the phone's screen timeout.
+Per-sample work in C: with the own decoders an MP3 spent
+44 % of its time decoding, 36 % in the meter, 7.5 % each converting
+to planar floats and in the waveform builder (WAV 40 % meter; an M4A
+or Ogg costs about eight MP3s). `analysis.c`
+(`NativeAnalysis`) now runs the K-filter, the energy per 100 ms step,
+the peak and the outline's 10 ms blocks on the decoder's interleaved
+buffer (`PcmTarget.addInterleaved`, taken by `MeasureTarget`; 16-bit
+or float, also MediaCodec's buffers), and hands steps and blocks to
+`LoudnessMeter.addSteps`/`notePeak` and `WaveformBuilder.addBlock`:
+filter design (`filterCoefficients`), blocks, gates, histogram and the
+slices stay in Kotlin, one BS.1770 logic. Built with
+`-ffp-contract=off` and written operation for operation like
+`KFilter.energy`, so loudness and peak are the Kotlin ones to the bit;
+both stereo channels go through the filter in one loop (two dependent
+chains side by side), which is the gain. Checked on the Mac (the C
+file as a dylib under a scratch JVM test: several hundred runs over
+real audio, 16-bit and float, one to six channels, odd chunkings) and
+on the Pixel 7a with both paths fed the same buffers (MP3, FLAC, M4A,
+Ogg, several hundred files): loudness, peak and outline equal in every
+bit. WAVs of 16-bit PCM or 32-bit floats (`WavAudio.isPcm16`,
+`isFloat32`) are what a decoder hands out, so `readWav` passes their
+bytes on from a direct buffer, floats after
+`NativeAnalysis.zeroNonFinite` (the Kotlin reader's NaN-to-silence);
+other widths keep `WavAudio.read`. A collection's WAVs can all be
+32-bit float behind a JUNK chunk (the first try took only 16-bit and
+changed nothing; `od` over the headers on the phone showed why):
+measured both ways per file, same bits, 10.0 -> 6.2 s per hour of
+audio. Measured on the Pixel 7a by alternating the two paths file by
+file in one run, the only fair way: per hour of MP3 audio everything
+after decoding fell from 4.7 to 2.8 s, the file from 8.6 to 6.8 s
+(decoding 3.9 s either way); on the Mac's JVM the same step went from
+66 to 27 ms for a three-minute track. Two traps: a run right after
+twenty minutes of load measured the unchanged decoder 25 % slower (a
+warm phone), so runs of different builds an hour apart do not compare;
+and the wake-up key event does not stop the Pixel from locking after
+its screen timeout (60 s here), behind which the app runs on at a
+fifth of the speed, so watch `mCurrentFocus` for `NotificationShade`
+during a run.
+The same on the Mac, where the split is another: Swift is
+compiled and the buffers are planar floats already, but AVFoundation's
+decoding was 80 % of an MP3's or FLAC's time (a 3:38 track: MP3 204 ms
+decoding and 55 ms meter, FLAC 317 and 54; minimp3 80 ms, dr_flac
+101 ms). So `LoudnessMeter.measure` tries `measureWithOwnDecoder`
+first (`CrateDecoders`, by the file's name, 16-bit like Android,
+converted with vDSP) and `measureWithAVFoundation` for the rest and
+for whatever the own decoder returns nil for: no stream of its format
+(the same checks as `mp3.c`), or a length 2 s or 5 % off what
+AVAudioFile says. The meter's stereo loop filters both channels in one
+loop (27 ms instead of 55, same bits; any other channel count keeps
+the loop per channel). Release build, two in flight, a folder of
+about 190 MP3s and FLACs: 30.7 s -> 13.8 s (1660x -> 3686x real time); the
+x86_64 build under Rosetta prints the same values. Against AVFoundation
+on several hundred files of the collection: FLAC equal (under
+0.005 LU), MP3 within 0.1 LU, more than half over 0.005 (AVFoundation
+drops the encoder delay, which moves the blocks), peaks equal. Found
+on the way: AVAudioFile's length of an MP3 without a frame count is an
+estimate, and where it is too long the last `read` throws
+kAudioFileEndOfFileError; `measure` gave such files up as unmeasurable
+(not rare: several in the one folder timed). That error
+after some audio now ends the file. SwiftPM's release build compiles
+the C at -O2; -O3 (an unsafe flag) made minimp3 10 % faster and was
+left out. Not verified: the DMG the workflow builds.
 Measured on the Pixel 7a (2026-10-15, release build compiled with
 `speed`): frame by frame one file a minute (the signed 0.9.0, which is
 why "it does not work"); batched, four at once, 86 files a minute over

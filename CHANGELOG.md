@@ -7,6 +7,41 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+### Changed
+
+- Android: measuring loudness is nearly four times as fast. MP3 and
+  FLAC files are decoded in the app itself (minimp3, dr_flac) and WAV
+  files read directly, instead of going through the system's decoders;
+  on a Pixel 7a a mixed library went from 83 to 319 files a minute,
+  with the same results. Other formats, and files those readers cannot
+  read, are measured as before.
+- Android: the filter and the sums of the loudness measurement, and
+  the outline for the practice sheet, run in native code on the
+  decoder's own samples. An MP3 or FLAC takes a fifth less time again,
+  a 16-bit or 32-bit float WAV over a third less; the results are the
+  same to the bit.
+
+- Mac: measuring loudness is about twice as fast. MP3 and FLAC files
+  are decoded by minimp3 and dr_flac instead of AVFoundation, and a
+  stereo file's two channels go through the meter's filter together;
+  a folder of MP3s and FLACs took 14 seconds instead of 31. FLAC
+  measures the same, an MP3 within a tenth of a LU (AVFoundation
+  leaves out the encoder's lead-in).
+
+### Fixed
+
+- Mac: MP3s whose length AVFoundation overestimates are measured. The
+  last read ended in an end-of-file error and the whole file was given
+  up, which is not rare among MP3s without a frame count.
+- "Measuring loudness…" counts over the whole library. It counted the
+  remaining files from zero after every start, which looked as if the
+  measuring began again.
+- The measurements are written every half minute instead of after
+  every ten files: every write is the whole file, and it grows with
+  the library (on the Mac nearly two seconds with a large one, about as
+  long as measuring the ten). On Android the outline for the practice sheet
+  costs less on the way.
+
 ## [0.17.2] - 2026-11-22
 
 ### Fixed

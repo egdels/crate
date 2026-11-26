@@ -17,11 +17,13 @@ import androidx.annotation.RequiresApi
 import android.util.Log
 import de.schliweb.crate.core.LoudnessMeter
 import de.schliweb.crate.core.Track
+import de.schliweb.crate.core.WavAudio
 import de.schliweb.crate.core.TrackLoudness
 import de.schliweb.crate.core.Waveform
 import de.schliweb.crate.core.WaveformBuilder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -30,22 +32,105 @@ import java.nio.ByteOrder
 
 /**
  * Where decoded audio goes: planar floats, one array per channel, after
- * [start] has told the format.
+ * [start] has told the format. A second [start] begins anew: a file one
+ * reader gave up on is read again from its beginning by another.
  */
 interface PcmTarget<R> {
     fun start(sampleRate: Double, channels: Int)
     fun add(planar: Array<FloatArray>, frames: Int)
+
+    /** The decoder's own buffer before it is taken apart: [size] bytes
+     *  of interleaved PCM in native order at [offset], 16-bit or
+     *  [floats]. True when the target took them; false, and the same
+     *  audio comes through [add]. */
+    fun addInterleaved(buffer: ByteBuffer, offset: Int, size: Int, floats: Boolean): Boolean = false
+
     val result: R?
+
+    /** Nothing more will come, whether [result] was asked or not. */
+    fun close() {}
 }
 
 /**
- * Decodes a whole file with the platform's codecs into a [PcmTarget]:
- * the loudness meter ([measure]) or the waveform ([waveform]); null when
- * the file is silent or cannot be decoded. In batches with callbacks
- * where the decoder allows it, else buffer by buffer on the calling
- * worker thread; cancellable either way. 16-bit PCM is what the decoders
- * hand out by default, floats when a decoder prefers them. One log line
- * per measured file under the tag "Loudness".
+ * The loudness and the outline of one file. Buffers of interleaved PCM
+ * go to [NativeAnalysis], which does the work per sample (filter,
+ * energy, peak) and hands back whole steps and blocks; the meter and
+ * the builder do the rest. Planar floats (the WAV reader's, or with the
+ * native library missing) go through the meter and the builder alone.
+ * The two give the same loudness and peak to the bit.
+ */
+private class MeasureTarget : PcmTarget<MediaCodecAudio.Measured> {
+    private var meter: LoudnessMeter? = null
+    private var builder: WaveformBuilder? = null
+    private var native = 0L
+    private var steps = DoubleArray(0)
+    private val peaks = FloatArray(512)
+    private val squares = DoubleArray(512)
+
+    override fun start(sampleRate: Double, channels: Int) {
+        close()
+        val meter = LoudnessMeter(sampleRate, channels).also { meter = it }
+        val builder = WaveformBuilder(sampleRate, channels).also { builder = it }
+        if (NativeDecoder.available && channels > 0) {
+            native = NativeAnalysis.open(channels, meter.filterCoefficients, meter.stepFrames, builder.blockFrames)
+            steps = DoubleArray(64 * channels)
+        }
+    }
+
+    override fun add(planar: Array<FloatArray>, frames: Int) {
+        meter?.add(planar, frames)
+        builder?.add(planar, frames)
+    }
+
+    override fun addInterleaved(buffer: ByteBuffer, offset: Int, size: Int, floats: Boolean): Boolean {
+        if (native == 0L || !buffer.isDirect) return false
+        check(NativeAnalysis.add(native, buffer, offset, size, floats)) { "out of memory" }
+        drain()
+        return true
+    }
+
+    private fun drain() {
+        val meter = meter ?: return
+        val builder = builder ?: return
+        while (true) {
+            val counts = NativeAnalysis.drain(native, steps, peaks, squares)
+            if (counts == 0L) break
+            meter.addSteps(steps, (counts ushr 32).toInt())
+            for (i in 0 until counts.toInt()) builder.addBlock(peaks[i], squares[i], builder.blockFrames)
+        }
+    }
+
+    // Read to the end: silence is a measurement too (no gain), or the
+    // file would be decoded again on every launch.
+    override val result: MediaCodecAudio.Measured
+        get() {
+            if (native != 0L) {
+                drain()
+                val frames = NativeAnalysis.finish(native, peaks, squares)
+                if (frames > 0) builder?.addBlock(peaks[0], squares[0], frames)
+                meter?.notePeak(NativeAnalysis.peak(native))
+                close()
+            }
+            return MediaCodecAudio.Measured(meter?.finalResult, builder?.result())
+        }
+
+    override fun close() {
+        if (native != 0L) NativeAnalysis.close(native)
+        native = 0L
+    }
+}
+
+/**
+ * Decodes a whole file into a [PcmTarget]: the loudness meter
+ * ([measure]) or the waveform ([waveform]); null when the file is
+ * silent or cannot be decoded. MP3, FLAC and WAV, nearly all of a usual
+ * library, are read in this process ([Mp3Decoder], [FlacDecoder],
+ * [WavAudio]); the rest, and any file those give up on, goes through
+ * the platform's codecs: in batches with callbacks where the decoder
+ * allows it, else buffer by buffer on the calling worker thread.
+ * Cancellable either way. 16-bit PCM is what the decoders hand out by
+ * default, floats when a decoder prefers them. One log line per
+ * measured file under the tag "Loudness".
  */
 object MediaCodecAudio {
     private const val TAG = "Loudness"
@@ -70,21 +155,7 @@ object MediaCodecAudio {
     suspend fun measure(context: Context, track: Track): Measured? {
         val started = System.currentTimeMillis()
         val measured = try {
-            decodeFile(context, track, object : PcmTarget<Measured> {
-                private var meter: LoudnessMeter? = null
-                private var builder: WaveformBuilder? = null
-                override fun start(sampleRate: Double, channels: Int) {
-                    meter = LoudnessMeter(sampleRate, channels)
-                    builder = WaveformBuilder(sampleRate, channels)
-                }
-                override fun add(planar: Array<FloatArray>, frames: Int) {
-                    meter?.add(planar, frames)
-                    builder?.add(planar, frames)
-                }
-                // Read to the end: silence is a measurement too (no gain),
-                // or the file would be decoded again on every launch.
-                override val result: Measured get() = Measured(meter?.finalResult, builder?.result())
-            })
+            decodeFile(context, track, MeasureTarget())
         } catch (e: TimeoutCancellationException) {
             Log.w(TAG, "gave up: ${track.title} took longer than it plays")
             throw e
@@ -102,6 +173,112 @@ object MediaCodecAudio {
     }
 
     private suspend fun <R> decodeFile(context: Context, track: Track, target: PcmTarget<R>): R? {
+        try {
+            return decodeAnyWay(context, track, target)
+        } finally {
+            target.close()
+        }
+    }
+
+    private suspend fun <R> decodeAnyWay(context: Context, track: Track, target: PcmTarget<R>): R? {
+        val name = track.path.lowercase()
+        val read = try {
+            when {
+                name.endsWith(".mp3") && NativeDecoder.available -> readNative(Mp3Decoder, context, track, target)
+                name.endsWith(".flac") && NativeDecoder.available -> readNative(FlacDecoder, context, track, target)
+                name.endsWith(".wav") -> readWav(context, track, target)
+                else -> false
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "own reader failed: ${track.title}: $e")
+            false
+        }
+        return if (read) target.result else decodeWithPlatform(context, track, target)
+    }
+
+    /** Samples per [NativeDecoder.read]: 64 MP3 frames, about 1.7 s. */
+    private const val NATIVE_BUFFER_SAMPLES = 1152 * 2 * 64
+
+    /** The whole file through a decoder of the app's own; false when it
+     *  is not a stream of that format after all, or when what came out
+     *  is not as long as the tags say: bytes of another format can pass
+     *  for a few MP3 frames, and the platform's decoder is the judge
+     *  then. */
+    private suspend fun <R> readNative(decoder: NativeDecoder, context: Context, track: Track, target: PcmTarget<R>): Boolean {
+        val descriptor = context.contentResolver.openFileDescriptor(Uri.parse(track.uri), "r") ?: return false
+        descriptor.use {
+            val handle = decoder.open(descriptor.fd)
+            if (handle == 0L) return false
+            try {
+                val buffer = ByteBuffer.allocateDirect(NATIVE_BUFFER_SAMPLES * 2).order(ByteOrder.nativeOrder())
+                val sink = PcmSink(target)
+                var rate = 0
+                var channels = 0
+                var frames = 0L
+                while (true) {
+                    currentCoroutineContext().ensureActive()
+                    val count = decoder.read(handle, buffer)
+                    if (count <= 0) break
+                    if (rate == 0) {
+                        rate = decoder.rate(handle)
+                        channels = decoder.channels(handle)
+                        if (rate <= 0 || channels <= 0) return false
+                        sink.start(rate, channels, AudioFormat.ENCODING_PCM_16BIT)
+                    }
+                    sink.add(buffer, 0, count * 2)
+                    frames += count / channels
+                }
+                if (rate == 0) return false
+                val seconds = frames.toDouble() / rate
+                if (track.duration > 0 && kotlin.math.abs(seconds - track.duration) > maxOf(2.0, track.duration * 0.05)) {
+                    Log.w(TAG, "own reader got %.1f s of %.1f s: %s".format(seconds, track.duration, track.title))
+                    return false
+                }
+                return true
+            } finally {
+                decoder.close(handle)
+            }
+        }
+    }
+
+    /** The samples of a plain PCM WAV, straight from the file. 16-bit
+     *  and 32-bit float files hold what a decoder hands out: their
+     *  bytes go to the target as they are, in the pieces [WavAudio.read]
+     *  would take, when the target wants them that way. */
+    private suspend fun <R> readWav(context: Context, track: Track, target: PcmTarget<R>): Boolean {
+        val job = currentCoroutineContext()[Job]
+        ContentByteSource(context, Uri.parse(track.uri)).use { source ->
+            val wav = WavAudio.open(source) ?: return false
+            target.start(wav.sampleRate.toDouble(), wav.channels)
+            if ((wav.isPcm16 || wav.isFloat32) && NativeDecoder.available && ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) {
+                val buffer = ByteBuffer.allocateDirect(WavAudio.CHUNK_FRAMES * wav.frameBytes)
+                var done = 0L
+                while (done < wav.frames) {
+                    job?.ensureActive()
+                    buffer.clear()
+                    buffer.limit(minOf(WavAudio.CHUNK_FRAMES.toLong(), wav.frames - done).toInt() * wav.frameBytes)
+                    val wanted = buffer.limit()
+                    val bytes = source.read(wav.dataOffset + done * wav.frameBytes, buffer)
+                    val whole = bytes - bytes % wav.frameBytes
+                    if (whole == 0) break
+                    if (wav.isFloat32) NativeAnalysis.zeroNonFinite(buffer, whole)
+                    // A target that does not take the first piece takes none.
+                    if (!target.addInterleaved(buffer, 0, whole, wav.isFloat32)) break
+                    done += whole / wav.frameBytes
+                    if (bytes < wanted) break
+                }
+                if (done > 0) return true
+            }
+            return wav.read(source) { planar, frames ->
+                job?.ensureActive()
+                target.add(planar, frames)
+            } > 0
+        }
+    }
+
+    private suspend fun <R> decodeWithPlatform(context: Context, track: Track, target: PcmTarget<R>): R? {
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(context, Uri.parse(track.uri), null)
@@ -236,8 +413,9 @@ object MediaCodecAudio {
         return ended
     }
 
-    /** Turns the decoder's interleaved PCM into planar floats for the
-     *  target; shared by both decode paths. */
+    /** Hands the decoder's interleaved PCM to the target, as it is when
+     *  the target takes that, else as planar floats; shared by all
+     *  decode paths. */
     private class PcmSink<R>(private val target: PcmTarget<R>) {
         private var started = false
         private var channels = 0
@@ -248,10 +426,15 @@ object MediaCodecAudio {
 
         val result: R? get() = target.result
 
-        fun formatChanged(format: MediaFormat) {
-            val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-            channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-            encoding = if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) format.getInteger(MediaFormat.KEY_PCM_ENCODING) else AudioFormat.ENCODING_PCM_16BIT
+        fun formatChanged(format: MediaFormat) = start(
+            format.getInteger(MediaFormat.KEY_SAMPLE_RATE),
+            format.getInteger(MediaFormat.KEY_CHANNEL_COUNT),
+            if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) format.getInteger(MediaFormat.KEY_PCM_ENCODING) else AudioFormat.ENCODING_PCM_16BIT,
+        )
+
+        fun start(sampleRate: Int, channels: Int, encoding: Int) {
+            this.channels = channels
+            this.encoding = encoding
             target.start(sampleRate.toDouble(), channels)
             started = true
             planar = Array(channels) { FloatArray(0) }
@@ -263,6 +446,7 @@ object MediaCodecAudio {
             buffer.position(offset)
             buffer.limit(offset + size)
             buffer.order(ByteOrder.nativeOrder())
+            if (target.addInterleaved(buffer, offset, size, encoding == AudioFormat.ENCODING_PCM_FLOAT)) return
             val frames: Int
             if (encoding == AudioFormat.ENCODING_PCM_FLOAT) {
                 val source = buffer.asFloatBuffer()

@@ -104,9 +104,12 @@ class CrateApplication : Application() {
     fun startAnalysis(tracks: List<Track>) {
         if (analysisJob?.isActive == true) return
         analysisJob = scope.launch {
-            val pending = withContext(Dispatchers.IO) { loudness.load(); loudness.pending(tracks).size }
+            val (pending, measured) = withContext(Dispatchers.IO) {
+                loudness.load()
+                loudness.pending(tracks).size to loudness.measured(tracks)
+            }
             if (pending == 0) return@launch
-            analysisProgress.value = LoudnessAnalyzer.Progress(0, pending)
+            analysisProgress.value = LoudnessAnalyzer.Progress(measured, measured + pending)
             try {
                 loudness.run(tracks) { progress, _ -> analysisProgress.value = progress }
             } finally {

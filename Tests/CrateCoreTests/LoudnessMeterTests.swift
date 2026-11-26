@@ -39,6 +39,24 @@ import Testing
         #expect(abs(whole.result!.loudness! - -20) < 0.1)
     }
 
+    /// Stereo goes through the filter two channels at a time; the
+    /// same two beside a silent third take the loop for any count.
+    @Test func stereoMeasuresTheSameInEitherLoop() {
+        let left = sine(dBFS: -18, seconds: 2.3, sampleRate: 44_100, frequency: 440, channels: 1)[0]
+        let right = sine(dBFS: -25, seconds: 2.3, sampleRate: 44_100, frequency: 3000, channels: 1)[0]
+        var two = LoudnessMeter(sampleRate: 44_100, channelCount: 2)
+        var three = LoudnessMeter(sampleRate: 44_100, channelCount: 3)
+        var offset = 0
+        while offset < left.count {
+            let end = min(left.count, offset + 1000)
+            two.add([Array(left[offset..<end]), Array(right[offset..<end])])
+            three.add([Array(left[offset..<end]), Array(right[offset..<end]), [Float](repeating: 0, count: end - offset)])
+            offset = end
+        }
+        #expect(two.result!.loudness == three.result!.loudness)
+        #expect(two.result!.peak == three.result!.peak)
+    }
+
     @Test func silenceIsGatedOut() {
         var meter = LoudnessMeter(sampleRate: 48_000, channelCount: 2)
         meter.add(Array(repeating: Array(repeating: Float(0), count: 48_000 * 5), count: 2))

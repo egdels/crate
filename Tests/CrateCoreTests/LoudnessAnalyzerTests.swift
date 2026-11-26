@@ -88,6 +88,14 @@ import Testing
         #expect(result.count < 40)
         #expect(result.count > 0)
         #expect(try store.load()?.count == result.count)
+
+        // The next run counts on from what is measured, not from zero.
+        let again = LoudnessAnalyzer(store: store, measure: { _ in
+            TrackLoudness(loudness: -20, peak: 1, histogram: LoudnessHistogram())
+        }, concurrency: 1)
+        nonisolated(unsafe) var first: LoudnessAnalyzer.Progress?
+        _ = await again.run(tracks: tracks) { progress, _ in if first == nil { first = progress } }
+        #expect(first == LoudnessAnalyzer.Progress(done: result.count + 1, total: 40))
     }
 
     @Test func silentAndUndecodableFilesAreNotPendingForever() async throws {

@@ -40,7 +40,8 @@ class Waveform(
  * block of ten milliseconds and reduced to slices at the end.
  */
 class WaveformBuilder(private val sampleRate: Double, private val channels: Int) {
-    private val blockFrames = max(1, (sampleRate / 100).toInt())
+    /** The frames of one block, ten milliseconds. */
+    val blockFrames = max(1, (sampleRate / 100).toInt())
     private var blocks = FloatArray(4096)
     private var squares = DoubleArray(4096)
     private var sizes = IntArray(4096)
@@ -50,18 +51,44 @@ class WaveformBuilder(private val sampleRate: Double, private val channels: Int)
     private var currentSquares = 0.0
     private var totalFrames = 0L
 
-    /** Planar samples, one array per channel, the first [frames] valid. */
+    /** Planar samples, one array per channel, the first [frames] valid.
+     *  Block by block with the running values in locals: as fields they
+     *  went through memory on every sample (see `KFilter.energy`), and
+     *  the loudness analysis sends every sample of the library here. */
     fun add(planar: Array<FloatArray>, frames: Int) {
-        for (i in 0 until frames) {
-            for (c in 0 until min(channels, planar.size)) {
-                val sample = planar[c][i]
-                val level = abs(sample)
-                if (level > current) current = level
-                currentSquares += sample.toDouble() * sample
+        val count = min(channels, planar.size)
+        var offset = 0
+        while (offset < frames) {
+            val end = offset + min(frames - offset, blockFrames - framesInBlock)
+            var peak = current
+            var sum = currentSquares
+            for (c in 0 until count) {
+                val data = planar[c]
+                for (i in offset until end) {
+                    val sample = data[i]
+                    val level = abs(sample)
+                    if (level > peak) peak = level
+                    sum += sample.toDouble() * sample
+                }
             }
-            framesInBlock++
+            current = peak
+            currentSquares = sum
+            framesInBlock += end - offset
+            offset = end
             if (framesInBlock == blockFrames) closeBlock()
         }
+        totalFrames += frames
+    }
+
+    /** One block measured elsewhere: the largest sample magnitude and
+     *  the sum of the squared samples of all channels over [frames]
+     *  frames, [blockFrames] of them except in a file's last block.
+     *  Instead of [add], never mixed with it. */
+    fun addBlock(peak: Float, squares: Double, frames: Int) {
+        current = peak
+        currentSquares = squares
+        framesInBlock = frames
+        closeBlock()
         totalFrames += frames
     }
 

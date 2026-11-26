@@ -631,8 +631,8 @@ final class PlayerModel: ObservableObject {
     // MARK: - Loudness analysis
 
     /// Measures files without ReplayGain tags in the background, lowest
-    /// priority, a few at a time; results arrive every few files and the
-    /// footer counts along. Cancelled by a scan or a folder removal and
+    /// priority, a few at a time; results arrive every half minute and
+    /// the footer counts along, over the whole library. Cancelled by a scan or a folder removal and
     /// started again after, picking up where it was.
     private var analysisRun = 0
 
@@ -656,7 +656,8 @@ final class PlayerModel: ObservableObject {
         analysisTask = Task(priority: .utility) {
             let pending = await analyzer.pending(in: tracks).count
             guard pending > 0 else { return }
-            report(LoudnessAnalyzer.Progress(done: 0, total: pending), nil)
+            let measured = await analyzer.measured(in: tracks)
+            report(LoudnessAnalyzer.Progress(done: measured, total: measured + pending), nil)
             let result = await analyzer.run(tracks: tracks) { progress, snapshot in report(progress, snapshot) }
             report(nil, result)
         }

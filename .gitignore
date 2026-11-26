@@ -8,3 +8,5 @@ build/
 .claude/settings.local.json
 .idea/
 __pycache__/
+# Cache of the Android app's native build
+android/app/.cxx/

@@ -35,6 +35,19 @@ class ContentByteSource(context: Context, uri: Uri) : ByteSource {
         return if (buffer.hasRemaining()) buffer.array().copyOf(buffer.position()) else buffer.array()
     }
 
+    /** Fills [buffer] from [offset] of the file up to its limit, less
+     *  at the end of the file; the bytes read. For a direct buffer:
+     *  no array in between. */
+    fun read(offset: Long, buffer: ByteBuffer): Int {
+        var position = offset
+        while (buffer.hasRemaining()) {
+            val n = channel.read(buffer, position)
+            if (n <= 0) break
+            position += n
+        }
+        return (position - offset).toInt()
+    }
+
     override fun close() {
         stream.close()
         descriptor.close()

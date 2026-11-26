@@ -99,9 +99,9 @@ public struct JSONLoudnessStore: LoudnessStore {
 }
 
 /// Measures what the library has not measured yet, a few files at a
-/// time at utility priority, and writes the results down every few
-/// files, so a run that is cancelled (quit, a scan starting) picks up
-/// where it was. Hours for a large collection; the app never waits for
+/// time at utility priority, and writes the results down every half
+/// minute and at the end, so a run that is cancelled (quit, a scan
+/// starting) picks up where it was. Hours for a large collection; the app never waits for
 /// it, playback uses whatever is measured by then.
 public actor LoudnessAnalyzer {
     public typealias Measure = @Sendable (URL) throws -> TrackLoudness?
@@ -119,6 +119,11 @@ public actor LoudnessAnalyzer {
     private let store: any LoudnessStore
     private let measure: Measure
     private let concurrency: Int
+    /// The least time between two saves during a run: every save
+    /// writes the whole file, a megabyte per thousand measured files, and
+    /// after every ten files that grew with the square of the library.
+    /// A killed process loses this much work at most.
+    private let saveInterval: TimeInterval
     public private(set) var loudness = Loudness()
     private var loaded = false
     /// Files that could not be measured (undecodable), by id, with the
@@ -126,10 +131,14 @@ public actor LoudnessAnalyzer {
     /// until the file changes.
     private var unmeasurable: [String: Date] = [:]
 
-    public init(store: any LoudnessStore, measure: @escaping Measure = LoudnessMeter.measure, concurrency: Int = 2) {
+    public init(
+        store: any LoudnessStore, measure: @escaping Measure = LoudnessMeter.measure, concurrency: Int = 2,
+        saveInterval: TimeInterval = 30
+    ) {
         self.store = store
         self.measure = measure
         self.concurrency = max(1, concurrency)
+        self.saveInterval = saveInterval
     }
 
     /// Reads the file once.
@@ -153,16 +162,25 @@ public actor LoudnessAnalyzer {
         }
     }
 
+    /// How many of the tracks are measured already.
+    public func measured(in tracks: [Track]) -> Int {
+        tracks.count { Loudness.needsMeasuring($0) && loudness.isFresh($0) }
+    }
+
     /// Measures the pending tracks. `progress` is called after every
-    /// file with the count and, every few files and at the end, the
-    /// measurements so far. Returns when done or cancelled.
+    /// file with the count and, now and then and at the end, the
+    /// measurements so far. The count is over the whole library, what
+    /// earlier runs measured included: counted from zero, every launch
+    /// looked like starting over. Returns when done or cancelled.
     public func run(tracks: [Track], progress: @escaping @Sendable (Progress, Loudness?) -> Void) async -> Loudness {
         _ = load()
         let pending = self.pending(in: tracks)
-        let total = pending.count
-        guard total > 0 else { return loudness }
-        var done = 0
+        guard !pending.isEmpty else { return loudness }
+        let before = measured(in: tracks)
+        let total = before + pending.count
+        var done = before
         var unsaved = 0
+        var saved: Date?
         let measure = self.measure
         await withTaskGroup(of: (Track, TrackLoudness??).self) { group in
             var iterator = pending.makeIterator()
@@ -195,8 +213,9 @@ public actor LoudnessAnalyzer {
                     break
                 }
                 done += 1
-                if unsaved >= 10 {
+                if unsaved >= 10, saved.map({ Date().timeIntervalSince($0) >= saveInterval }) ?? true {
                     try? store.save(loudness)
+                    saved = Date()
                     unsaved = 0
                     progress(Progress(done: done, total: total), loudness)
                 } else {

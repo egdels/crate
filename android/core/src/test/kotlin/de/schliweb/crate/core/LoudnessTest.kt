@@ -57,6 +57,42 @@ class LoudnessTest {
         assertTrue(abs(whole.result!!.loudness!! - pieces.result!!.loudness!!) < 0.01)
     }
 
+    /** What the Android app's native code does: the filter from the
+     *  meter's coefficients, one sum per channel and step. */
+    @Test
+    fun stepsMeasuredElsewhereGiveTheSameResult() {
+        val rate = 44_100.0
+        val left = FloatArray((rate * 4.25).toInt()) { (0.4 * sin(2 * PI * 440 * it / rate) * (1 + sin(it / 9000.0)) / 2).toFloat() }
+        val right = FloatArray(left.size) { (0.2 * sin(2 * PI * 3000 * it / rate)).toFloat() }
+        val direct = LoudnessMeter(rate, 2).also { it.add(arrayOf(left, right)) }
+
+        val fed = LoudnessMeter(rate, 2)
+        val k = fed.filterCoefficients
+        assertEquals(10, k.size)
+        val steps = left.size / fed.stepFrames // the unfinished step at the end is dropped
+        val sums = DoubleArray(steps * 2)
+        for ((c, data) in listOf(left, right).withIndex()) {
+            var x1 = 0.0; var x2 = 0.0; var y1 = 0.0; var y2 = 0.0
+            var hx1 = 0.0; var hx2 = 0.0; var hy1 = 0.0; var hy2 = 0.0
+            for (i in 0 until steps * fed.stepFrames) {
+                val x = data[i].toDouble()
+                val y = k[0] * x + k[1] * x1 + k[2] * x2 - k[3] * y1 - k[4] * y2
+                x2 = x1; x1 = x; y2 = y1; y1 = y
+                val z = k[5] * y + k[6] * hx1 + k[7] * hx2 - k[8] * hy1 - k[9] * hy2
+                hx2 = hx1; hx1 = y; hy2 = hy1; hy1 = z
+                sums[i / fed.stepFrames * 2 + c] += z * z
+            }
+            fed.notePeak(data.maxOf { abs(it) })
+        }
+        // In two portions, as they arrive.
+        fed.addSteps(sums.copyOfRange(0, 2 * 7), 7)
+        fed.addSteps(sums.copyOfRange(2 * 7, sums.size), steps - 7)
+
+        assertEquals(direct.result!!.loudness, fed.result!!.loudness)
+        assertEquals(direct.result!!.peak, fed.result!!.peak)
+        assertEquals(direct.result!!.histogram.blockCount, fed.result!!.histogram.blockCount)
+    }
+
     @Test
     fun silenceAndQuietPassagesAreGatedOut() {
         val meter = LoudnessMeter(48_000.0, 2)
@@ -118,6 +154,12 @@ class LoudnessTest {
         val partial = slowStore.load()
         assertNotNull(partial)
         assertTrue(partial.size in 1 until 40)
+
+        // The next run counts on from what is measured, not from zero.
+        val again = LoudnessAnalyzer(slowStore, measure = { TrackLoudness(-20.0, 0.1, LoudnessHistogram()) })
+        var first: LoudnessAnalyzer.Progress? = null
+        again.run((0 until 40).map { makeTrack("s$it") }) { progress, _ -> if (first == null) first = progress }
+        assertEquals(LoudnessAnalyzer.Progress(partial.size + 1, 40), first)
     }
 
     @Test

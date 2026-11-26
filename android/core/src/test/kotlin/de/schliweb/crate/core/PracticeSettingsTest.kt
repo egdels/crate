@@ -175,6 +175,30 @@ class WaveformTest {
     }
 
     @Test
+    fun blocksMeasuredElsewhereGiveTheSameOutline() {
+        val samples = Array(2) { c -> FloatArray(2345) { i -> ((i * 37 + c * 11) % 200 - 100) / 100f } }
+        val direct = WaveformBuilder(1000.0, 2).also { it.add(samples, 2345) }.result(slices = 50)
+
+        val fed = WaveformBuilder(1000.0, 2)
+        var offset = 0
+        while (offset < 2345) {
+            val frames = minOf(fed.blockFrames, 2345 - offset) // the last block is a short one
+            var peak = 0f
+            var squares = 0.0
+            for (data in samples) for (i in offset until offset + frames) {
+                peak = maxOf(peak, abs(data[i]))
+                squares += data[i].toDouble() * data[i]
+            }
+            fed.addBlock(peak, squares, frames)
+            offset += frames
+        }
+        val outline = fed.result(slices = 50)
+        assertEquals(direct.duration, outline.duration)
+        assertTrue(direct.peaks.contentEquals(outline.peaks))
+        assertTrue(direct.levels.contentEquals(outline.levels))
+    }
+
+    @Test
     fun aShortFileGetsNoMoreSlicesThanBlocks() {
         val builder = WaveformBuilder(1000.0, 1)
         builder.add(arrayOf(FloatArray(25) { 1f }), 25)

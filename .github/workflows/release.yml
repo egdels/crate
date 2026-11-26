@@ -139,8 +139,10 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
-      - name: Install the Android platform
-        run: sdkmanager --install "platforms;android-37.0"
+      # The NDK and CMake build the decoders in android/app/src/main/cpp; the
+      # versions are the ones app/build.gradle.kts names.
+      - name: Install the Android platform, the NDK and CMake
+        run: sdkmanager --install "platforms;android-37.0" "ndk;28.0.13004108" "cmake;3.22.1"
 
       - uses: gradle/actions/setup-gradle@v4
 

@@ -52,7 +52,13 @@ class LoudnessMeter(val sampleRate: Double, val channelCount: Int) {
             else -> 1.0
         }
     }
-    private val stepFrames = Math.round(sampleRate * 0.1).toInt()
+    /** The frames of one step, a tenth of a second. */
+    val stepFrames = Math.round(sampleRate * 0.1).toInt()
+
+    /** The K-filter for this sample rate: b0, b1, b2, a1, a2 of the
+     *  shelf, then of the high-pass. For code that filters elsewhere and
+     *  hands in the steps ([addSteps]). */
+    val filterCoefficients: DoubleArray get() = KFilter(sampleRate).coefficients
     private var stepSums = DoubleArray(channelCount)
     private var stepFilled = 0
     private val ring = ArrayDeque<DoubleArray>()
@@ -78,6 +84,23 @@ class LoudnessMeter(val sampleRate: Double, val channelCount: Int) {
             offset += count
             if (stepFilled == stepFrames) stepDone()
         }
+    }
+
+    /** [count] whole steps measured elsewhere, in order: for each, every
+     *  channel's sum of the squared filter output over [stepFrames]
+     *  frames, with the peak through [notePeak]. Instead of [add], not
+     *  mixed with it within a step: the Android app does the per-sample
+     *  work in native code and leaves the blocks and gates here. */
+    fun addSteps(sums: DoubleArray, count: Int) {
+        for (step in 0 until count) {
+            stepSums = sums.copyOfRange(step * channelCount, (step + 1) * channelCount)
+            stepDone()
+        }
+    }
+
+    /** The largest sample magnitude of what [addSteps] was given. */
+    fun notePeak(magnitude: Float) {
+        if (magnitude > peak) peak = magnitude
     }
 
     private fun stepDone() {
@@ -134,6 +157,8 @@ internal class KFilter(fs: Double) {
         ha1 = 2 * (hk * hk - 1) / ha0
         ha2 = (1 - hk / hq + hk * hk) / ha0
     }
+
+    val coefficients: DoubleArray get() = doubleArrayOf(b0, b1, b2, a1, a2, hb0, hb1, hb2, ha1, ha2)
 
     fun process(x: Double): Double {
         val y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
@@ -222,6 +247,7 @@ class LoudnessHistogram(bins: Map<Int, Bin> = emptyMap()) {
         const val LOWEST = -70.0
         const val BIN_WIDTH = 1.0
         const val BIN_COUNT = 80
+        private val FOUR_DIGITS = java.math.MathContext(4)
 
         fun loudnessOf(power: Double): Double = -0.691 + 10 * log10(power)
 
@@ -230,8 +256,10 @@ class LoudnessHistogram(bins: Map<Int, Bin> = emptyMap()) {
 
         override fun serialize(encoder: Encoder, value: LoudnessHistogram) {
             val triples = value.bins.entries.sortedBy { it.key }.map { (index, bin) ->
-                // Four significant digits: hundredths of a dB.
-                JsonArray(listOf(JsonPrimitive(index), JsonPrimitive(bin.count), JsonPrimitive("%.4g".format(java.util.Locale.ROOT, bin.power).toDouble())))
+                // Four significant digits: hundredths of a dB. Not with
+                // String.format: a large library has a million bins, and
+                // the file is written again and again during the analysis.
+                JsonArray(listOf(JsonPrimitive(index), JsonPrimitive(bin.count), JsonPrimitive(java.math.BigDecimal(bin.power).round(FOUR_DIGITS).toDouble())))
             }
             encoder.encodeSerializableValue(delegate, triples)
         }
@@ -349,6 +377,12 @@ class LoudnessAnalyzer(
     private val concurrency: Int = 2,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val minTimeoutMillis: Long = 120_000,
+    /** The least time between two saves during a run. Every save writes
+     *  the whole file, a megabyte per thousand measured files (a large
+     *  library's took 0.7 to 5 s on a desktop JVM), which after every ten
+     *  files grew with the square of the library. A killed process
+     *  loses this much work at most. */
+    private val saveIntervalMillis: Long = 30_000,
 ) {
     data class Progress(val done: Int, val total: Int)
 
@@ -379,16 +413,23 @@ class LoudnessAnalyzer(
         Loudness.needsMeasuring(it) && !loudness.isFresh(it) && unmeasurable[it.id] != it.modified
     }
 
+    /** How many of [tracks] are measured already. */
+    fun measured(tracks: List<Track>): Int = tracks.count { Loudness.needsMeasuring(it) && loudness.isFresh(it) }
+
     /** Measures the pending tracks; [progress] gets the count after every
-     *  file and the measurements every few files and at the end. Returns
-     *  when done or cancelled. */
+     *  file and the measurements every now and then and at the end. The
+     *  count is over the whole library, what earlier runs measured
+     *  included: counted from zero, every launch looked like starting
+     *  over. Returns when done or cancelled. */
     suspend fun run(tracks: List<Track>, progress: (Progress, Loudness?) -> Unit): Loudness {
         load()
         val pending = pending(tracks)
-        val total = pending.size
-        if (total == 0) return loudness
-        var done = 0
+        if (pending.isEmpty()) return loudness
+        val before = measured(tracks)
+        val total = before + pending.size
+        var done = before
         var unsaved = 0
+        var saved = 0L
         try {
             withContext(dispatcher) {
                 coroutineScope {
@@ -406,7 +447,7 @@ class LoudnessAnalyzer(
                             }
                         }
                     }
-                    repeat(total) {
+                    repeat(pending.size) {
                         val (track, outcome) = results.receive()
                         when (outcome) {
                             is Outcome.Measured -> { loudness = loudness.set(outcome.loudness, track); unsaved++ }
@@ -414,8 +455,10 @@ class LoudnessAnalyzer(
                             Outcome.TimedOut -> Unit
                         }
                         done++
-                        if (unsaved >= 10) {
+                        val now = System.nanoTime() / 1_000_000
+                        if (unsaved >= 10 && (saved == 0L || now - saved >= saveIntervalMillis)) {
                             runCatching { store.save(loudness) }
+                            saved = System.nanoTime() / 1_000_000
                             unsaved = 0
                             progress(Progress(done, total), loudness)
                         } else {

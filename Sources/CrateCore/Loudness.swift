@@ -54,21 +54,47 @@ public struct LoudnessMeter {
         var offset = 0
         while offset < frames {
             let count = min(frames - offset, stepFrames - stepFilled)
-            for c in 0..<min(channelCount, channels.count) {
-                let base = channels[c] + offset
-                var sum = 0.0
+            if channelCount == 2, channels.count >= 2 {
+                // Stereo, nearly every file: both channels in one loop.
+                // A channel's filter is a chain of operations that each
+                // wait for the one before; two chains side by side take
+                // half the time of one after the other, and every
+                // channel's numbers stay the same to the bit.
+                let left = channels[0] + offset, right = channels[1] + offset
+                var sumLeft = 0.0, sumRight = 0.0
                 var peak = self.peak
-                var filter = filters[c]
+                var filterLeft = filters[0], filterRight = filters[1]
                 for i in 0..<count {
-                    let x = base[i]
-                    let magnitude = abs(x)
-                    if magnitude > peak { peak = magnitude }
-                    let y = filter.process(Double(x))
-                    sum += y * y
+                    let l = left[i], r = right[i]
+                    let magnitudeLeft = abs(l), magnitudeRight = abs(r)
+                    if magnitudeLeft > peak { peak = magnitudeLeft }
+                    if magnitudeRight > peak { peak = magnitudeRight }
+                    let yl = filterLeft.process(Double(l)), yr = filterRight.process(Double(r))
+                    sumLeft += yl * yl
+                    sumRight += yr * yr
                 }
-                filters[c] = filter
+                filters[0] = filterLeft
+                filters[1] = filterRight
                 self.peak = peak
-                stepSums[c] += sum
+                stepSums[0] += sumLeft
+                stepSums[1] += sumRight
+            } else {
+                for c in 0..<min(channelCount, channels.count) {
+                    let base = channels[c] + offset
+                    var sum = 0.0
+                    var peak = self.peak
+                    var filter = filters[c]
+                    for i in 0..<count {
+                        let x = base[i]
+                        let magnitude = abs(x)
+                        if magnitude > peak { peak = magnitude }
+                        let y = filter.process(Double(x))
+                        sum += y * y
+                    }
+                    filters[c] = filter
+                    self.peak = peak
+                    stepSums[c] += sum
+                }
             }
             stepFilled += count
             offset += count

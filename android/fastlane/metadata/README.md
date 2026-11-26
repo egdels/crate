@@ -73,10 +73,38 @@ Values for the forms that are not part of the listing text:
   user data types?" -> No. The app has no INTERNET permission, so the
   form's "data is encrypted in transit" and "users can request deletion"
   questions do not apply; answer that no data is collected.
-  Playback runs in a foreground service of type `mediaPlayback`, which
-  Play asks about separately (foreground service permissions
-  declaration): purpose "media playback", the user-facing feature is the
-  player itself and its notification.
+- **Foreground service permissions** (App content; Play blocks updates
+  until it is filled in): the manifest has `FOREGROUND_SERVICE` and
+  `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, and `PlaybackService` is of type
+  `mediaPlayback`. Type: media playback; task: playing audio in the
+  background. Description, where the form has a text field:
+
+  > Crate is an offline music player. The foreground service plays the
+  > user's audio files and keeps playing when the app is in the
+  > background or the screen is off. The user starts playback in the app
+  > and controls it from the media notification (play/pause, skip,
+  > favorite); the service stops when playback ends or the user
+  > dismisses it.
+
+  The form wants a link to a video of the feature. Recorded on the
+  Pixel_9a emulator, about 40 s, without sound (`screenrecord` takes
+  none): the app already running and paused, then
+
+  ```sh
+  adb shell screenrecord --time-limit 45 /sdcard/fgs.mp4 &
+  adb shell am start -n de.schliweb.crate/.MainActivity
+  # tap an album, tap a track, then:
+  adb shell input keyevent 3                    # Home, playback goes on
+  adb shell input swipe 540 10 540 1400 300     # the shade with the media notification
+  # tap Pause, Play and Next there
+  adb pull /sdcard/fgs.mp4 build/store/crate-foreground-service.mp4
+  ```
+
+  Wait between the steps (a cold start takes the emulator eight
+  seconds, hence the running app), and check a contact sheet of the
+  result (`ffmpeg -i ... -vf "fps=1/3,scale=270:-1,tile=7x2"`). The
+  file is not in the repository; upload it somewhere Play can open it,
+  an unlisted YouTube video for example.
 - **Government apps / financial features / health**: no.
 - **News app**: no. **COVID-19 contact tracing**: no.
 - **Open source**: mention the GPL-3.0 licence and the repository in the

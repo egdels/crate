@@ -13,8 +13,15 @@ let package = Package(
         .executable(name: "crate-scan", targets: ["crate-scan"]),
     ],
     targets: [
+        // minimp3 and dr_flac for the loudness analysis, the package's
+        // one piece of C. The two headers are the Android app's.
+        .target(
+            name: "CrateDecoders",
+            cSettings: [.headerSearchPath("../../android/app/src/main/cpp")]
+        ),
         .target(
             name: "CrateCore",
+            dependencies: ["CrateDecoders"],
             linkerSettings: [.linkedFramework("AVFoundation")]
         ),
         // The app: a SwiftUI executable, wrapped into Crate.app by

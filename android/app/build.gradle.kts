@@ -54,6 +54,16 @@ android {
         }
     }
 
+    // The one piece of native code: minimp3 and dr_flac for the loudness
+    // analysis (src/main/cpp). Built for every ABI the NDK knows.
+    ndkVersion = "28.0.13004108"
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
