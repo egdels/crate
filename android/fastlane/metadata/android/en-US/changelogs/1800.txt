@@ -1,0 +1,2 @@
+- Measuring loudness is nearly four times as fast: MP3, FLAC and WAV files are read by the app itself.
+- "Measuring loudness…" counts over the whole library instead of starting from zero after every launch.

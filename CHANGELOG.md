@@ -7,6 +7,8 @@ version's section from this file as the GitHub release notes.
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-26
+
 ### Changed
 
 - Android: measuring loudness is nearly four times as fast. MP3 and
@@ -20,7 +22,6 @@ version's section from this file as the GitHub release notes.
   decoder's own samples. An MP3 or FLAC takes a fifth less time again,
   a 16-bit or 32-bit float WAV over a third less; the results are the
   same to the bit.
-
 - Mac: measuring loudness is about twice as fast. MP3 and FLAC files
   are decoded by minimp3 and dr_flac instead of AVFoundation, and a
   stereo file's two channels go through the meter's filter together;
